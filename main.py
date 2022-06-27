@@ -256,9 +256,6 @@ async def def_play(ctx,args,mode_q):
     if g_opts[guild.id].get('playlist'):
         del g_opts[guild.id]['playlist']
         del g_opts[guild.id]['playlist_index']
-        g_opts[guild.id]['queue'] = []
-        g_opts[guild.id]['playing'] = []
-        g_opts[guild.id]['loop'] = 1
 
         #Queueに登録
     if mode_q == 0:
