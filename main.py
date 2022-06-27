@@ -466,9 +466,10 @@ async def play_loop(guild,played,did_time):
 
         FFMPEG_OPTIONS = {
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 2147483647 -probesize 2147483647",
-            'options': '-vn -c:a libopus -af "volume=0.1" -application lowdelay'}
+            'options': '-vn -c:a libopus -af "volume=0.1" -application lowdelay'
+            }
             
-        source_play = discord.FFmpegOpusAudio(source_url,**FFMPEG_OPTIONS,bitrate=128)
+        source_play = await discord.FFmpegOpusAudio.from_probe(source_url,**FFMPEG_OPTIONS)
         vc.play(source_play,after=lambda e: asyncio.run(play_loop(guild,source_url,played_time)))
 
 
@@ -480,7 +481,7 @@ async def play_loop(guild,played,did_time):
 #--------------------------------------------------------------------------------------------
 def pytube_vid(url):
     pyt_def = pytube.YouTube(url)
-    return str(pyt_def.streams.get_audio_only().url)
+    return str(pyt_def.streams.filter(only_audio=True).last().url)
 
 def pytube_pl(url):
     pyt_def = pytube.Playlist(url).video_urls
