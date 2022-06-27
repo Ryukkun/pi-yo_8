@@ -1,10 +1,10 @@
 # pi-yo_8
 
 
-※Loopが二種類あるの 俺か俺以外か
+※Loopが二種類あるの 俺か俺以外か<\br>
 　　　　　　　　　　　うそ 曲単体ループ と プレイリストのループ
 
-※初期設定で Loop True
+※初期設定で Loop True<\br>
 　　　　　　 Loop PlayList True
 
 ※プレイリスト呼び出し時に自動的に Loop False
