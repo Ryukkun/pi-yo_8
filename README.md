@@ -8,7 +8,7 @@
 ※初期設定で Loop True<br>
 　　　　　　 Loop PlayList True
 
-※プレイリスト呼び出し時に自動的に Loop False
+※プレイリスト呼び出し時に自動的に Loop False<br>
 ※プレイリスト再生中でも、曲単体のループが可能<br>
 
 ## こまんどぅ
@@ -22,10 +22,10 @@
 
 ,playing :再生中の曲のURL
 
-,loop(,l) :loop切り替え [False,True]
+,loop(,l) :loop切り替え [False,True]<br>
 ,loop(,l) playlist(p or pl) :プレイリストのループを切り替え [False,True,Random]
 
-,play(,p) :一時停止していた場合 再生開始させる
+,play(,p) :一時停止していた場合 再生開始させる<br>
 ,play(,p) URL :URL先を即再生 プレイリスト内の動画が指定されたら、動画だけ [〇 Youtube , 〇 Twitter , × ニコニコ動画 , その他不明]<br>
 ,play(,p) 文字列 :Youtubeから検索して即再生 文字列にスペースおけ
 
