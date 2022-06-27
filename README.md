@@ -23,7 +23,8 @@
 ,playing :再生中の曲のURL
 
 ,loop(,l) :loop切り替え [False,True]<br>
-,loop(,l) playlist(p or pl) :プレイリストのループを切り替え [False,True,Random]
+,loop(,l) playlist(p or pl) :プレイリストのループを切り替え [False,True,Random]<br>
+,loop(,l) 適当な文字列 :上記に当てはまらなければ 現在の Loop の状態を返してくれる。 ライフハックだね
 
 ,play(,p) :一時停止していた場合 再生開始させる<br>
 ,play(,p) URL :URL先を即再生 プレイリスト内の動画が指定されたら、動画だけ [〇 Youtube , 〇 Twitter , × ニコニコ動画 , その他不明]<br>
