@@ -489,7 +489,7 @@ def pytube_search(arg,mode):
     source,web_url = None,None
     if pyt_def:
         if mode == 'video':
-            source = str(pyt_def[0].streams.get_audio_only().url)
+            source = str(pyt_def[0].streams.filter(only_audio=True).last().url)
             web_url = str(pyt_def[0].watch_url)
             return source,web_url
 
