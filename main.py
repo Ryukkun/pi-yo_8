@@ -56,7 +56,6 @@ async def join(ctx):
         g_opts[ctx.guild.id]['loop'] = 1
         g_opts[ctx.guild.id]['loop_playlist'] = 1
         g_opts[ctx.guild.id]['queue'] = []
-        g_opts[ctx.guild.id]['playing'] = []
     
 @client.command()
 async def bye(ctx):
@@ -79,8 +78,8 @@ async def stop(ctx):
 async def playing(ctx):
     vc = ctx.voice_client
     if vc.is_playing():
-        print(f"{ctx.guild.name} : #再生中の曲　<{g_opts[ctx.guild.id]['playing'][0]}>")
-        await ctx.send(g_opts[ctx.guild.id]['playing'][0])
+        print(f"{ctx.guild.name} : #再生中の曲　<{g_opts[ctx.guild.id]['queue'][0][1]}>")
+        await ctx.send(g_opts[ctx.guild.id]['queue'][0][1])
 
 
 #----------------------------------------------------------------------------
@@ -172,7 +171,6 @@ async def def_skip(ctx):
     if vc:
         if g_opts[ctx.guild.id]['queue'] != []:
             del g_opts[ctx.guild.id]['queue'][0]
-            del g_opts[ctx.guild.id]['playing'][0]
             print(f'{ctx.guild.name} : #次の曲へ skip')
             vc.stop()
         
@@ -222,8 +220,9 @@ async def def_play(ctx,args,mode_q):
     # Stream URL
     loop = asyncio.get_event_loop()
     web_url = None
+    loud_vol = None
     if not re.match(r'http.+$',arg):
-        source,web_url = await loop.run_in_executor(_executor,pytube_search,arg,'video')
+        source,web_url,loud_vol = await loop.run_in_executor(_executor,pytube_search,arg,'video')
         if web_url:
             await ctx.send(web_url)
         else:
@@ -231,7 +230,7 @@ async def def_play(ctx,args,mode_q):
             return
 
     elif re.match(r'https://(www.|)youtube.com/',arg):
-        try: source = await loop.run_in_executor(_executor,pytube_vid,arg)
+        try: source,loud_vol = await loop.run_in_executor(_executor,pytube_vid,arg)
         except Exception as e:
             print(f"Error : Audio only 失敗 {e}")
             return
@@ -260,14 +259,11 @@ async def def_play(ctx,args,mode_q):
         #Queueに登録
     if mode_q == 0:
         if g_opts[guild.id]['queue'] == []:
-            g_opts[guild.id]['queue'].append(source)
-            g_opts[guild.id]['playing'].append(web_url)
+            g_opts[guild.id]['queue'].append((source,web_url,loud_vol))
         else:
-            g_opts[guild.id]['queue'][0] = source
-            g_opts[guild.id]['playing'][0] = web_url
+            g_opts[guild.id]['queue'][0] = (source,web_url,loud_vol)
     else:
-        g_opts[guild.id]['queue'].append(source)
-        g_opts[guild.id]['playing'].append(web_url)
+        g_opts[guild.id]['queue'].append((source,web_url,loud_vol))
 
         # 再生されるまでループ
     if mode_q == 0:
@@ -330,26 +326,26 @@ async def def_playlist(ctx,args):
 
     # 君はほんとにplaylistなのかい　どっちなんだい！
     yt_first = None
-    loop = asyncio.get_event_loop()
     watch_url = None
+    loud_vol = None
+    loop = asyncio.get_event_loop()
+
     # --------------------------------------------------------------------------------#
     if re.match(r'https://(www.|)youtube.com/playlist\?list=.+$',arg): 
         g_opts[guild.id]['playlist_index'] = 0
         await yt_all_list()
 
     # --------------------------------------------------------------------------------#
-    elif result_re := re.match(r'https://(www.|)youtube.com/watch\?v=(.+)&list=(.+)&index=(\d+)$',arg):
+    elif result_re := re.match(r'https://(www.|)youtube.com/watch\?v=(.+)&list=(.+)',arg):
         watch_url = result_re.group(2)
-        g_opts[guild.id]['playlist_index'] = int(result_re.group(4))
         arg = f'https://www.youtube.com/playlist?list={result_re.group(3)}'
         extract_url = f'https://www.youtube.com/watch?v={watch_url}'
 
-        try: yt_first = await loop.run_in_executor(_executor,pytube_vid,extract_url)
+        try: yt_first,loud_vol = await loop.run_in_executor(_executor,pytube_vid,extract_url)
         except Exception as e:
             print(f'Error : Playlist First-Music {e}')
         else:
-            g_opts[guild.id]['queue'] = [yt_first]
-            g_opts[guild.id]['playing'] = [extract_url]
+            g_opts[guild.id]['queue'] = [(yt_first,extract_url,loud_vol)]
             if vc.is_playing():
                 vc.stop()
             else:
@@ -363,6 +359,9 @@ async def def_playlist(ctx,args):
             if watch_url in temp:
                 g_opts[guild.id]['playlist_index'] = i
                 break
+        if not g_opts[guild.id]['playlist_index']:
+            g_opts[guild.id]['playlist_index'] = 0
+        
 
     # --------------------------------------------------------------------------------#
     elif not re.match(r'http',arg):
@@ -384,7 +383,6 @@ async def def_playlist(ctx,args):
     else:
         g_opts[guild.id]['playlist_index'] -= 1
         g_opts[guild.id]['queue'] = []
-        g_opts[guild.id]['playing'] = []
     
         # 再生
         if vc.is_playing():
@@ -411,15 +409,14 @@ async def ydl_playlist(guild):
             return
 
     extract_url = g_opts[guild.id]['playlist'][g_opts[guild.id]['playlist_index']]
-    try :yt = await loop.run_in_executor(_executor,pytube_vid,extract_url)
+    try :yt,loud_vol = await loop.run_in_executor(_executor,pytube_vid,extract_url)
     except Exception as e:
         print(f'Error : Playlist Extract {e}')
         return
 
     # Queue
     if yt:
-        g_opts[guild.id]['queue'].append(yt)
-        g_opts[guild.id]['playing'].append(extract_url)
+        g_opts[guild.id]['queue'].append((yt,extract_url,loud_vol))
 
     # Print
     print(f"{guild.name} : Paylist add Queue  [Now len: {str(len(g_opts[guild.id]['queue']))}]")
@@ -438,9 +435,8 @@ async def play_loop(guild,played,did_time):
 
     # Queue削除
     if g_opts[guild.id]['queue']:
-        if g_opts[guild.id]['loop'] != 1 and g_opts[guild.id]['queue'][0] == played or (time.time() - did_time) <= 0.5:
+        if g_opts[guild.id]['loop'] != 1 and g_opts[guild.id]['queue'][0][0] == played or (time.time() - did_time) <= 0.5:
             del g_opts[guild.id]['queue'][0]
-            del g_opts[guild.id]['playing'][0]
 
     # Playlistのお客様Only
     if g_opts[guild.id].get('playlist') and g_opts[guild.id]['queue'] == []:
@@ -457,13 +453,20 @@ async def play_loop(guild,played,did_time):
     # 再生
     vc = guild.voice_client
     if g_opts[guild.id]['queue'] != [] and not vc.is_playing():
-        source_url = g_opts[guild.id]['queue'][0]
+        source_url = g_opts[guild.id]['queue'][0][0]
         played_time = time.time()
         print(f"{guild.name} : Play  [Now len: {str(len(g_opts[guild.id]['queue']))}]")
 
+        volume = -20
+        if loud_vol := g_opts[guild.id]['queue'][0][2]:
+            if loud_vol <= 0:
+                loud_vol /= 2
+            volume -= int(loud_vol)
+            print(volume)
+
         FFMPEG_OPTIONS = {
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 2147483647 -probesize 2147483647",
-            'options': '-vn -c:a libopus -af "volume=0.1" -application lowdelay'
+            'options': f'-vn -c:a libopus -af "volume={volume}dB" -application lowdelay'
             }
             
         source_play = await discord.FFmpegOpusAudio.from_probe(source_url,**FFMPEG_OPTIONS)
@@ -478,7 +481,9 @@ async def play_loop(guild,played,did_time):
 #--------------------------------------------------------------------------------------------
 def pytube_vid(url):
     pyt_def = pytube.YouTube(url)
-    return str(pyt_def.streams.filter(only_audio=True).last().url)
+    pyt_url = str(pyt_def.streams.filter(only_audio=True).last().url)
+    pyt_vol = pyt_def.vid_info.get('playerConfig',{}).get('audioConfig',{}).get('loudnessDb',None)
+    return pyt_url,pyt_vol
 
 def pytube_pl(url):
     pyt_def = pytube.Playlist(url).video_urls
@@ -491,7 +496,8 @@ def pytube_search(arg,mode):
         if mode == 'video':
             source = str(pyt_def[0].streams.filter(only_audio=True).last().url)
             web_url = str(pyt_def[0].watch_url)
-            return source,web_url
+            pyt_vol = pyt_def[0].vid_info.get('playerConfig',{}).get('audioConfig',{}).get('loudnessDb',None)
+            return source,web_url,pyt_vol
 
         if mode == 'playlist':
             web_url = [str(temp.watch_url) for temp in pyt_def]
