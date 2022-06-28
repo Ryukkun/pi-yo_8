@@ -462,7 +462,6 @@ async def play_loop(guild,played,did_time):
             if loud_vol <= 0:
                 loud_vol /= 2
             volume -= int(loud_vol)
-            print(volume)
 
         FFMPEG_OPTIONS = {
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 2147483647 -probesize 2147483647",
