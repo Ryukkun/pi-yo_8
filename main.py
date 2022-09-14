@@ -33,8 +33,9 @@ config.read('config.ini')
 
 
 
-
-client = commands.Bot(command_prefix=config['DEFAULT']['Prefix'])
+intents = discord.Intents.default()
+intents.message_content = True
+client = commands.Bot(command_prefix=config['DEFAULT']['Prefix'],intents=intents)
 voice_client = None
 g_opts = {}
 _executor = ThreadPoolExecutor(1)
