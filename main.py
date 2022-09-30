@@ -307,6 +307,8 @@ async def def_playlist(ctx,args):
         if vc.is_paused():
             vc.resume()
         return
+    elif type(args) == str:
+        arg = args
     else:
         arg = ' '.join(args)
 
