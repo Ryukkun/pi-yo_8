@@ -40,6 +40,17 @@ voice_client = None
 g_opts = {}
 _executor = ThreadPoolExecutor(1)
 
+re_false = re.compile(r'(f|0|ふぁlせ)')
+re_true = re.compile(r'(t|1|ｔるえ)')
+re_random = re.compile(r'(r|2|らんどm)')
+re_URL_YT = re.compile(r'https://(www.|)youtube.com/')
+re_URL_Video = re.compile(r'https://(www.|)youtube.com/watch')
+re_URL_PL_Video = re.compile(r'https://(www.|)youtube.com/watch\?v=(.+)&list=(.+)')
+re_str_PL = re.compile(r'p')
+re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
+re_URL = re.compile(r'http')
+
+
 @client.event
 async def on_ready():
     print('Logged in')
@@ -98,8 +109,6 @@ async def def_loop(ctx,args):
     # joinしてる？
     if not ctx.voice_client: return
     gid = ctx.guild.id
-    re_false = re.compile(r'(false|f|0|ふぁlせ)$')
-    re_true = re.compile(r'(true|t|1|tるえ)$')
 
 
     # loop 単体切り替え
@@ -120,7 +129,7 @@ async def def_loop(ctx,args):
 
     # playlist
     if args != ():
-        if re.match(r'(playlist|pl|p|pぁyぃst)$',args[0].lower()):
+        if re_str_PL.match(args[0].lower()):
             if len(args) == 1:
                 if g_opts[gid]['loop_playlist'] == 0: args = ('pl','1')
                 if g_opts[gid]['loop_playlist'] == 1: args = ('pl','2')
@@ -131,7 +140,7 @@ async def def_loop(ctx,args):
                     g_opts[gid]['loop_playlist'] = 0
                 if re_true.match(arg):
                     g_opts[gid]['loop_playlist'] = 1
-                if re.match(r'(random|r|2|らんどm)$',arg):
+                if re_random.match(arg):
                     g_opts[gid]['loop_playlist'] = 2
 
 
@@ -212,17 +221,17 @@ async def def_play(ctx,args,mode_q):
         arg = ' '.join(args)
 
     # よそはよそ　うちはうち
-    if re.match(r'https://(www.|)youtube.com/playlist\?list=.+$',arg):
+    if re_URL_PL.match(arg):
         await def_playlist(ctx,arg)
         return
-    if re.match(r'https://(www.|)youtube.com/',arg) and not re.match(r'https://(www.|)youtube.com/watch.+$',arg):
+    if re_URL_YT.match(arg) and not re_URL_Video.match(arg):
         return
 
     # Stream URL
     loop = asyncio.get_event_loop()
     web_url = None
     loud_vol = None
-    if not re.match(r'http.+$',arg):
+    if not re_URL.match(arg):
         source,web_url,loud_vol = await loop.run_in_executor(_executor,pytube_search,arg,'video')
         if web_url:
             await ctx.send(web_url)
@@ -230,7 +239,7 @@ async def def_play(ctx,args,mode_q):
             await ctx.send('検索結果なし')
             return
 
-    elif re.match(r'https://(www.|)youtube.com/',arg):
+    elif re_URL_YT.match(arg):
         try: source,loud_vol = await loop.run_in_executor(_executor,pytube_vid,arg)
         except Exception as e:
             print(f"Error : Audio only 失敗 {e}")
@@ -250,7 +259,7 @@ async def def_play(ctx,args,mode_q):
     
 
         # URL確認
-    if not re.match(r'http.+$',source): return
+    if not re_URL.match(source): return
 
         # playlist 再生中のお客様はお断りよ
     if g_opts[guild.id].get('playlist'):
@@ -334,12 +343,12 @@ async def def_playlist(ctx,args):
     loop = asyncio.get_event_loop()
 
     # --------------------------------------------------------------------------------#
-    if re.match(r'https://(www.|)youtube.com/playlist\?list=.+$',arg): 
+    if re_URL_PL.match(arg): 
         g_opts[guild.id]['playlist_index'] = 0
         await yt_all_list()
 
     # --------------------------------------------------------------------------------#
-    elif result_re := re.match(r'https://(www.|)youtube.com/watch\?v=(.+)&list=(.+)',arg):
+    elif result_re := re_URL_PL_Video.match(arg):
         watch_url = result_re.group(2)
         arg = f'https://www.youtube.com/playlist?list={result_re.group(3)}'
         extract_url = f'https://www.youtube.com/watch?v={watch_url}'
@@ -367,7 +376,7 @@ async def def_playlist(ctx,args):
         
 
     # --------------------------------------------------------------------------------#
-    elif not re.match(r'http',arg):
+    elif not re_URL.match(arg):
         g_opts[guild.id]['playlist_index'] = 0
         g_opts[guild.id]['playlist'] = await loop.run_in_executor(_executor,pytube_search,arg,'playlist')
 
@@ -434,7 +443,7 @@ async def ydl_playlist(guild):
 async def play_loop(guild,played,did_time):
 
     # あなたは用済みよ
-    if not guild.voice_client: return
+    if not guild.voice_client.is_connected(): return
 
     # Queue削除
     if g_opts[guild.id]['queue']:
