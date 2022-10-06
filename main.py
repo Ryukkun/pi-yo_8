@@ -39,14 +39,14 @@ intents.reactions = True
 client = commands.Bot(command_prefix=config['DEFAULT']['Prefix'],intents=intents)
 voice_client = None
 g_opts = {}
-_executor = ThreadPoolExecutor(max_workers=30)
+_executor = ThreadPoolExecutor(1)
 Play_Loop_Embed = []
 
 re_false = re.compile(r'(f|0|ふぁlせ)')
 re_true = re.compile(r'(t|1|ｔるえ)')
 re_random = re.compile(r'(r|2|らんどm)')
-re_URL_YT = re.compile(r'https://(www.|)youtube.com/')
-re_URL_Video = re.compile(r'https://(www.|)youtube.com/watch')
+re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
+re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch|youtu.be/)')
 re_URL_PL_Video = re.compile(r'https://(www.|)youtube.com/watch\?v=(.+)&list=(.+)')
 re_str_PL = re.compile(r'p')
 re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
@@ -124,7 +124,7 @@ async def playing(ctx):
         await Sended_Mes.add_reaction("♻")
         await Sended_Mes.add_reaction("🔀")
 
-    print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
+    #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
 
 
 @client.event
@@ -187,16 +187,11 @@ async def on_reaction_add(Reac,User):
 
 
 
-async def Edit_Embed(gid,*args):
+async def Edit_Embed(gid):
     try:
         url = g_opts[gid]['queue'][0][1]
     except IndexError:
         return None
-
-    if args:
-        args = args[0]
-    else:
-        args = False
 
     def pytube_info(url):
         pyt_def = pytube.YouTube(url)
@@ -208,12 +203,6 @@ async def Edit_Embed(gid,*args):
         r = r.find('link',rel="image_src").get('href')
         return pyt_title, pyt_channel, pyt_VidID, r, pyt_C_url
     
-    if args:
-        title, channnel, VidID, C_Icon, C_url = pytube_info(url)
-    else:
-        loop = asyncio.get_event_loop()
-        title, channnel, VidID, C_Icon, C_url = await loop.run_in_executor(_executor,pytube_info,url)
-
     # emoji
     V_loop= PL_loop= Random_P= ':red_circle:'
     if g_opts[gid]['loop'] == 1: V_loop = ':green_circle:'
@@ -221,9 +210,16 @@ async def Edit_Embed(gid,*args):
         if g_opts[gid]['loop_playlist'] >= 1: PL_loop = ':green_circle:'
         if g_opts[gid]['loop_playlist'] == 2: Random_P = ':green_circle:'
 
-    embed=discord.Embed(title=title, url=url)
-    embed.set_thumbnail(url=f'https://img.youtube.com/vi/{VidID}/mqdefault.jpg')
-    embed.set_author(name=channnel, url=C_url, icon_url=C_Icon)
+    # Embed
+    if re_URL_YT.match(url):
+        loop = asyncio.get_event_loop()
+        title, channnel, VidID, C_Icon, C_url = await loop.run_in_executor(_executor,pytube_info,url)
+        embed=discord.Embed(title=title, url=url)
+        embed.set_thumbnail(url=f'https://img.youtube.com/vi/{VidID}/mqdefault.jpg')
+        embed.set_author(name=channnel, url=C_url, icon_url=C_Icon)
+    else:
+        embed=discord.Embed(title=url, url=url)
+
     if g_opts[gid].get('playlist'):
         embed.add_field(name="単曲ループ", value=f'🔁 : {V_loop}', inline=True)
         embed.add_field(name="Playlistループ", value=f'♻ : {PL_loop}', inline=True)
@@ -368,9 +364,9 @@ async def def_play(ctx,args,mode_q):
         return
 
     # Stream URL
-    loop = asyncio.get_event_loop()
     web_url = None
     loud_vol = None
+    loop = asyncio.get_event_loop()
     if not re_URL.match(arg):
         source,web_url,loud_vol = await loop.run_in_executor(_executor,pytube_search,arg,'video')
 
@@ -549,7 +545,6 @@ async def def_playlist(ctx,args):
 
 # playlistダウンロード
 async def ydl_playlist(guild):
-    loop = asyncio.get_event_loop()
 
     if g_opts[guild.id]['playlist_index'] >= len(g_opts[guild.id]['playlist']):
         g_opts[guild.id]['playlist_index'] = 0
@@ -558,6 +553,7 @@ async def ydl_playlist(guild):
             del g_opts[guild.id]['playlist_index']
             return
 
+    loop = asyncio.get_event_loop()
     extract_url = g_opts[guild.id]['playlist'][g_opts[guild.id]['playlist_index']]
     try :yt,loud_vol = await loop.run_in_executor(_executor,pytube_vid,extract_url)
     except Exception as e:
@@ -626,7 +622,7 @@ async def play_loop(ctx,played,did_time):
 
         if did_time != 0 and g_opts[gid].get('Embed_Message'):
             late_E = g_opts[gid].get('Embed_Message')
-            embed = await Edit_Embed(gid,False)
+            embed = await Edit_Embed(gid)
             Play_Loop_Embed.append((False,late_E,embed))
 
         else:
@@ -635,15 +631,18 @@ async def play_loop(ctx,played,did_time):
 
 async def Send_Embed():
     while True:
-        await asyncio.sleep(1)
-        while Play_Loop_Embed:
-            late_E = Play_Loop_Embed[0][1]
-            if Play_Loop_Embed[0][0]:
-                await playing(late_E)
-            else:
-                embed = Play_Loop_Embed[0][2]
-                await late_E.edit(embed=embed)
-            del Play_Loop_Embed[0]
+        try:
+            await asyncio.sleep(0.5)
+            while Play_Loop_Embed:
+                late_E = Play_Loop_Embed[0][1]
+                if Play_Loop_Embed[0][0]:
+                    await playing(late_E)
+                else:
+                    embed = Play_Loop_Embed[0][2]
+                    await late_E.edit(embed=embed)
+                del Play_Loop_Embed[0]
+        except Exception as e:
+            print(f'Error Send_Embed : {e}')
 
 
 
