@@ -68,13 +68,14 @@ async def on_ready():
 @client.command()
 async def join(ctx):
     if ctx.author.voice:
+        gid = ctx.guild.id
         print(f'{ctx.guild.name} : #join')
         await ctx.author.voice.channel.connect()
-        g_opts[ctx.guild.id] = {}
-        g_opts[ctx.guild.id]['loop'] = 1
-        g_opts[ctx.guild.id]['loop_playlist'] = 1
-        g_opts[ctx.guild.id]['random_playlist'] = 1
-        g_opts[ctx.guild.id]['queue'] = []
+        g_opts[gid] = {}
+        g_opts[gid]['loop'] = 1
+        g_opts[gid]['loop_playlist'] = 1
+        g_opts[gid]['random_playlist'] = 1
+        g_opts[gid]['queue'] = []
     
 
 @client.command()
@@ -133,7 +134,7 @@ async def on_reaction_add(Reac,User):
     vc = Reac.message.guild.voice_client
     guild = Reac.message.guild
     gid = guild.id
-    if User.bot: return
+    if User.bot or Reac.message.author.id != client.user.id: return
     asyncio.create_task(Reac.remove(User))
     if vc.is_playing() or vc.is_paused():
 
@@ -217,11 +218,11 @@ async def Edit_Embed(gid):
         CH_Icon = CH_Icon.find('link',rel="image_src").get('href')
         
 
-        embed=discord.Embed(title=Title, url=url)
+        embed=discord.Embed(title=Title, url=url, colour=0xe1bd5b)
         embed.set_thumbnail(url=f'https://img.youtube.com/vi/{Vid}/mqdefault.jpg')
         embed.set_author(name=CH, url=CH_Url, icon_url=CH_Icon)
     else:
-        embed=discord.Embed(title=url, url=url)
+        embed=discord.Embed(title=url, url=url, colour=0xe1bd5b)
 
     if g_opts[gid].get('playlist'):
         embed.add_field(name="単曲ループ", value=f'🔁 : {V_loop}', inline=True)
@@ -248,11 +249,13 @@ async def s(ctx):
     await def_skip(ctx)
 
 async def def_skip(ctx):
-    vc = ctx.guild.voice_client
+    guild = ctx.guild
+    vc = guild.voice_client
+    gid = guild.id
     if vc:
-        if g_opts[ctx.guild.id]['queue'] != []:
-            del g_opts[ctx.guild.id]['queue'][0]
-            print(f'{ctx.guild.name} : #次の曲へ skip')
+        if g_opts[gid]['queue'] != []:
+            del g_opts[gid]['queue'][0]
+            print(f'{guild.name} : #次の曲へ skip')
             vc.stop()
         
 
@@ -283,6 +286,7 @@ async def def_play(ctx,args,mode_q):
     if not await join_check(ctx): return
     guild = ctx.guild
     vc = guild.voice_client
+    gid = guild.id
 
     # 一時停止していた場合再生 開始
     if args == ():
@@ -327,26 +331,26 @@ async def def_play(ctx,args,mode_q):
         # URL確認
     if not re_URL.match(source): return
 
-        # playlist 再生中のお客様はお断りよ
-    if g_opts[guild.id].get('playlist'):
-        del g_opts[guild.id]['playlist']
-        del g_opts[guild.id]['playlist_index']
+        # playlist 再生中のお客様はお断り
+    if g_opts[gid].get('playlist'):
+        del g_opts[gid]['playlist']
+        del g_opts[gid]['playlist_index']
 
         #Queueに登録
     if mode_q == 0:
-        if g_opts[guild.id]['queue'] == []:
-            g_opts[guild.id]['queue'].append((source,web_url,loud_vol))
+        if g_opts[gid]['queue'] == []:
+            g_opts[gid]['queue'].append((source,web_url,loud_vol))
         else:
-            g_opts[guild.id]['queue'][0] = (source,web_url,loud_vol)
+            g_opts[gid]['queue'][0] = (source,web_url,loud_vol)
     else:
-        g_opts[guild.id]['queue'].append((source,web_url,loud_vol))
+        g_opts[gid]['queue'].append((source,web_url,loud_vol))
 
         # 再生されるまでループ
     if mode_q == 0:
         if vc.is_playing():
-            if late_E := g_opts[guild.id].get('Embed_Message'):
+            if late_E := g_opts[gid].get('Embed_Message'):
                 await late_E.delete()
-                g_opts[guild.id]['Embed_Message'] = None
+                g_opts[gid]['Embed_Message'] = None
                 vc.stop()
         else:
             await play_loop(ctx,None,0)
@@ -378,6 +382,7 @@ async def def_playlist(ctx,args):
         return
     guild = ctx.guild
     vc = guild.voice_client
+    gid = guild.id
 
     # 一時停止していた場合再生 開始
     if args == ():
@@ -401,7 +406,7 @@ async def def_playlist(ctx,args):
             return
         else:
             print(f"{guild.name} : Loaded all video in the playlist  [playlist_count: {str(len(yt_pl))}]")
-            g_opts[guild.id]['playlist'] = yt_pl
+            g_opts[gid]['playlist'] = yt_pl
     #*******************************************************************#
 
 
@@ -413,7 +418,7 @@ async def def_playlist(ctx,args):
 
     ### PlayList 本体のURL ------------------------------------------------------------------------#
     if re_URL_PL.match(arg): 
-        g_opts[guild.id]['playlist_index'] = 0
+        g_opts[gid]['playlist_index'] = 0
         await yt_all_list()
 
     ### PlayList と 動画が一緒についてきた場合 --------------------------------------------------------------#
@@ -426,13 +431,13 @@ async def def_playlist(ctx,args):
         except Exception as e:
             print(f'Error : Playlist First-Music {e}')
         else:
-            g_opts[guild.id]['queue'] = [(yt_first,extract_url,loud_vol)]
-            g_opts[guild.id]['playlist'] = 'Temp'
-            g_opts[guild.id]['loop'] = 0
+            g_opts[gid]['queue'] = [(yt_first,extract_url,loud_vol)]
+            g_opts[gid]['playlist'] = 'Temp'
+            g_opts[gid]['loop'] = 0
             if vc.is_playing():
-                if late_E := g_opts[guild.id].get('Embed_Message'):
+                if late_E := g_opts[gid].get('Embed_Message'):
                     await late_E.delete()
-                    g_opts[guild.id]['Embed_Message'] = None
+                    g_opts[gid]['Embed_Message'] = None
                     vc.stop()
             else:
                 await play_loop(ctx,None,0)
@@ -441,38 +446,39 @@ async def def_playlist(ctx,args):
 
         await yt_all_list()
 
-        for i, temp in enumerate(g_opts[guild.id]['playlist']):
+        for i, temp in enumerate(g_opts[gid]['playlist']):
             if watch_url in temp:
-                g_opts[guild.id]['playlist_index'] = i
+                g_opts[gid]['playlist_index'] = i
                 break
-        if not g_opts[guild.id]['playlist_index']:
-            g_opts[guild.id]['playlist_index'] = 0
+        if not g_opts[gid]['playlist_index']:
+            g_opts[gid]['playlist_index'] = 0
         
     ### URLじゃなかった場合 -----------------------------------------------------------------------#
     elif not re_URL.match(arg):
-        g_opts[guild.id]['playlist_index'] = 0
-        g_opts[guild.id]['playlist'] = await pytube_search(arg,'playlist')
+        g_opts[gid]['playlist_index'] = 0
+        g_opts[gid]['playlist'] = await pytube_search(arg,'playlist')
+        g_opts[gid]['random_playlist'] = 0
 
     ### その他 例外------------------------------------------------------------------------#
     else: 
         print("playlistじゃないみたい")
         return
 
-    g_opts[guild.id]['loop'] = 0
+    g_opts[gid]['loop'] = 0
     if yt_first:
         # 再生
         if not vc.is_playing():
             await play_loop(ctx,None,0)
 
     else:
-        g_opts[guild.id]['playlist_index'] -= 1
-        g_opts[guild.id]['queue'] = []
+        g_opts[gid]['playlist_index'] -= 1
+        g_opts[gid]['queue'] = []
     
         # 再生
         if vc.is_playing():
-            if late_E := g_opts[guild.id].get('Embed_Message'):
+            if late_E := g_opts[gid].get('Embed_Message'):
                 await late_E.delete()
-                g_opts[guild.id]['Embed_Message'] = None
+                g_opts[gid]['Embed_Message'] = None
                 vc.stop()
         else:
             await play_loop(ctx,None,0)
@@ -483,15 +489,15 @@ async def def_playlist(ctx,args):
 
 # playlistダウンロード
 async def ydl_playlist(guild):
-
-    if g_opts[guild.id]['playlist_index'] >= len(g_opts[guild.id]['playlist']):
-        g_opts[guild.id]['playlist_index'] = 0
-        if g_opts[guild.id]['loop_playlist'] == 0:
-            del g_opts[guild.id]['playlist']
-            del g_opts[guild.id]['playlist_index']
+    gid = guild.id
+    if g_opts[gid]['playlist_index'] >= len(g_opts[gid]['playlist']):
+        g_opts[gid]['playlist_index'] = 0
+        if g_opts[gid]['loop_playlist'] == 0:
+            del g_opts[gid]['playlist']
+            del g_opts[gid]['playlist_index']
             return
 
-    extract_url = g_opts[guild.id]['playlist'][g_opts[guild.id]['playlist_index']]
+    extract_url = g_opts[gid]['playlist'][g_opts[gid]['playlist_index']]
     try :yt,loud_vol = await pytube_vid(extract_url)
     except Exception as e:
         print(f'Error : Playlist Extract {e}')
@@ -499,10 +505,10 @@ async def ydl_playlist(guild):
 
     # Queue
     if yt:
-        g_opts[guild.id]['queue'].append((yt,extract_url,loud_vol))
+        g_opts[gid]['queue'].append((yt,extract_url,loud_vol))
 
     # Print
-    print(f"{guild.name} : Paylist add Queue  [Now len: {str(len(g_opts[guild.id]['queue']))}]")
+    print(f"{guild.name} : Paylist add Queue  [Now len: {str(len(g_opts[gid]['queue']))}]")
 
 
 
@@ -522,7 +528,7 @@ async def play_loop(ctx,played,did_time):
     # Queue削除
     if g_opts[gid]['queue']:
         if g_opts[gid]['loop'] != 1 and g_opts[gid]['queue'][0][0] == played or (time.time() - did_time) <= 0.5:
-            del g_opts[guild.id]['queue'][0]
+            del g_opts[gid]['queue'][0]
 
     # Playlistのお客様Only
     if g_opts[gid].get('playlist') and g_opts[gid]['queue'] == []:
@@ -533,7 +539,7 @@ async def play_loop(ctx,played,did_time):
                 if for_count == 10: break
             g_opts[gid]['playlist_index'] = new_index
         else:
-            g_opts[guild.id]['playlist_index'] += 1
+            g_opts[gid]['playlist_index'] += 1
         await ydl_playlist(guild)
 
     # 再生
