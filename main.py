@@ -9,9 +9,10 @@ import configparser
 import shutil
 from yt_dlp import YoutubeDL
 import pytube
+from pytube.innertube import InnerTube
+from pytube.helpers import DeferredGeneratorList
 import random
-from concurrent.futures import ThreadPoolExecutor
-import requests
+import aiohttp
 from bs4 import BeautifulSoup
 
 
@@ -39,14 +40,13 @@ intents.reactions = True
 client = commands.Bot(command_prefix=config['DEFAULT']['Prefix'],intents=intents)
 voice_client = None
 g_opts = {}
-_executor = ThreadPoolExecutor(1)
 Play_Loop_Embed = []
 
 re_false = re.compile(r'(f|0|ふぁlせ)')
 re_true = re.compile(r'(t|1|ｔるえ)')
 re_random = re.compile(r'(r|2|らんどm)')
 re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
-re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch|youtu.be/)')
+re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
 re_URL_PL_Video = re.compile(r'https://(www.|)youtube.com/watch\?v=(.+)&list=(.+)')
 re_str_PL = re.compile(r'p')
 re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
@@ -73,6 +73,7 @@ async def join(ctx):
         g_opts[ctx.guild.id] = {}
         g_opts[ctx.guild.id]['loop'] = 1
         g_opts[ctx.guild.id]['loop_playlist'] = 1
+        g_opts[ctx.guild.id]['random_playlist'] = 1
         g_opts[ctx.guild.id]['queue'] = []
     
 
@@ -159,21 +160,17 @@ async def on_reaction_add(Reac,User):
 
         # Playlistループ
         if Reac.emoji =='♻':
-            if g_opts[gid]['loop_playlist'] == 2:       #Random => False     LOOPしてるからね
-                g_opts[gid]['loop_playlist'] = 0
-            elif g_opts[gid]['loop_playlist'] == 0:     #Flse => True
+            if g_opts[gid]['loop_playlist'] == 0:     #Flse => True
                 g_opts[gid]['loop_playlist'] = 1
             elif g_opts[gid]['loop_playlist'] == 1:     #True => False
                 g_opts[gid]['loop_playlist'] = 0
 
         # Random
         if Reac.emoji =='🔀':
-            if g_opts[gid]['loop_playlist'] == 2:       #Random => True     LOOPしてるからね
-                g_opts[gid]['loop_playlist'] = 1
-            elif g_opts[gid]['loop_playlist'] == 0:     #Flse => Random
-                g_opts[gid]['loop_playlist'] = 2
-            elif g_opts[gid]['loop_playlist'] == 1:     #True => Random
-                g_opts[gid]['loop_playlist'] = 2
+            if g_opts[gid]['random_playlist'] == 0:     #Flse => Random
+                g_opts[gid]['random_playlist'] = 1
+            elif g_opts[gid]['random_playlist'] == 1:     #True => Random
+                g_opts[gid]['random_playlist'] = 0
 
 
         #### Message
@@ -193,30 +190,36 @@ async def Edit_Embed(gid):
     except IndexError:
         return None
 
-    def pytube_info(url):
-        pyt_def = pytube.YouTube(url)
-        pyt_title = str(pyt_def.title)
-        pyt_channel = pyt_def.author
-        pyt_VidID = pyt_def.video_id
-        pyt_C_url = pyt_def.channel_url
-        r = BeautifulSoup(requests.get(pyt_def.channel_url).text,'html.parser')
-        r = r.find('link',rel="image_src").get('href')
-        return pyt_title, pyt_channel, pyt_VidID, r, pyt_C_url
-    
+
     # emoji
     V_loop= PL_loop= Random_P= ':red_circle:'
     if g_opts[gid]['loop'] == 1: V_loop = ':green_circle:'
     if g_opts[gid].get('playlist'):
         if g_opts[gid]['loop_playlist'] >= 1: PL_loop = ':green_circle:'
-        if g_opts[gid]['loop_playlist'] == 2: Random_P = ':green_circle:'
+        if g_opts[gid]['random_playlist'] >= 1: Random_P = ':green_circle:'
 
     # Embed
     if re_URL_YT.match(url):
+        Vid = re_URL_Video.match(url).group(4)
         loop = asyncio.get_event_loop()
-        title, channnel, VidID, C_Icon, C_url = await loop.run_in_executor(_executor,pytube_info,url)
-        embed=discord.Embed(title=title, url=url)
-        embed.set_thumbnail(url=f'https://img.youtube.com/vi/{VidID}/mqdefault.jpg')
-        embed.set_author(name=channnel, url=C_url, icon_url=C_Icon)
+
+        # Get Youtube Data
+        IN = InnerTube()
+        Vdic = await loop.run_in_executor(None,IN.player,Vid)
+        Title = Vdic["videoDetails"]["title"]
+        CH = Vdic["videoDetails"]["author"]
+        CH_Url = f'https://www.youtube.com/channel/{Vdic["videoDetails"]["channelId"]}'
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(CH_Url) as resp:
+                text = await resp.read()
+        CH_Icon = BeautifulSoup(text.decode('utf-8'), 'html.parser')
+        CH_Icon = CH_Icon.find('link',rel="image_src").get('href')
+        
+
+        embed=discord.Embed(title=Title, url=url)
+        embed.set_thumbnail(url=f'https://img.youtube.com/vi/{Vid}/mqdefault.jpg')
+        embed.set_author(name=CH, url=CH_Url, icon_url=CH_Icon)
     else:
         embed=discord.Embed(title=url, url=url)
 
@@ -228,73 +231,6 @@ async def Edit_Embed(gid):
         embed.add_field(name="ループ", value=f'🔁 : {V_loop}', inline=True)
     
     return embed
-
-
-
-
-#----------------------------------------------------------------------------
-#   Loop 
-#----------------------------------------------------------------------------
-@client.command()
-async def loop(ctx,*args):
-    await def_loop(ctx,args)
-
-@client.command()
-async def l(ctx,*args):
-    await def_loop(ctx,args)
-
-async def def_loop(ctx,args):
-    # joinしてる？
-    if not ctx.voice_client: return
-    gid = ctx.guild.id
-
-    # loop 単体切り替え
-    if args == ():
-        if g_opts[gid]['loop'] == 0:args = ("1")
-        if g_opts[gid]['loop'] == 1:args = ("0")
-
-    # loop 指定切り替え
-    if args != ():
-        arg = args[0].lower()
-
-        if re_false.match(arg):
-            g_opts[gid]['loop'] = 0
-
-        if re_true.match(arg):
-            g_opts[gid]['loop'] = 1
-
-    # playlist
-    if args != ():
-        if re_str_PL.match(args[0].lower()):
-            if len(args) == 1:
-                if g_opts[gid]['loop_playlist'] == 0: args = ('pl','1')
-                if g_opts[gid]['loop_playlist'] == 1: args = ('pl','2')
-                if g_opts[gid]['loop_playlist'] == 2: args = ('pl','0')
-            if len(args) >= 2:
-                arg = args[1].lower()
-                if re_false.match(arg):
-                    g_opts[gid]['loop_playlist'] = 0
-                if re_true.match(arg):
-                    g_opts[gid]['loop_playlist'] = 1
-                if re_random.match(arg):
-                    g_opts[gid]['loop_playlist'] = 2
-
-    # 現在の Loop の状態を送信
-    pl = ''
-    if g_opts[gid].get('playlist'):
-        pl_ = 'None'
-        if g_opts[gid]['loop_playlist'] == 0: pl_ = 'False'
-        if g_opts[gid]['loop_playlist'] == 1: pl_ = 'True'
-        if g_opts[gid]['loop_playlist'] == 2: pl_ = 'Random'
-        pl = f' [Playlist : {pl_}]'
-
-    if g_opts[gid]['loop'] <= 0:
-        await ctx.send(embed=discord.Embed(title=f"Loop : False{pl}"))
-        print(f'{ctx.guild.name} : #loop False{pl}')
-
-    if g_opts[gid]['loop'] == 1:
-        await ctx.send(embed=discord.Embed(title=f"Loop : True{pl}"))
-        print(f'{ctx.guild.name} : #loop True{pl}')
 
 
 
@@ -368,10 +304,10 @@ async def def_play(ctx,args,mode_q):
     loud_vol = None
     loop = asyncio.get_event_loop()
     if not re_URL.match(arg):
-        source,web_url,loud_vol = await loop.run_in_executor(_executor,pytube_search,arg,'video')
+        source,web_url,loud_vol = await pytube_search(arg,'video')
 
     elif re_URL_YT.match(arg):
-        try: source,loud_vol = await loop.run_in_executor(_executor,pytube_vid,arg)
+        try: source,loud_vol = await pytube_vid(arg)
         except Exception as e:
             print(f"Error : Audio only 失敗 {e}")
             return
@@ -380,7 +316,7 @@ async def def_play(ctx,args,mode_q):
 
     else:
         with YoutubeDL({'format': 'best','quiet':True,'noplaylist':True}) as ydl:
-            try: info = await loop.run_in_executor(_executor,ydl.extract_info,arg,False)
+            try: info = await loop.run_in_executor(None,ydl.extract_info,arg,False)
             except Exception as e:
                 print(f"Error : Audio + Video 失敗 {e}")
                 return
@@ -457,7 +393,9 @@ async def def_playlist(ctx,args):
     #**************************#　ネスト関数 #****************************#
     # Playlist 全体ダウンロード
     async def yt_all_list():
-        try: yt_pl = await loop.run_in_executor(_executor,pytube_pl,arg)
+        yt_pl = pytube.Playlist(arg)
+        loop = asyncio.get_event_loop()
+        try: yt_pl = await loop.run_in_executor(None,DeferredGeneratorList,yt_pl.url_generator())
         except Exception as e:
             print(f'Error : Playlist All-List {e}')
             return
@@ -471,7 +409,7 @@ async def def_playlist(ctx,args):
     yt_first = None
     watch_url = None
     loud_vol = None
-    loop = asyncio.get_event_loop()
+    
 
     ### PlayList 本体のURL ------------------------------------------------------------------------#
     if re_URL_PL.match(arg): 
@@ -484,7 +422,7 @@ async def def_playlist(ctx,args):
         arg = f'https://www.youtube.com/playlist?list={result_re.group(3)}'
         extract_url = f'https://www.youtube.com/watch?v={watch_url}'
 
-        try: yt_first,loud_vol = await loop.run_in_executor(_executor,pytube_vid,extract_url)
+        try: yt_first,loud_vol = await pytube_vid(extract_url)
         except Exception as e:
             print(f'Error : Playlist First-Music {e}')
         else:
@@ -513,7 +451,7 @@ async def def_playlist(ctx,args):
     ### URLじゃなかった場合 -----------------------------------------------------------------------#
     elif not re_URL.match(arg):
         g_opts[guild.id]['playlist_index'] = 0
-        g_opts[guild.id]['playlist'] = await loop.run_in_executor(_executor,pytube_search,arg,'playlist')
+        g_opts[guild.id]['playlist'] = await pytube_search(arg,'playlist')
 
     ### その他 例外------------------------------------------------------------------------#
     else: 
@@ -553,9 +491,8 @@ async def ydl_playlist(guild):
             del g_opts[guild.id]['playlist_index']
             return
 
-    loop = asyncio.get_event_loop()
     extract_url = g_opts[guild.id]['playlist'][g_opts[guild.id]['playlist_index']]
-    try :yt,loud_vol = await loop.run_in_executor(_executor,pytube_vid,extract_url)
+    try :yt,loud_vol = await pytube_vid(extract_url)
     except Exception as e:
         print(f'Error : Playlist Extract {e}')
         return
@@ -589,7 +526,7 @@ async def play_loop(ctx,played,did_time):
 
     # Playlistのお客様Only
     if g_opts[gid].get('playlist') and g_opts[gid]['queue'] == []:
-        if g_opts[gid]['loop_playlist'] == 2:
+        if g_opts[gid]['random_playlist'] == 1:
             for_count = 0
             while g_opts[gid]['playlist_index'] == (new_index := random.randint(0,len(g_opts[gid]['playlist']) - 1)):
                 for_count += 1
@@ -632,7 +569,7 @@ async def play_loop(ctx,played,did_time):
 async def Send_Embed():
     while True:
         try:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.2)
             while Play_Loop_Embed:
                 late_E = Play_Loop_Embed[0][1]
                 if Play_Loop_Embed[0][0]:
@@ -650,31 +587,43 @@ async def Send_Embed():
 #--------------------------------------------------------------------------------------------
 #   居たら楽な関数達
 #--------------------------------------------------------------------------------------------
-def pytube_vid(url):
-    pyt_def = pytube.YouTube(url)
-    pyt_url = str(pyt_def.streams.filter(only_audio=True).last().url)
-    pyt_vol = pyt_def.vid_info.get('playerConfig',{}).get('audioConfig',{}).get('loudnessDb',None)
-    return pyt_url,pyt_vol
+async def pytube_vid(url):
+    Vid = re_URL_Video.match(url).group(4)
+    loop = asyncio.get_event_loop()
+    INN = InnerTube()
+    Vdic = await loop.run_in_executor(None,INN.player,Vid)
+
+    St_Url = await _format(Vdic)
+    St_Vol = Vdic.get('playerConfig',{}).get('audioConfig',{}).get('loudnessDb',None)
+    return St_Url,St_Vol
 
 
-def pytube_pl(url):
-    pyt_def = pytube.Playlist(url).video_urls
-    return list(pyt_def)
+async def _format(Vdic):
+    formats = Vdic['streamingData'].get('formats',[])
+    formats.extend(Vdic['streamingData'].get('adaptiveFormats',[]))
+    res = []
+    for fm in formats:
+        if 249 <= fm['itag'] <= 251 or 139 <= fm['itag'] <= 141:
+            res.append(fm)
+    return res[-1]['url']
 
 
-def pytube_search(arg,mode):
-    pyt_def = pytube.Search(arg).results
-    source,web_url = None,None
-    if pyt_def:
+async def pytube_search(arg,mode):
+    loop = asyncio.get_event_loop()
+    pyt = pytube.Search(arg)
+    Vdic = await loop.run_in_executor(None,pyt.fetch_and_parse)
+    if pyt:
         if mode == 'video':
-            source = str(pyt_def[0].streams.filter(only_audio=True).last().url)
-            web_url = str(pyt_def[0].watch_url)
-            pyt_vol = pyt_def[0].vid_info.get('playerConfig',{}).get('audioConfig',{}).get('loudnessDb',None)
-            return source,web_url,pyt_vol
+            INN = InnerTube()
+            Vdic = await loop.run_in_executor(None,INN.player,Vdic[0][0].video_id)
+            Web_Url = f"https://youtu.be/{Vdic['videoDetails']['videoId']}"
+            St_Vol = Vdic.get('playerConfig',{}).get('audioConfig',{}).get('loudnessDb',None)
+            St_Url = await _format(Vdic)
+            return St_Url,Web_Url,St_Vol
 
         if mode == 'playlist':
-            web_url = [str(temp.watch_url) for temp in pyt_def]
-            return web_url
+            Web_Url = [temp.watch_url for temp in Vdic[0]]
+            return Web_Url
 
 
 async def join_check(ctx):
