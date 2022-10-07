@@ -2,3 +2,4 @@ discord.py[voice]
 yt_dlp
 pytube
 ffmpeg
+bs4
