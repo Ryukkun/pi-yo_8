@@ -322,6 +322,8 @@ async def def_play(ctx,args,mode_q):
     web_url = None
     loud_vol = None
     loop = asyncio.get_event_loop()
+    if re_result := re_URL_PL_Video.match(arg):
+        arg = f'https://www.youtube.com/watch?v={re_result.group(2)}'
     if not re_URL.match(arg):
         source,web_url,loud_vol = await pytube_search(arg,'video')
 
@@ -447,7 +449,9 @@ async def def_playlist(ctx,args):
         else:
             g_opts[gid]['queue'] = [(yt_first,extract_url,loud_vol)]
             g_opts[gid]['playlist'] = 'Temp'
+            g_opts[gid]['playlist_index'] = None
             g_opts[gid]['loop'] = 0
+            g_opts[gid]['latest_ch'] = ctx.channel
             if vc.is_playing():
                 vc.stop()
             else:
