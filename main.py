@@ -76,6 +76,7 @@ async def join(ctx):
         g_opts[gid]['loop_playlist'] = 1
         g_opts[gid]['random_playlist'] = 1
         g_opts[gid]['queue'] = []
+        g_opts[gid]['may_i_edit'] = {}
     
 
 @client.command()
@@ -83,6 +84,10 @@ async def bye(ctx):
     gid = ctx.guild.id
     if ctx.voice_client:
         print(f'{ctx.guild.name} : #切断')
+
+        # 古いEmbedを削除
+        if late_E := g_opts[gid].get('Embed_Message'):
+            await late_E.delete()
         g_opts[gid] = {}
         await ctx.voice_client.disconnect()
 
@@ -118,7 +123,7 @@ async def playing(ctx):
 
     # 新しいEmbed
     Sended_Mes = await ctx.send(embed=embed)
-    g_opts[gid]['Embed_Message'] = Sended_Mes
+    g_opts[gid]['Embed_Message'] = Sended_Mes 
     await Sended_Mes.add_reaction("⏯")
     await Sended_Mes.add_reaction("⏩")
     await Sended_Mes.add_reaction("🔁")
@@ -180,8 +185,7 @@ async def on_reaction_add(Reac,User):
         if not embed: return
         # Edit
         await Reac.message.edit(embed=embed)
-        if Reac.message != (late_E := g_opts[gid]['Embed_Message']):
-            await late_E.edit(embed=embed)
+
 
 
 
@@ -348,10 +352,7 @@ async def def_play(ctx,args,mode_q):
         # 再生されるまでループ
     if mode_q == 0:
         if vc.is_playing():
-            if late_E := g_opts[gid].get('Embed_Message'):
-                await late_E.delete()
-                g_opts[gid]['Embed_Message'] = None
-                vc.stop()
+            vc.stop()
         else:
             await play_loop(ctx,None,0)
         if vc.is_paused():
@@ -435,10 +436,7 @@ async def def_playlist(ctx,args):
             g_opts[gid]['playlist'] = 'Temp'
             g_opts[gid]['loop'] = 0
             if vc.is_playing():
-                if late_E := g_opts[gid].get('Embed_Message'):
-                    await late_E.delete()
-                    g_opts[gid]['Embed_Message'] = None
-                    vc.stop()
+                vc.stop()
             else:
                 await play_loop(ctx,None,0)
             if vc.is_paused():
@@ -476,10 +474,7 @@ async def def_playlist(ctx,args):
     
         # 再生
         if vc.is_playing():
-            if late_E := g_opts[gid].get('Embed_Message'):
-                await late_E.delete()
-                g_opts[gid]['Embed_Message'] = None
-                vc.stop()
+            vc.stop()
         else:
             await play_loop(ctx,None,0)
         if vc.is_paused():
@@ -523,7 +518,7 @@ async def play_loop(ctx,played,did_time):
 
 
     # あなたは用済みよ
-    if not vc.is_connected(): return
+    if not vc: return
 
     # Queue削除
     if g_opts[gid]['queue']:
@@ -563,8 +558,8 @@ async def play_loop(ctx,played,did_time):
         source_play = await discord.FFmpegOpusAudio.from_probe(source_url,**FFMPEG_OPTIONS)
         vc.play(source_play,after=lambda e: asyncio.run(play_loop(ctx,source_url,played_time)))
 
-        if did_time != 0 and g_opts[gid].get('Embed_Message'):
-            late_E = g_opts[gid].get('Embed_Message')
+        print(ctx.channel.id)
+        if late_E := g_opts[gid]['may_i_edit'].get(ctx.channel.id):
             embed = await Edit_Embed(gid)
             Play_Loop_Embed.append((False,late_E,embed))
 
@@ -586,6 +581,19 @@ async def Send_Embed():
                 del Play_Loop_Embed[0]
         except Exception as e:
             print(f'Error Send_Embed : {e}')
+
+
+
+@client.event
+async def on_message(message):
+    if message.guild.voice_client:
+        print(message.channel.id)
+        if message.author.id == client.user.id:
+            g_opts[message.guild.id]['may_i_edit'][message.channel.id] = message
+        else:
+            g_opts[message.guild.id]['may_i_edit'][message.channel.id] = None
+    
+    await client.process_commands(message)
 
 
 
