@@ -107,10 +107,19 @@ async def stop(ctx):
 #--------------------------------------------------
 
 @client.command()
-async def playing(ctx):
-    guild = ctx.guild
-    vc = guild.voice_client
-    gid = guild.id
+async def playing(ctx,*args):
+    if ctx:
+        guild = ctx.guild
+        vc = guild.voice_client
+        gid = guild.id
+        channel = ctx.channel
+        g_opts[gid]['latest_ch'] = channel
+    else:
+        guild = args[0]
+        vc = guild.voice_client
+        gid = guild.id
+        channel = args[1]
+
     if not vc.is_playing() and not vc.is_paused(): return
     
     # Get Embed
@@ -119,10 +128,11 @@ async def playing(ctx):
 
     # 古いEmbedを削除
     if late_E := g_opts[gid].get('Embed_Message'):
-        await late_E.delete()
+        try: await late_E.delete()
+        except discord.NotFound: pass
 
     # 新しいEmbed
-    Sended_Mes = await ctx.send(embed=embed)
+    Sended_Mes = await channel.send(embed=embed)
     g_opts[gid]['Embed_Message'] = Sended_Mes 
     await Sended_Mes.add_reaction("⏯")
     await Sended_Mes.add_reaction("⏩")
@@ -340,6 +350,8 @@ async def def_play(ctx,args,mode_q):
         del g_opts[gid]['playlist']
         del g_opts[gid]['playlist_index']
 
+    g_opts[gid]['latest_ch'] = ctx.channel
+
         #Queueに登録
     if mode_q == 0:
         if g_opts[gid]['queue'] == []:
@@ -354,12 +366,12 @@ async def def_play(ctx,args,mode_q):
         if vc.is_playing():
             vc.stop()
         else:
-            await play_loop(ctx,None,0)
+            await play_loop(guild,None,0)
         if vc.is_paused():
             vc.resume()
     else:
         if not vc.is_playing():
-            await play_loop(ctx,None,0)
+            await play_loop(guild,None,0)
         if vc.is_paused():
             vc.resume()
 
@@ -438,7 +450,7 @@ async def def_playlist(ctx,args):
             if vc.is_playing():
                 vc.stop()
             else:
-                await play_loop(ctx,None,0)
+                await play_loop(guild,None,0)
             if vc.is_paused():
                 vc.resume()
 
@@ -462,11 +474,12 @@ async def def_playlist(ctx,args):
         print("playlistじゃないみたい")
         return
 
+    g_opts[gid]['latest_ch'] = ctx.channel
     g_opts[gid]['loop'] = 0
     if yt_first:
         # 再生
         if not vc.is_playing():
-            await play_loop(ctx,None,0)
+            await play_loop(guild,None,0)
 
     else:
         g_opts[gid]['playlist_index'] -= 1
@@ -476,7 +489,7 @@ async def def_playlist(ctx,args):
         if vc.is_playing():
             vc.stop()
         else:
-            await play_loop(ctx,None,0)
+            await play_loop(guild,None,0)
         if vc.is_paused():
             vc.resume()
 
@@ -511,10 +524,9 @@ async def ydl_playlist(guild):
 #---------------------------------------------------------------------------------------
 #   再生 Loop
 #---------------------------------------------------------------------------------------
-async def play_loop(ctx,played,did_time):
-    guild = ctx.guild
+async def play_loop(guild,played,did_time):
     gid = guild.id
-    vc = ctx.voice_client
+    vc = guild.voice_client
 
 
     # あなたは用済みよ
@@ -538,7 +550,7 @@ async def play_loop(ctx,played,did_time):
         await ydl_playlist(guild)
 
     # 再生
-    vc = ctx.voice_client
+    vc = guild.voice_client
     if g_opts[gid]['queue'] != [] and not vc.is_playing():
         source_url = g_opts[gid]['queue'][0][0]
         played_time = time.time()
@@ -556,15 +568,14 @@ async def play_loop(ctx,played,did_time):
             }
             
         source_play = await discord.FFmpegOpusAudio.from_probe(source_url,**FFMPEG_OPTIONS)
-        vc.play(source_play,after=lambda e: asyncio.run(play_loop(ctx,source_url,played_time)))
+        vc.play(source_play,after=lambda e: asyncio.run(play_loop(guild,source_url,played_time)))
 
-        print(ctx.channel.id)
-        if late_E := g_opts[gid]['may_i_edit'].get(ctx.channel.id):
+        if late_E := g_opts[gid]['may_i_edit'].get(g_opts[gid]['latest_ch'].id):
             embed = await Edit_Embed(gid)
-            Play_Loop_Embed.append((False,late_E,embed))
+            Play_Loop_Embed.append((False,guild,late_E,embed))
 
         else:
-            Play_Loop_Embed.append((True,ctx))
+            Play_Loop_Embed.append((True,guild))
 
 
 async def Send_Embed():
@@ -572,12 +583,19 @@ async def Send_Embed():
         try:
             await asyncio.sleep(0.2)
             while Play_Loop_Embed:
-                late_E = Play_Loop_Embed[0][1]
+                guild = Play_Loop_Embed[0][1]
+                channel = g_opts[guild.id]['latest_ch']
+                
                 if Play_Loop_Embed[0][0]:
-                    await playing(late_E)
+                    await playing(None,guild,channel)
                 else:
-                    embed = Play_Loop_Embed[0][2]
-                    await late_E.edit(embed=embed)
+                    late_E = Play_Loop_Embed[0][2]
+                    embed = Play_Loop_Embed[0][3]
+                    try: 
+                        await late_E.edit(embed=embed)
+                    except discord.NotFound:
+                        await playing(None,guild,channel)
+
                 del Play_Loop_Embed[0]
         except Exception as e:
             print(f'Error Send_Embed : {e}')
@@ -587,7 +605,6 @@ async def Send_Embed():
 @client.event
 async def on_message(message):
     if message.guild.voice_client:
-        print(message.channel.id)
         if message.author.id == client.user.id:
             g_opts[message.guild.id]['may_i_edit'][message.channel.id] = message
         else:
