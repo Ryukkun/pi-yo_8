@@ -67,10 +67,10 @@ async def on_ready():
 
 @client.command()
 async def join(ctx):
-    if ctx.author.voice:
+    if vc := ctx.author.voice:
         gid = ctx.guild.id
         print(f'{ctx.guild.name} : #join')
-        await ctx.author.voice.channel.connect()
+        await vc.channel.connect()
         g_opts[gid] = {}
         g_opts[gid]['loop'] = 1
         g_opts[gid]['loop_playlist'] = 1
@@ -82,14 +82,15 @@ async def join(ctx):
 @client.command()
 async def bye(ctx):
     gid = ctx.guild.id
-    if ctx.voice_client:
+    vc = ctx.voice_client
+    if vc:
         print(f'{ctx.guild.name} : #切断')
 
         # 古いEmbedを削除
         if late_E := g_opts[gid].get('Embed_Message'):
             await late_E.delete()
         g_opts[gid] = {}
-        await ctx.voice_client.disconnect()
+        await vc.disconnect()
 
 
 @client.command()
