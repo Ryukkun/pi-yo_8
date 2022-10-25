@@ -11,16 +11,20 @@ re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.
 
 
 class StreamAudioData:
-    @classmethod
-    async def pytube_vid(self,url):
-        self.Vid = re_URL_Video.match(url).group(4)
-        loop = asyncio.get_event_loop()
-        INN = InnerTube()
-        self.Vdic = await loop.run_in_executor(None,INN.player,self.Vid)
 
-        self.Web_Url = url
+    def __init__(self,url):
+        self.Url = url
+        self.loop = asyncio.get_event_loop()
+        
+    # YT Video Load
+    async def Pyt_V(self):
+        self.Vid = re_URL_Video.match(self.Url).group(4)
+        self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,self.Vid)
+
+        self.Web_Url = self.Url
         self.St_Url = await self._format(self.Vdic)
         self.St_Vol = self.Vdic.get('playerConfig',{}).get('audioConfig',{}).get('loudnessDb',None)
+        return self
 
 
     async def _format(self,Vdic):
@@ -32,27 +36,35 @@ class StreamAudioData:
                 res.append(fm)
         return res[-1]['url']
 
-    @classmethod
-    async def pytube_search(col,arg,mode):
-        loop = asyncio.get_event_loop()
-        pyt = pytube.Search(arg)
-        Vdic = await loop.run_in_executor(None,pyt.fetch_and_parse)
-        if pyt:
-            if mode == 'video':
-                INN = InnerTube()
-                col.Vdic = await loop.run_in_executor(None,INN.player,Vdic[0][0].video_id)
-                col.Web_Url = f"https://youtu.be/{col.Vdic['videoDetails']['videoId']}"
-                col.St_Vol = col.Vdic.get('playerConfig',{}).get('audioConfig',{}).get('loudnessDb',None)
-                col.St_Url = await col._format(col.Vdic)
+    # Video Search
+    async def Pyt_V_Search(self):
+        pyt = pytube.Search(self.Url)
+        Vdic = await self.loop.run_in_executor(None,pyt.fetch_and_parse)
+        self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,Vdic[0][0].video_id)
+        self.Web_Url = f"https://youtu.be/{self.Vdic['videoDetails']['videoId']}"
+        self.St_Vol = self.Vdic.get('playerConfig',{}).get('audioConfig',{}).get('loudnessDb',None)
+        self.St_Url = await self._format(self.Vdic)
+        return self
 
-            if mode == 'playlist':
-                col.Web_Url = [temp.watch_url for temp in Vdic[0]]
-
-    
-    async def yt_dlp_vid(self,url):
-        loop = asyncio.get_event_loop()
+    # 汎用人型決戦兵器
+    async def Ytdlp_V(self):
         with YoutubeDL({'format': 'best','quiet':True,'noplaylist':True}) as ydl:
-            info = await loop.run_in_executor(None,ydl.extract_info,url,False)
+            info = await self.loop.run_in_executor(None,ydl.extract_info,self.Url,False)
             self.St_Url = info['url']
-            self.Web_Url = url
+            self.Web_Url = self.Url
             self.St_Vol = None
+
+# Playlist Search
+async def Pyt_P_Search(Url):
+    loop = asyncio.get_event_loop()
+    pyt = pytube.Search(Url)
+    Vdic = await loop.run_in_executor(None,pyt.fetch_and_parse)
+    return [temp.watch_url for temp in Vdic[0]]
+
+# Playlist 全体 Load
+async def Pyt_P(Url):
+    loop = asyncio.get_event_loop()
+    yt_pl = pytube.Playlist(Url)
+    try: return await loop.run_in_executor(None,DeferredGeneratorList,yt_pl.url_generator())
+    except Exception as e:
+        print(f'Error : Playlist All-List {e}')
