@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import asyncio
 import os
 import ffmpeg
@@ -62,7 +62,7 @@ async def on_ready():
     print(client.user.name)
     print(client.user.id)
     print('----------------')
-    await Send_Embed()
+    Loop.start()
 
 
 @client.command()
@@ -106,6 +106,34 @@ async def stop(ctx):
 #--------------------------------------------------
 # GUI操作
 #--------------------------------------------------
+# Button
+class CreateButton(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="<",)
+    async def def_button0(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+
+    @discord.ui.button(label="⏯",style=discord.ButtonStyle.blurple)
+    async def def_button1(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        guild = interaction.guild
+        vc = guild.voice_client
+        if vc.is_paused():
+            print(f'{guild.name} : #resume')
+            vc.resume()
+        elif vc.is_playing():
+            print(f'{guild.name} : #stop')
+            vc.pause()
+
+    @discord.ui.button(label=">")
+    async def def_button2(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        await def_skip(interaction.message)
+
+
+
 
 @client.command()
 async def playing(ctx,*args):
@@ -132,11 +160,11 @@ async def playing(ctx,*args):
         try: await late_E.delete()
         except discord.NotFound: pass
 
+
+
     # 新しいEmbed
-    Sended_Mes = await channel.send(embed=embed)
+    Sended_Mes = await channel.send(embed=embed,view=CreateButton())
     g_opts[gid]['Embed_Message'] = Sended_Mes 
-    await Sended_Mes.add_reaction("⏯")
-    await Sended_Mes.add_reaction("⏩")
     await Sended_Mes.add_reaction("🔁")
     if g_opts[gid].get('playlist'):
         await Sended_Mes.add_reaction("♻")
@@ -155,19 +183,6 @@ async def on_reaction_add(Reac,User):
     if vc.is_playing() or vc.is_paused():
 
         #### Setting
-        # Play Pause
-        if Reac.emoji == '⏯':
-            if vc.is_paused():
-                print(f'{guild.name} : #resume')
-                vc.resume()
-            elif vc.is_playing():
-                print(f'{guild.name} : #stop')
-                vc.pause()
-
-        # 次の曲
-        if Reac.emoji == '⏩':
-            await def_skip(Reac.message)
-
         # 単曲ループ
         if Reac.emoji =='🔁':
             if g_opts[gid]['loop'] == 0:
@@ -283,21 +298,21 @@ async def def_skip(ctx):
 
 @client.command()
 async def queue(ctx,*args):
-    await def_play(ctx,args,1)
+    await def_play(ctx,args,True)
 
 @client.command()
 async def q(ctx,*args):
-    await def_play(ctx,args,1)
+    await def_play(ctx,args,True)
 
 @client.command()
 async def play(ctx,*args):
-    await def_play(ctx,args,0)
+    await def_play(ctx,args,False)
 
 @client.command()
 async def p(ctx,*args):
-    await def_play(ctx,args,0)
+    await def_play(ctx,args,False)
 
-async def def_play(ctx,args,mode_q):
+async def def_play(ctx,args,Q):
     if not await join_check(ctx): return
     guild = ctx.guild
     vc = guild.voice_client
@@ -356,27 +371,29 @@ async def def_play(ctx,args,mode_q):
     g_opts[gid]['latest_ch'] = ctx.channel
 
         #Queueに登録
-    if mode_q == 0:
+    if Q:
+        g_opts[gid]['queue'].append((source,web_url,loud_vol))
+    else:
         if g_opts[gid]['queue'] == []:
             g_opts[gid]['queue'].append((source,web_url,loud_vol))
         else:
             g_opts[gid]['queue'][0] = (source,web_url,loud_vol)
-    else:
-        g_opts[gid]['queue'].append((source,web_url,loud_vol))
+
 
         # 再生されるまでループ
-    if mode_q == 0:
+    if Q:
+        if not vc.is_playing():
+            await play_loop(guild,None,0)
+        if vc.is_paused():
+            vc.resume()
+    else:
         if vc.is_playing():
             vc.stop()
         else:
             await play_loop(guild,None,0)
         if vc.is_paused():
             vc.resume()
-    else:
-        if not vc.is_playing():
-            await play_loop(guild,None,0)
-        if vc.is_paused():
-            vc.resume()
+
 
 
 
@@ -573,42 +590,34 @@ async def play_loop(guild,played,did_time):
             }
             
         source_play = await discord.FFmpegOpusAudio.from_probe(source_url,**FFMPEG_OPTIONS)
-        vc.play(source_play,after=lambda e: asyncio.run(play_loop(guild,source_url,played_time)))
-
-        if late_E := g_opts[gid]['may_i_edit'].get(g_opts[gid]['latest_ch'].id):
-            embed = await Edit_Embed(gid)
-            Play_Loop_Embed.append((False,guild,late_E,embed))
+        vc.play(source_play,after=lambda e: client.loop.create_task(play_loop(guild,source_url,played_time)))
+        Channel = g_opts[guild.id]['latest_ch']
+        if late_E := g_opts[gid]['may_i_edit'].get(Channel.id):
+            try: 
+                await late_E.edit(embed= await Edit_Embed(gid))
+            except discord.NotFound:
+                await playing(None,guild,Channel)
 
         else:
-            Play_Loop_Embed.append((True,guild))
-
-
-async def Send_Embed():
-    while True:
-        try:
-            await asyncio.sleep(0.2)
-            while Play_Loop_Embed:
-                guild = Play_Loop_Embed[0][1]
-                channel = g_opts[guild.id]['latest_ch']
-                
-                if Play_Loop_Embed[0][0]:
-                    await playing(None,guild,channel)
-                else:
-                    late_E = Play_Loop_Embed[0][2]
-                    embed = Play_Loop_Embed[0][3]
-                    try: 
-                        await late_E.edit(embed=embed)
-                    except discord.NotFound:
-                        await playing(None,guild,channel)
-
-                del Play_Loop_Embed[0]
-        except Exception as e:
-            print(f'Error Send_Embed : {e}')
+            await playing(None,guild,Channel)
 
 
 
+@tasks.loop(seconds=0.2)
+async def Loop():
+    try:
+        pass
+    except Exception as e:
+        print(f'Error Send_Embed : {e}')
+
+
+# 最新の投稿か確認
 @client.event
 async def on_message(message):
+    """
+    チャンネルの履歴が見れないため チャンネル毎に 投稿があったか記録していく
+    user.id で判別してるため、playing以外の投稿があったらバグる
+    """
     if message.guild.voice_client:
         if message.author.id == client.user.id:
             g_opts[message.guild.id]['may_i_edit'][message.channel.id] = message
