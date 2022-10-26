@@ -4,6 +4,7 @@ from yt_dlp import YoutubeDL
 import pytube
 from pytube.innertube import InnerTube
 from pytube.helpers import DeferredGeneratorList
+from discord import FFmpegOpusAudio
 
 
 re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
@@ -22,19 +23,10 @@ class StreamAudioData:
         self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,self.Vid)
 
         self.Web_Url = self.Url
-        self.St_Url = await self._format(self.Vdic)
         self.St_Vol = self.Vdic.get('playerConfig',{}).get('audioConfig',{}).get('loudnessDb',None)
+        self.St_Url = await self._format()
         return self
 
-
-    async def _format(self,Vdic):
-        formats = Vdic['streamingData'].get('formats',[])
-        formats.extend(Vdic['streamingData'].get('adaptiveFormats',[]))
-        res = []
-        for fm in formats:
-            if 249 <= fm['itag'] <= 251 or 139 <= fm['itag'] <= 141:
-                res.append(fm)
-        return res[-1]['url']
 
     # Video Search
     async def Pyt_V_Search(self):
@@ -43,7 +35,7 @@ class StreamAudioData:
         self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,Vdic[0][0].video_id)
         self.Web_Url = f"https://youtu.be/{self.Vdic['videoDetails']['videoId']}"
         self.St_Vol = self.Vdic.get('playerConfig',{}).get('audioConfig',{}).get('loudnessDb',None)
-        self.St_Url = await self._format(self.Vdic)
+        self.St_Url = await self._format()
         return self
 
     # 汎用人型決戦兵器
@@ -53,6 +45,30 @@ class StreamAudioData:
             self.St_Url = info['url']
             self.Web_Url = self.Url
             self.St_Vol = None
+
+
+    async def _format(self):
+        formats = self.Vdic['streamingData'].get('formats',[])
+        formats.extend(self.Vdic['streamingData'].get('adaptiveFormats',[]))
+        res = []
+        for fm in formats:
+            if 249 <= fm['itag'] <= 251 or 139 <= fm['itag'] <= 141:
+                res.append(fm)
+        return res[-1]['url']
+
+
+    async def AudioSource(self):
+        volume = -20
+        if Vol := self.St_Vol:
+            if Vol <= 0:
+                Vol /= 2
+            volume -= int(Vol)
+
+        FFMPEG_OPTIONS = {
+            "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 2147483647 -probesize 2147483647",
+            'options': f'-vn -c:a libopus -af "volume={volume}dB" -application lowdelay'
+            }
+        return await FFmpegOpusAudio.from_probe(self.St_Url,**FFMPEG_OPTIONS)
 
 # Playlist Search
 async def Pyt_P_Search(Url):

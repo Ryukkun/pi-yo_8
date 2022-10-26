@@ -98,7 +98,13 @@ async def stop(ctx):
         print(f'{ctx.guild.name} : #stop')
         vc.pause()
 
-
+@client.command()
+async def now(ctx):
+    vc = ctx.voice_client
+    if vc.is_playing():
+        print(f'{ctx.guild.name} : #playing')
+    if vc.is_paused():
+        print(f'{ctx.guild.name} : #paused')    
 
 
 #--------------------------------------------------
@@ -297,6 +303,7 @@ async def def_skip(ctx):
     gid = guild.id
     if vc:
         if g_opts[gid]['queue'] != []:
+            g_opts[gid]['rewind'].append(g_opts[gid]['queue'][0])
             del g_opts[gid]['queue'][0]
             print(f'{guild.name} : #次の曲へ skip')
             vc.stop()
@@ -581,20 +588,8 @@ async def play_loop(guild,played,did_time):
         AudioData = g_opts[gid]['queue'][0]
         played_time = time.time()
         print(f"{guild.name} : Play  [Now len: {str(len(g_opts[gid]['queue']))}]")
-
-        volume = -20
-        if loud_vol := AudioData.St_Vol:
-            if loud_vol <= 0:
-                loud_vol /= 2
-            volume -= int(loud_vol)
-
-        FFMPEG_OPTIONS = {
-            "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 2147483647 -probesize 2147483647",
-            'options': f'-vn -c:a libopus -af "volume={volume}dB" -application lowdelay'
-            }
             
-        source_play = await discord.FFmpegOpusAudio.from_probe(AudioData.St_Url,**FFMPEG_OPTIONS)
-        vc.play(source_play,after=lambda e: client.loop.create_task(play_loop(guild,AudioData.St_Url,played_time)))
+        vc.play(await AudioData.AudioSource(),after=lambda e: client.loop.create_task(play_loop(guild,AudioData.St_Url,played_time)))
         Channel = g_opts[guild.id]['latest_ch']
         if late_E := g_opts[gid]['may_i_edit'].get(Channel.id):
             try: 
