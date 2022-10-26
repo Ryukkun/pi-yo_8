@@ -11,6 +11,7 @@ import aiohttp
 from bs4 import BeautifulSoup
 import audio as SAudio
 from audio import StreamAudioData as SAD
+from concurrent.futures import ThreadPoolExecutor
 
 
 
@@ -75,6 +76,7 @@ async def join(ctx):
         g_opts[gid]['queue'] = []
         g_opts[gid]['may_i_edit'] = {}
         g_opts[gid]['rewind'] = []
+        g_opts[gid]['Ma'] = MultiAudio(ctx.guild)
     
 
 @client.command()
@@ -93,18 +95,11 @@ async def bye(ctx):
 
 @client.command()
 async def stop(ctx):
-    vc = ctx.voice_client
-    if vc.is_playing():
+    Mvc = g_opts[ctx.guild.id]['Ma'].Music
+    if Mvc.is_playing():
         print(f'{ctx.guild.name} : #stop')
-        vc.pause()
-
-@client.command()
-async def now(ctx):
-    vc = ctx.voice_client
-    if vc.is_playing():
-        print(f'{ctx.guild.name} : #playing')
-    if vc.is_paused():
-        print(f'{ctx.guild.name} : #paused')    
+        Mvc.pause()
+  
 
 
 #--------------------------------------------------
@@ -119,33 +114,30 @@ class CreateButton(discord.ui.View):
     async def def_button0(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         guild = interaction.guild
-        vc = guild.voice_client
         gid = interaction.guild_id
+        Mvc = g_opts[gid]['Ma'].Music
         
         if not g_opts[gid]['rewind']: return
         AudioData = g_opts[gid]['rewind'][-1]
         g_opts[gid]['queue'].insert(0,AudioData)
         del g_opts[gid]['rewind'][-1]
 
-        if vc.is_playing() or vc.is_paused():
-            vc.stop()
-        else:
-            await play_loop(guild,None,0)
-        if vc.is_paused():
-            vc.resume()
+        await play_loop(guild,None,0)
+        if Mvc.is_paused():
+            Mvc.resume()
 
 
     @discord.ui.button(label="⏯",style=discord.ButtonStyle.blurple)
     async def def_button1(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         guild = interaction.guild
-        vc = guild.voice_client
-        if vc.is_paused():
+        Mvc = g_opts[guild.id]['Ma'].Music
+        if Mvc.is_paused():
             print(f'{guild.name} : #resume')
-            vc.resume()
-        elif vc.is_playing():
+            Mvc.resume()
+        elif Mvc.is_playing():
             print(f'{guild.name} : #stop')
-            vc.pause()
+            Mvc.pause()
 
     @discord.ui.button(label=">")
     async def def_button2(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -159,17 +151,17 @@ class CreateButton(discord.ui.View):
 async def playing(ctx,*args):
     if ctx:
         guild = ctx.guild
-        vc = guild.voice_client
         gid = guild.id
+        Mvc = g_opts[gid]['Ma'].Music
         channel = ctx.channel
         g_opts[gid]['latest_ch'] = channel
     else:
         guild = args[0]
-        vc = guild.voice_client
         gid = guild.id
+        Mvc = g_opts[guild.id]['Ma'].Music
         channel = args[1]
 
-    if not vc.is_playing() and not vc.is_paused(): return
+    if not Mvc.is_playing(): return
     
     # Get Embed
     embed = await Edit_Embed(gid)
@@ -195,12 +187,12 @@ async def playing(ctx,*args):
 
 @client.event
 async def on_reaction_add(Reac,User):
-    vc = Reac.message.guild.voice_client
     guild = Reac.message.guild
     gid = guild.id
+    Mvc = g_opts[gid]['Ma'].Music
     if User.bot or Reac.message.author.id != client.user.id: return
     asyncio.create_task(Reac.remove(User))
-    if vc.is_playing() or vc.is_paused():
+    if Mvc.is_playing():
 
         #### Setting
         # 単曲ループ
@@ -306,7 +298,7 @@ async def def_skip(ctx):
             g_opts[gid]['rewind'].append(g_opts[gid]['queue'][0])
             del g_opts[gid]['queue'][0]
             print(f'{guild.name} : #次の曲へ skip')
-            vc.stop()
+            await play_loop(guild,None,0)
         
 
 
@@ -336,12 +328,13 @@ async def def_play(ctx,args,Q):
     if not await join_check(ctx): return
     guild = ctx.guild
     vc = guild.voice_client
+    Mvc = g_opts[gid]['Ma'].Music
     gid = guild.id
 
     # 一時停止していた場合再生 開始
     if args == ():
-        if vc.is_paused():
-            vc.resume()
+        if Mvc.is_paused():
+            Mvc.resume()
         return
     else:
         arg = ' '.join(args)
@@ -397,17 +390,14 @@ async def def_play(ctx,args,Q):
 
         # 再生されるまでループ
     if Q:
-        if not vc.is_playing():
+        if not Mvc.is_playing():
             await play_loop(guild,None,0)
-        if vc.is_paused():
-            vc.resume()
+        if Mvc.is_paused():
+            Mvc.resume()
     else:
-        if vc.is_playing():
-            vc.stop()
-        else:
-            await play_loop(guild,None,0)
-        if vc.is_paused():
-            vc.resume()
+        await play_loop(guild,None,0)
+        if Mvc.is_paused():
+            Mvc.resume()
 
 
 
@@ -431,11 +421,12 @@ async def def_playlist(ctx,args):
     guild = ctx.guild
     vc = guild.voice_client
     gid = guild.id
+    Mvc = g_opts[gid]['Ma'].Music
 
     # 一時停止していた場合再生 開始
     if args == ():
-        if vc.is_paused():
-            vc.resume()
+        if Mvc.is_paused():
+            Mvc.resume()
         return
     elif type(args) == str:
         arg = args
@@ -477,12 +468,9 @@ async def def_playlist(ctx,args):
             g_opts[gid]['playlist_index'] = None
             g_opts[gid]['loop'] = 0
             g_opts[gid]['latest_ch'] = ctx.channel
-            if vc.is_playing():
-                vc.stop()
-            else:
-                await play_loop(guild,None,0)
-            if vc.is_paused():
-                vc.resume()
+            await play_loop(guild,None,0)
+            if Mvc.is_paused():
+                Mvc.resume()
 
         # Load Video in the Playlist 
         Pl = await SAudio.Pyt_P(arg)
@@ -519,12 +507,9 @@ async def def_playlist(ctx,args):
     g_opts[gid]['queue'] = []
 
     # 再生
-    if vc.is_playing():
-        vc.stop()
-    else:
-        await play_loop(guild,None,0)
-    if vc.is_paused():
-        vc.resume()
+    await play_loop(guild,None,0)
+    if Mvc.is_paused():
+        Mvc.resume()
 
 
 
@@ -558,11 +543,10 @@ async def ydl_playlist(guild):
 #---------------------------------------------------------------------------------------
 async def play_loop(guild,played,did_time):
     gid = guild.id
-    vc = guild.voice_client
 
 
     # あなたは用済みよ
-    if not vc: return
+    if not guild.voice_client: return
 
     # Queue削除
     if g_opts[gid]['queue']:
@@ -583,13 +567,12 @@ async def play_loop(guild,played,did_time):
         await ydl_playlist(guild)
 
     # 再生
-    vc = guild.voice_client
-    if g_opts[gid]['queue'] != [] and not vc.is_playing():
+    if g_opts[gid]['queue'] != []:
         AudioData = g_opts[gid]['queue'][0]
         played_time = time.time()
         print(f"{guild.name} : Play  [Now len: {str(len(g_opts[gid]['queue']))}]")
             
-        await MultiAudio(guild).Music.play(AudioData)
+        await g_opts[guild.id]['Ma'].Music.play(AudioData,lambda : client.loop.create_task(play_loop(guild,AudioData.St_Url,played_time)))
         Channel = g_opts[guild.id]['latest_ch']
         if late_E := g_opts[gid]['may_i_edit'].get(Channel.id):
             try: 
@@ -606,21 +589,29 @@ class MultiAudio():
         self.guild = guild
         self.gid = guild.id
         self.vc = guild.voice_client
-        self.Music = self._Music()
+        self.Music = self._Music(self)
         self.Voice = self._Voice()
-        self.Loop.start()
+
 
     class _Voice():
         def play(self,VAudioSource):
             self.VAudioSource = VAudioSource
 
     class _Music():
-        def __init__(self):
-            self.MAudioSource = None
+        def __init__(self,parent):
+            self.AudioSource = None
             self.Pausing = False
+            self.Parent = parent
+            self.Time = 0
+            self.After = None
 
-        async def play(self,MAudioSource):
-            self.MAudioSource = await MAudioSource.AudioSource()
+        async def play(self,AudioSource,after):
+            self.AudioSource = await AudioSource.AudioSource()
+            self.Timer = 0
+            self.Pausing = False
+            self.Parent.After = after
+            if not self.Parent.Loop.is_running():
+                self.Parent.Loop.start()
 
         def stop(self):
             self.MAudioSource = None
@@ -630,21 +621,36 @@ class MultiAudio():
 
         def pause(self):
             self.Pausing = True
+
+        def is_playing(self):
+            if self.AudioSource:
+                return True
+            return False
+
+        def is_paused(self):
+            return self.Pausing
         
         def read_bytes(self):
-            if self.MAudioSource and self.Pausing == False:
-                return self.MAudioSource.read()
+            if self.AudioSource and self.Pausing == False:
+                if Bytes := self.AudioSource.read():
+                    self.Timer += 1
+                    return Bytes
+                else:
+                    self.AudioSource = None
+                    self.Parent.Loop.stop()
+                    return 'Fin'
 
 
 
-    @tasks.loop(seconds=0.2)
+    @tasks.loop(seconds=0.02)
     async def Loop(self):
-        try:
-            if MBytes := self.Music.read_bytes():
-                self.vc.send_audio_packet(MBytes)
-        except Exception as e:
-            print(f'Error send_audio_packet : {e}')
+        self.MBytes = self.Music.read_bytes()
+        if self.MBytes == 'Fin':
+            self.After()
+        elif self.MBytes:
+            self.vc.send_audio_packet(self.MBytes,encode=False)
 
+            
 
 # 最新の投稿か確認
 @client.event
