@@ -59,7 +59,7 @@ async def on_ready():
     print(client.user.name)
     print(client.user.id)
     print('----------------')
-    Loop.start()
+    
 
 
 @client.command()
@@ -589,7 +589,7 @@ async def play_loop(guild,played,did_time):
         played_time = time.time()
         print(f"{guild.name} : Play  [Now len: {str(len(g_opts[gid]['queue']))}]")
             
-        vc.play(await AudioData.AudioSource(),after=lambda e: client.loop.create_task(play_loop(guild,AudioData.St_Url,played_time)))
+        await MultiAudio(guild).Music.play(AudioData)
         Channel = g_opts[guild.id]['latest_ch']
         if late_E := g_opts[gid]['may_i_edit'].get(Channel.id):
             try: 
@@ -601,13 +601,49 @@ async def play_loop(guild,played,did_time):
             await playing(None,guild,Channel)
 
 
+class MultiAudio():
+    def __init__(self,guild) -> None:
+        self.guild = guild
+        self.gid = guild.id
+        self.vc = guild.voice_client
+        self.Music = self._Music()
+        self.Voice = self._Voice()
+        self.Loop.start()
 
-@tasks.loop(seconds=0.2)
-async def Loop():
-    try:
-        pass
-    except Exception as e:
-        print(f'Error Send_Embed : {e}')
+    class _Voice():
+        def play(self,VAudioSource):
+            self.VAudioSource = VAudioSource
+
+    class _Music():
+        def __init__(self):
+            self.MAudioSource = None
+            self.Pausing = False
+
+        async def play(self,MAudioSource):
+            self.MAudioSource = await MAudioSource.AudioSource()
+
+        def stop(self):
+            self.MAudioSource = None
+
+        def resume(self):
+            self.Pausing = False
+
+        def pause(self):
+            self.Pausing = True
+        
+        def read_bytes(self):
+            if self.MAudioSource and self.Pausing == False:
+                return self.MAudioSource.read()
+
+
+
+    @tasks.loop(seconds=0.2)
+    async def Loop(self):
+        try:
+            if MBytes := self.Music.read_bytes():
+                self.vc.send_audio_packet(MBytes)
+        except Exception as e:
+            print(f'Error send_audio_packet : {e}')
 
 
 # 最新の投稿か確認
