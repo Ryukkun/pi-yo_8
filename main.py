@@ -1,3 +1,4 @@
+from types import NoneType
 import discord
 from discord.ext import commands, tasks
 import asyncio
@@ -11,23 +12,39 @@ import aiohttp
 from bs4 import BeautifulSoup
 import audio as SAudio
 from audio import StreamAudioData as SAD
-from concurrent.futures import ThreadPoolExecutor
+from synthetic_voice import creat_voice
+import numpy as np
+import shutil
 
 
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 ####  Config
 if not os.path.isfile('config.ini'):
     config = configparser.ConfigParser()
     config['DEFAULT'] = {
         'Prefix':'.',
-        'Token':''
+        'Token':'',
+        'Admin_dic':'./dic/admin_dic.txt',
+        'User_dic':'./dic/user_dic/'
+    }
+    config['Open_Jtalk'] = {
+        'Dic':'/var/lib/mecab/dic/open-jtalk/naist-jdic',
+        'Voice':'./Voice/',
+        'Output':'./Output/'
     }
     with open('config.ini', 'w') as f:
         config.write(f)
 
 config = configparser.ConfigParser()
 config.read('config.ini')
-
+try:shutil.rmtree(config['Open_Jtalk']['Output'])
+except Exception:pass
+os.makedirs(config['DEFAULT']['User_dic'], exist_ok=True)
+os.makedirs(config['Open_Jtalk']['Voice'], exist_ok=True)
+os.makedirs(config['Open_Jtalk']['Output'], exist_ok=True)
+with open(config['DEFAULT']['Admin_dic'],'a'):pass
 
 
 
@@ -74,9 +91,11 @@ async def join(ctx):
         g_opts[gid]['loop_playlist'] = 1
         g_opts[gid]['random_playlist'] = 1
         g_opts[gid]['queue'] = []
+        g_opts[gid]['Voice_queue'] = []
         g_opts[gid]['may_i_edit'] = {}
         g_opts[gid]['rewind'] = []
         g_opts[gid]['Ma'] = MultiAudio(ctx.guild)
+        with open(config['DEFAULT']['User_dic']+ str(ctx.guild.id) + '.txt', 'a'): pass
     
 
 @client.command()
@@ -285,9 +304,6 @@ async def Edit_Embed(gid):
 async def skip(ctx):
     await def_skip(ctx)
 
-@client.command()
-async def s(ctx):
-    await def_skip(ctx)
 
 async def def_skip(ctx):
     guild = ctx.guild
@@ -327,9 +343,10 @@ async def p(ctx,*args):
 async def def_play(ctx,args,Q):
     if not await join_check(ctx): return
     guild = ctx.guild
+    gid = guild.id
     vc = guild.voice_client
     Mvc = g_opts[gid]['Ma'].Music
-    gid = guild.id
+    
 
     # 一時停止していた場合再生 開始
     if args == ():
@@ -437,9 +454,6 @@ async def def_playlist(ctx,args):
 
 
     # 君はほんとにplaylistなのかい　どっちなんだい！
-    yt_first = None
-    watch_url = None
-    loud_vol = None
     
 
     ### PlayList 本体のURL ------------------------------------------------------------------------#
@@ -455,9 +469,9 @@ async def def_playlist(ctx,args):
     ### ここは特別 elif の範囲だけで処理終わらせる
     ###
     elif result_re := re_URL_PL_Video.match(arg):
-        watch_url = result_re.group(2)
+        watch_id = result_re.group(2)
         arg = f'https://www.youtube.com/playlist?list={result_re.group(3)}'
-        extract_url = f'https://www.youtube.com/watch?v={watch_url}'
+        extract_url = f'https://www.youtube.com/watch?v={watch_id}'
 
         try: AudioData = await SAD(extract_url).Pyt_V()
         except Exception as e:
@@ -480,7 +494,7 @@ async def def_playlist(ctx,args):
 
         # Playlist Index 特定
         for i, temp in enumerate(g_opts[gid]['playlist']):
-            if watch_url in temp:
+            if watch_id in temp:
                 g_opts[gid]['playlist_index'] = i
                 break
         if not g_opts[gid]['playlist_index']:
@@ -572,7 +586,8 @@ async def play_loop(guild,played,did_time):
         played_time = time.time()
         print(f"{guild.name} : Play  [Now len: {str(len(g_opts[gid]['queue']))}]")
             
-        await g_opts[guild.id]['Ma'].Music.play(AudioData,lambda : client.loop.create_task(play_loop(guild,AudioData.St_Url,played_time)))
+        Mvc = g_opts[guild.id]['Ma'].Music
+        await Mvc.play(AudioData,lambda : client.loop.create_task(play_loop(guild,AudioData.St_Url,played_time)))
         Channel = g_opts[guild.id]['latest_ch']
         if late_E := g_opts[gid]['may_i_edit'].get(Channel.id):
             try: 
@@ -589,13 +604,55 @@ class MultiAudio():
         self.guild = guild
         self.gid = guild.id
         self.vc = guild.voice_client
+        self.MLoop = False
+        self.VLoop = False
         self.Music = self._Music(self)
-        self.Voice = self._Voice()
+        self.Voice = self._Voice(self)
+        self.I = 960
+        self.play_audio = self.vc.encoder = discord.opus.Encoder()
+        self.play_audio = self.vc.send_audio_packet
+
+    def Loop_Check(self):
+        if self.VLoop or self.MLoop:
+            if not self.Loop.is_running():
+                self.Loop.start()
+        else:
+            if self.Loop.is_running():
+                self.Loop.stop()
 
 
     class _Voice():
-        def play(self,VAudioSource):
-            self.VAudioSource = VAudioSource
+        def __init__(self,parent):
+            self.AudioSource = None
+            self.Parent = parent
+            
+
+        async def play(self,AudioSource,after):
+            self.AudioSource = AudioSource
+            self.Parent.VAfter = after
+            self.Parent.VLoop = True
+            self.Parent.Loop_Check()
+
+        def stop(self):
+            self.AudioSource = None
+
+
+        def is_playing(self):
+            if self.AudioSource:
+                return True
+            return False
+        
+        def read_bytes(self):
+            if self.AudioSource:
+                if Bytes := self.AudioSource.read():
+                    return Bytes
+                else:
+                    self.AudioSource = None
+                    self.Parent.VLoop = False
+                    self.Parent.Loop_Check()
+                    return 'Fin'
+
+
 
     class _Music():
         def __init__(self,parent):
@@ -604,17 +661,18 @@ class MultiAudio():
             self.Parent = parent
             self.Time = 0
             self.After = None
+            
 
         async def play(self,AudioSource,after):
             self.AudioSource = await AudioSource.AudioSource()
             self.Timer = 0
             self.Pausing = False
-            self.Parent.After = after
-            if not self.Parent.Loop.is_running():
-                self.Parent.Loop.start()
+            self.Parent.MAfter = after
+            self.Parent.MLoop = True
+            self.Parent.Loop_Check()
 
         def stop(self):
-            self.MAudioSource = None
+            self.AudioSource = None
 
         def resume(self):
             self.Pausing = False
@@ -637,35 +695,40 @@ class MultiAudio():
                     return Bytes
                 else:
                     self.AudioSource = None
-                    self.Parent.Loop.stop()
+                    self.Parent.MLoop = False
+                    self.Parent.Loop_Check()
                     return 'Fin'
 
 
 
     @tasks.loop(seconds=0.02)
     async def Loop(self):
-        self.MBytes = self.Music.read_bytes()
-        if self.MBytes == 'Fin':
-            self.After()
-        elif self.MBytes:
-            self.vc.send_audio_packet(self.MBytes,encode=False)
+        MBytes = self.Music.read_bytes()
+        VBytes = self.Voice.read_bytes()
+        VArray = None
+        MArray = None
+        if MBytes == 'Fin':
+            self.MAfter()
+            MBytes = None
+        elif MBytes:
+            try:MArray = np.frombuffer(MBytes,np.int16)
+            except Exception:MArray = None
+            Bytes = MBytes
+        if VBytes == 'Fin':
+            self.VAfter()
+            VBytes = None
+        elif VBytes:
+            try:VArray = np.frombuffer(VBytes,np.int16)
+            except Exception:VArray = None
+            Bytes = VBytes
+        if type(MArray) != NoneType and type(VArray) != NoneType:
+            Bytes = (MArray + VArray).astype(np.int16).tobytes()
+            #print(Bytes)
+        if MBytes or VBytes:
+            #print(Bytes)
+            self.play_audio(Bytes,encode=True)
 
             
-
-# 最新の投稿か確認
-@client.event
-async def on_message(message):
-    """
-    チャンネルの履歴が見れないため チャンネル毎に 投稿があったか記録していく
-    user.id で判別してるため、playing以外の投稿があったらバグる
-    """
-    if message.guild.voice_client:
-        if message.author.id == client.user.id:
-            g_opts[message.guild.id]['may_i_edit'][message.channel.id] = message
-        else:
-            g_opts[message.guild.id]['may_i_edit'][message.channel.id] = None
-    
-    await client.process_commands(message)
 
 
 
@@ -687,6 +750,135 @@ async def join_check(ctx):
         # Joinしてるよね！！
     return guild.voice_client
     
+
+
+
+
+
+
+
+
+#---------------------------------
+
+
+
+
+
+
+@client.command()
+async def register(ctx, arg1, arg2):
+    gid = str(ctx.guild.id)
+    with open(config['DEFAULT']['User_dic']+ gid +'.txt', mode='a') as f:
+        f.write(arg1 + ',' + arg2 + '\n')
+        print(gid +'.txtに書き込み : '+ arg1 + ',' + arg2)
+
+@client.command()
+async def delete(ctx, arg1):
+    gid = str(ctx.guild.id)
+    with open(config['DEFAULT']['User_dic']+ gid +'.txt', mode='r') as f:
+        text = f.read()
+        replaced_text = re.sub(rf'{arg1},[^\n]+\n','',text)
+    if re.search(rf'{arg1},[^\n]+\n',text):
+        with open(config['DEFAULT']['User_dic']+ gid +'.txt', mode='w') as f:
+            f.write(replaced_text)
+        print(f'{gid}.txtから削除 : {arg1}')
+
+
+@client.command()
+async def s(ctx):
+    if ctx.guild.voice_client:
+        g_opts[ctx.guild.id]['Ma'].Voice.stop()
+        await playV_loop(ctx.guild)
+
+@client.command()
+async def shutup(ctx):
+    if ctx.guild.voice_client:
+        g_opts[ctx.guild.id]['Ma'].Voice.stop()
+        await playV_loop(ctx.guild)
+
+@client.event
+async def on_message(message):
+    # 最新の投稿を記録
+    """ 
+    チャンネルの履歴が見れないため チャンネル毎に 投稿があったか記録していく
+    user.id で判別してるため、playing以外の投稿があったらバグる
+    """
+    if message.guild.voice_client:
+        if message.author.id == client.user.id:
+            g_opts[message.guild.id]['may_i_edit'][message.channel.id] = message
+        else:
+            g_opts[message.guild.id]['may_i_edit'][message.channel.id] = None
+    
+
+
+    # 読み上げ
+    guild = message.guild
+    gid = guild.id
+    vc = guild.voice_client
+    
+
+    # 発言者がBotの場合はPass
+    if message.author.bot:
+        print('.\n#message.author : bot')
+    else:
+        print(f'.\n#message.server  : {guild.name} ({message.channel.name})')
+        print( message.author.name +" (",message.author.display_name,') : '+ message.content)
+    
+        # コマンドではなく なおかつ Joinしている場合
+        if not message.content.startswith(config['DEFAULT']['Prefix']) and vc:
+
+            Vvc = g_opts[gid]['Ma'].Voice
+            now_time = time.time()
+            source = config['Open_Jtalk']['Output']+str(message.guild.id)+"-"+str(now_time)+".wav"
+            g_opts[gid]['Voice_queue'].append([source,0])
+
+            # 音声ファイル ファイル作成
+            try : await creat_voice(message.content,str(message.guild.id),str(now_time),config)
+            except Exception as e:                                              # Error
+                print(f"Error : 音声ファイル作成に失敗 {e}")
+                g_opts[gid]['Voice_queue'].remove([source,0])
+
+            print('生成時間 : '+str(time.time()-now_time))
+            g_opts[gid]['Voice_queue'] = [[source,1] if i[0] == source else i for i in g_opts[gid]['Voice_queue']]  # 音声ファイルが作成済みなのを記述
+
+            # 再生されるまでループ
+            if not Vvc.is_playing():
+                await playV_loop(guild)
+
+    # Fin
+    await client.process_commands(message)
+
+
+
+# 再生 Loop
+async def playV_loop(guild):
+    gid = guild.id
+    vc = guild.voice_client
+    Vvc = g_opts[gid]['Ma'].Voice
+
+    if g_opts[gid]['Voice_queue'] ==[]: return
+
+    while g_opts[gid]['Voice_queue'][0][1] == 2:                # ファイル削除
+        voice_data = g_opts[gid]['Voice_queue'][0]
+        if os.path.isfile(voice_data[0]):
+            os.remove(voice_data[0])
+        del g_opts[gid]['Voice_queue'][0]
+        if g_opts[gid]['Voice_queue'] ==[]: return
+
+    if g_opts[gid]['Voice_queue'][0][1] == 1:                   # 再生
+        source = g_opts[gid]['Voice_queue'][0][0]
+        g_opts[gid]['Voice_queue'][0][1] = 2
+        print(f"Play  <{guild.name}>")
+
+        source_play = discord.FFmpegPCMAudio(source,options='-vn -c:a pcm_s16le -b:a 128k -application lowdelay')
+        await Vvc.play(source_play,lambda : client.loop.create_task(playV_loop(guild)))
+        return
+
+    if g_opts[gid]['Voice_queue'][0][1] == 0:                   # Skip
+        print("作成途中かな " + str(g_opts[gid]['Voice_queue']))
+
+
+
 
 
 

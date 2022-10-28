@@ -4,7 +4,7 @@ from yt_dlp import YoutubeDL
 import pytube
 from pytube.innertube import InnerTube
 from pytube.helpers import DeferredGeneratorList
-from discord import FFmpegOpusAudio
+from discord import FFmpegPCMAudio, FFmpegOpusAudio
 
 
 re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
@@ -66,9 +66,9 @@ class StreamAudioData:
 
         FFMPEG_OPTIONS = {
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 2147483647 -probesize 2147483647",
-            'options': f'-vn -c:a libopus -af "volume={volume}dB" -application lowdelay'
+            'options': f'-vn -c:a pcm_s16le -af "volume={volume}dB" -b:a 128k -application lowdelay'
             }
-        return await FFmpegOpusAudio.from_probe(self.St_Url,**FFMPEG_OPTIONS)
+        return FFmpegPCMAudio(self.St_Url,**FFMPEG_OPTIONS)
 
 # Playlist Search
 async def Pyt_P_Search(Url):
