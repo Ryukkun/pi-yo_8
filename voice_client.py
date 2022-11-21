@@ -191,8 +191,8 @@ class _APlayer():
                 #print(len(self.QBytes))
                 del self.QBytes[0]
                 self.RBytes.append(temp)
-                if len(self.RBytes) > (120 * 50):
-                    del self.RBytes[:len(self.RBytes) - (120 * 50)]
+                if len(self.RBytes) > (600 * 50):
+                    del self.RBytes[:len(self.RBytes) - (600 * 50)]
                 return temp
 
             
