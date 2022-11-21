@@ -2,11 +2,7 @@ import threading
 import asyncio
 import time
 
-import numpy as np
-
-from json import load as json_load
-from discord import opus, SpeakingState
-from types import NoneType
+from discord import SpeakingState
 
 
 class MultiAudio(threading.Thread):
@@ -48,7 +44,9 @@ class MultiAudio(threading.Thread):
         音声データ（Bytes）を取得し、必要があれば Numpy で読み込んで 合成しています
         最後に音声データ送信　ドルチェ
         """
+        global _start, delay
         _start = time.perf_counter()
+        delay = 1
         while self.loop:
             Bytes = self.Music.read_bytes()
 
@@ -56,6 +54,8 @@ class MultiAudio(threading.Thread):
             _start += 0.02
             delay = max(0, _start - time.perf_counter())
             time.sleep(delay)
+            # if delay == 0:
+            #     print(time.perf_counter() - _start)
  
             # Send Bytes
             if Bytes:
@@ -74,8 +74,12 @@ class _APlayer():
         self.Pausing = False
         self.Parent = parent
         self.Timer = 0
+        self.TargetTimer = 0
+        self.read_fin = False
+        self.read_loop = False
         self.After = None
-        self.QBytes = None
+        self.QBytes = []
+        self.RBytes = []
         self.Duration = None
         self.Loop = False
         
@@ -85,16 +89,18 @@ class _APlayer():
         self.Duration = _SAD.St_Sec
         AudioSource = await _SAD.AudioSource()
         # 最初のロードは少し時間かかるから先にロード
-        self.QBytes = AudioSource.read()
+        self.QBytes = [AudioSource.read()]
+        self.RBytes = []
         self.AudioSource = AudioSource
         self.Timer = 0
+        self.TargetTimer = 0
+        self.read_fin = False
         self.After = after
         self.resume()
 
     def stop(self):
         self.AudioSource = None
         self._SAD = None
-        self._speaking(False)
 
     def resume(self):
         self.Pausing = False
@@ -124,7 +130,6 @@ class _APlayer():
         """
         これ（self._speak）がないと謎にバグる ※botがjoinしたときに居たメンツにしか 音が聞こえない
         友達が幻聴を聞いてたら怖いよね
-        ついでにLOOPの制御も
         """
         try:
             asyncio.run_coroutine_threadsafe(self.Parent.vc.ws.speak(speaking), self.Parent.vc.client.loop)
@@ -136,18 +141,68 @@ class _APlayer():
     def read_bytes(self):
         if self.AudioSource and self.Pausing == False:
             
+
+            if self.Timer < self.TargetTimer:
+                Dif = self.TargetTimer - self.Timer
+                if len(self.QBytes) < Dif:
+                    self.RBytes += self.QBytes
+                    self.QBytes = []
+                else:
+                    self.Timer = self.TargetTimer
+                    self.RBytes += self.QBytes[:Dif]
+                    del self.QBytes[:Dif]
+
+            if self.Timer > self.TargetTimer:
+                Dif = self.Timer - self.TargetTimer
+                if len(self.RBytes) <= Dif:
+                    self.Timer -= len(self.RBytes)
+                    self.TargetTimer = self.Timer
+                    print(self.Timer)
+                    self.QBytes = self.RBytes + self.QBytes
+                    self.RBytes = []
+                else:
+                    self.QBytes = self.RBytes[-Dif:] + self.QBytes
+                    del self.RBytes[-Dif:]
+                    self.Timer = self.TargetTimer
+
+
+            if len(self.QBytes) <= (60 * 50) and self.read_fin == False:
+                self._read_bytes(True)
+
             if self.QBytes:
                 self.Timer += 1
-                temp = self.QBytes
-                self.QBytes = None
+                self.TargetTimer += 1
+                temp = self.QBytes[0]
+                #print(len(self.QBytes))
+                del self.QBytes[0]
+                self.RBytes.append(temp)
+                if len(self.RBytes) == (120 * 50):
+                    del self.RBytes[0]
                 return temp
-            if Bytes := self.AudioSource.read():
-                self.Timer += 1
-                return Bytes
-            else:
+
+            elif self.read_loop == False:
                 self.AudioSource = None
                 self._SAD = None
                 self._speaking(False)
                 self.After()
             
-        return None
+
+    def _read_bytes(self, status):
+        if status:
+            if self.read_loop or self.read_fin: return
+            self.read_loop = True
+            threading.Thread(target=self.__read_bytes, daemon=True).start()
+        
+        else:
+            self.read_loop = False
+
+
+    def __read_bytes(self):
+            while len(self.QBytes) <= (120 * 50) and self.read_loop:
+                if temp := self.AudioSource.read():
+                    self.QBytes.append(temp)
+                else: 
+                    self.read_fin = True
+                    break
+
+            self.read_loop = False

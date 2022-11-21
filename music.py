@@ -134,7 +134,7 @@ class MusicController():
             super().__init__(timeout=None)
             self.Parent = Parent
 
-        @ui.button(label="<",)
+        @ui.button(label="<")
         async def def_button0(self, interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
@@ -159,9 +159,14 @@ class MusicController():
             if Parent.Mvc.is_paused():
                 Parent.Mvc.resume()
 
+        @ui.button(label="10↩︎")
+        async def def_button1(self, interaction, button):
+            Parent = self.Parent
+            Parent.CLoop.create_task(interaction.response.defer())
+            Parent.Mvc.TargetTimer -= 10*50
 
         @ui.button(label="⏯",style=ButtonStyle.blurple)
-        async def def_button1(self, interaction, button):
+        async def def_button2(self, interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
 
@@ -173,8 +178,14 @@ class MusicController():
                 Parent.Mvc.pause()
                 await Parent.Update_Embed()
 
+        @ui.button(label="↪︎10")
+        async def def_button3(self, interaction, button):
+            Parent = self.Parent
+            Parent.CLoop.create_task(interaction.response.defer())
+            Parent.Mvc.TargetTimer += 10*50
+
         @ui.button(label=">")
-        async def def_button2(self, interaction, button):
+        async def def_button4(self, interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
             await Parent._skip()
