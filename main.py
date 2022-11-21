@@ -1,10 +1,7 @@
 import discord
 import os
-import re
-import shutil
 import asyncio
 from discord.ext import commands
-from typing import Literal
 
 from voice_client import MultiAudio
 from music import MusicController
