@@ -113,14 +113,16 @@ class MusicController():
             self.Mvc.resume()
 
 
-
-    async def _skip(self):
+    async def _skip(self, sec):
         if self.vc:
-            if self.Queue:
-                self.Rewind.append(self.Queue[0])
-                del self.Queue[0]
-                print(f'{self.gn} : #次の曲へ skip')
-                await self.play_loop(None,0)
+            if sec:
+                self.Mvc.TargetTimer += int(sec) * 50
+            else:
+                if self.Queue:
+                    self.Rewind.append(self.Queue[0])
+                    del self.Queue[0]
+                    print(f'{self.gn} : #次の曲へ skip')
+                    await self.play_loop(None,0)
 
 
 
@@ -188,7 +190,7 @@ class MusicController():
         async def def_button4(self, interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
-            await Parent._skip()
+            await Parent._skip(None)
 
 
 

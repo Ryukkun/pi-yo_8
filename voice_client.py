@@ -141,23 +141,31 @@ class _APlayer():
     def read_bytes(self):
         if self.AudioSource and self.Pausing == False:
             
-
+            # n秒 進む
             if self.Timer < self.TargetTimer:
                 Dif = self.TargetTimer - self.Timer
                 if len(self.QBytes) < Dif:
-                    self.RBytes += self.QBytes
-                    self.QBytes = []
+                    if not self.QBytes and self.read_fin:
+                        self.Timer = self._SAD.St_Sec * 50
+                        self.TargetTimer = self.Timer
+                    else:
+                        self.Timer += len(self.QBytes)
+                        self.RBytes += self.QBytes
+                        self.QBytes = []
+                        self._read_bytes(True)
+                        return
                 else:
                     self.Timer = self.TargetTimer
                     self.RBytes += self.QBytes[:Dif]
                     del self.QBytes[:Dif]
 
+            # n秒 前に戻る
             if self.Timer > self.TargetTimer:
                 Dif = self.Timer - self.TargetTimer
                 if len(self.RBytes) <= Dif:
                     self.Timer -= len(self.RBytes)
                     self.TargetTimer = self.Timer
-                    print(self.Timer)
+                    #print(self.Timer)
                     self.QBytes = self.RBytes + self.QBytes
                     self.RBytes = []
                 else:
@@ -165,26 +173,28 @@ class _APlayer():
                     del self.RBytes[-Dif:]
                     self.Timer = self.TargetTimer
 
-
+            # Read Bytes
             if len(self.QBytes) <= (60 * 50) and self.read_fin == False:
                 self._read_bytes(True)
 
             if self.QBytes:
+                temp = self.QBytes[0]
+                if temp == 'Fin':
+                    self.AudioSource = None
+                    self._SAD = None
+                    self._speaking(False)
+                    self.After()
+                    return
+
                 self.Timer += 1
                 self.TargetTimer += 1
-                temp = self.QBytes[0]
                 #print(len(self.QBytes))
                 del self.QBytes[0]
                 self.RBytes.append(temp)
-                if len(self.RBytes) == (120 * 50):
-                    del self.RBytes[0]
+                if len(self.RBytes) > (120 * 50):
+                    del self.RBytes[:len(self.RBytes) - (120 * 50)]
                 return temp
 
-            elif self.read_loop == False:
-                self.AudioSource = None
-                self._SAD = None
-                self._speaking(False)
-                self.After()
             
 
     def _read_bytes(self, status):
@@ -203,6 +213,7 @@ class _APlayer():
                     self.QBytes.append(temp)
                 else: 
                     self.read_fin = True
+                    self.QBytes.append('Fin')
                     break
 
             self.read_loop = False
