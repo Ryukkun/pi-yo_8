@@ -64,26 +64,43 @@ async def bye(ctx):
     vc = guild.voice_client
     if vc:
         print(f'{guild.name} : #切断')
+        await _bye(guild)
 
-        # 古いEmbedを削除
-        Old_Music = g_opts[gid].Music
 
-        g_opts[gid].MA.loop = False
-        del g_opts[gid]
-        await vc.disconnect()
-        
-        await asyncio.sleep(1.0)
-        if late_E := Old_Music.Embed_Message:
-            await late_E.delete()
-        del Old_Music
+async def _bye(guild):
+    gid = guild.id
+    vc = guild.voice_client
+    # 古いEmbedを削除
+    Old_Music = g_opts[gid].Music
+
+    g_opts[gid].MA.kill()
+    del g_opts[gid]
+    try: await vc.disconnect()
+    except Exception: pass
+
+    await asyncio.sleep(1.0)
+    if late_E := Old_Music.Embed_Message:
+        await late_E.delete()
+    del Old_Music
   
   
 @client.event
 async def on_voice_state_update(member, befor, after):
-    # voice channelに誰もいなくなったことを確認
+
     if not befor.channel:
         return
     if befor.channel != after.channel:
+
+        # 強制切断検知
+        if member.id == client.user.id and not after.channel:
+            await asyncio.sleep(1)
+            guild = befor.channel.guild
+            if guild.id in g_opts:
+                print(f'{guild.name} : #強制切断検知')
+                await _bye(guild)
+                return
+
+        # voice channelに誰もいなくなったことを確認
         if vc := befor.channel.guild.voice_client:
             if not befor.channel == vc.channel:
                 return

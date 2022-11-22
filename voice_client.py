@@ -24,6 +24,10 @@ class MultiAudio(threading.Thread):
         self.old_time = 0
 
 
+    def kill(self):
+        self.loop = False
+        self.Music._read_bytes(False)
+
 
     def _update_embed(self):
         # 秒数更新のため
@@ -62,7 +66,7 @@ class MultiAudio(threading.Thread):
                 self._update_embed()
                 try:self.play_audio(Bytes, encode=False)
                 except OSError:
-                    print('Error send_audio_packet OSError')
+                    #print('Error send_audio_packet OSError')
                     time.sleep(1)
 
             
