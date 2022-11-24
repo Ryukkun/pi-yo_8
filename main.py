@@ -146,6 +146,25 @@ async def s(ctx, arg):
     except KeyError:pass
 
 
+#---------------------------------------------------------------------------------------
+#   Download
+#---------------------------------------------------------------------------------------
+@client.command()
+async def download(ctx:commands.Context, arg):
+    embed_list = await MusicController._download(arg)
+    while embed_list:
+        i = min(10, len(embed_list))
+        await ctx.send(embeds=embed_list[:i])
+        del embed_list[:i]
+
+@client.command()
+async def dl(ctx:commands.Context, arg):
+    if embeds := await MusicController._download(arg):
+        for em in embeds:
+            await ctx.send(embed=em)
+
+
+
 ##############################################################################
 # Play & Queue
 ##############################################################################
@@ -225,8 +244,8 @@ class DataInfo():
         self.client = client
         self.config = config
         self.MA = MultiAudio(guild, client, self)
-        self.MA.start()
         self.Music = MusicController(self)
+        self.MA.start()
 
 
 

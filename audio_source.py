@@ -6,7 +6,7 @@ from yt_dlp import YoutubeDL
 import pytube
 from pytube.innertube import InnerTube
 from pytube.helpers import DeferredGeneratorList
-from discord import FFmpegOpusAudio
+from discord import FFmpegOpusAudio, FFmpegPCMAudio
 
 re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
 re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
@@ -35,6 +35,7 @@ class StreamAudioData:
         self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,self.Vid)
 
         await self._format()
+        self.music = True
         self.YT = True
         return self
 
@@ -46,6 +47,7 @@ class StreamAudioData:
         self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,Vdic[0][0].video_id)
 
         await self._format()
+        self.music = True
         self.YT = True
         return self
 
@@ -56,14 +58,23 @@ class StreamAudioData:
             self.St_Url = info['url']
             self.Web_Url = self.Url
             self.St_Sec = int(info.get('duration',None))
+            self.formats = info.get('formats')
+            self.music = True
             self.YT = False
         return self
 
+    def Url_Only(self):
+        self.St_Url = self.Url
+        self.music = False
+        self.YT = False
+        return self
+
+
     async def _format(self):
-        formats = self.Vdic['streamingData'].get('formats',[])
-        formats.extend(self.Vdic['streamingData'].get('adaptiveFormats',[]))
+        self.formats = self.Vdic['streamingData'].get('formats',[])
+        self.formats.extend(self.Vdic['streamingData'].get('adaptiveFormats',[]))
         res = []
-        for fm in formats:
+        for fm in self.formats:
             if 249 <= fm['itag'] <= 251 or 139 <= fm['itag'] <= 141:
                 res.append(fm)
         self.St_Url = res[-1]['url']
@@ -81,19 +92,23 @@ class StreamAudioData:
         self.CH_Icon = CH_Icon.find('link',rel="image_src").get('href')
 
 
-    async def AudioSource(self):
-
-        volume = -20.0
-        if Vol := self.St_Vol:
-            if Vol <= 0:
+    async def AudioSource(self, opus:bool):
+        FFMPEG_OPTIONS = {'options': '-vn -application lowdelay -loglevel quiet'}
+        if self.music:
+            volume = -20.0
+            if Vol := self.St_Vol:
                 Vol /= 2
-            volume -= Vol
-        FFMPEG_OPTIONS = {
-            "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 2147483647 -probesize 2147483647",
-            'options': f'-vn -c:a libopus -af "volume={volume}dB" -application lowdelay -loglevel quiet'
-            }
+                volume -= Vol
+            FFMPEG_OPTIONS['before_options'] = "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 2147483647 -probesize 2147483647"
+            FFMPEG_OPTIONS['options'] += f' -af "volume={volume}dB"'
 
-        return await FFmpegOpusAudio.from_probe(self.St_Url,**FFMPEG_OPTIONS)
+        if opus:
+            FFMPEG_OPTIONS['options'] += ' -c:a libopus'
+            return await FFmpegOpusAudio.from_probe(self.St_Url,**FFMPEG_OPTIONS)
+
+        else:
+            FFMPEG_OPTIONS['options'] += ' -c:a pcm_s16le -b:a 128k'
+            return FFmpegPCMAudio(self.St_Url,**FFMPEG_OPTIONS)
 
 
     async def Check_V(self):

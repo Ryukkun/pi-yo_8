@@ -2,7 +2,10 @@ import threading
 import asyncio
 import time
 
-from discord import SpeakingState
+import numpy as np
+
+from types import NoneType
+from discord import SpeakingState, opus
 
 
 class MultiAudio(threading.Thread):
@@ -19,9 +22,34 @@ class MultiAudio(threading.Thread):
         self.vc = guild.voice_client
         self.CLoop = client.loop
         self.Parent = parent
-        self.Music = _APlayer(self)
+        self.Players = {}
+        self.PLen = 0
+        self.vc.encoder = opus.Encoder()
+        self.vc.encoder.set_expected_packet_loss_percent(0.0)
         self.play_audio = self.vc.send_audio_packet
-        self.old_time = 0
+
+    def add_player(self ,name ,RNum ,opus=False):
+        self.Players[name] = _APlayer(RNum ,opus=opus , parent=self)
+        self.PLen = len(self.Players)
+        return self.Players[name]
+
+    def _speaking(self,status: bool):
+        if status:
+            self._speak(SpeakingState.voice)
+        else:
+            self._speak(SpeakingState.none)
+        self.Loop = status
+
+
+    def _speak(self, speaking: SpeakingState) -> None:
+        """
+        これ（self._speak）がないと謎にバグる ※botがjoinしたときに居たメンツにしか 音が聞こえない
+        友達が幻聴を聞いてたら怖いよね
+        """
+        try:
+            asyncio.run_coroutine_threadsafe(self.Parent.vc.ws.speak(speaking), self.Parent.vc.client.loop)
+        except Exception:
+            pass
 
 
     def kill(self):
@@ -48,11 +76,23 @@ class MultiAudio(threading.Thread):
         音声データ（Bytes）を取得し、必要があれば Numpy で読み込んで 合成しています
         最後に音声データ送信　ドルチェ
         """
-        global _start, delay
         _start = time.perf_counter()
         delay = 1
         while self.loop:
-            Bytes = self.Music.read_bytes()
+            if self.PLen == 1:
+                Bytes = self.Music.read_bytes()
+            else:
+                LBytes = []
+                Bytes = None
+                for P in self.Players.values():
+                    LBytes.append(P.read_bytes(numpy=True))
+                for P in LBytes:
+                    if P == NoneType: continue
+                    if not Bytes:
+                        Bytes = P
+                        continue
+                    Bytes += P
+                Bytes = Bytes.astype(np.int16).tobytes()
 
             # Loop Delay
             _start += 0.02
@@ -64,7 +104,7 @@ class MultiAudio(threading.Thread):
             # Send Bytes
             if Bytes:
                 self._update_embed()
-                try:self.play_audio(Bytes, encode=False)
+                try:self.play_audio(Bytes, encode= (self.PLen != 1))
                 except OSError:
                     #print('Error send_audio_packet OSError')
                     time.sleep(1)
@@ -72,16 +112,18 @@ class MultiAudio(threading.Thread):
             
 
 class _APlayer():
-    def __init__(self,parent):
+    def __init__(self ,RNum ,opus ,parent):
         self.AudioSource = None
         self._SAD = None
         self.Pausing = False
         self.Parent = parent
+        self.RNum = RNum
         self.Timer = 0
         self.TargetTimer = 0
         self.read_fin = False
         self.read_loop = False
         self.After = None
+        self.opus = opus
         self.QBytes = []
         self.RBytes = []
         self.Duration = None
@@ -91,9 +133,9 @@ class _APlayer():
     async def play(self,_SAD,after):
         self._SAD = _SAD
         self.Duration = _SAD.St_Sec
-        AudioSource = await _SAD.AudioSource()
+        AudioSource = await _SAD.AudioSource(self.opus)
         # 最初のロードは少し時間かかるから先にロード
-        self.QBytes = [AudioSource.read()]
+        self.QBytes = []
         self.RBytes = []
         self.AudioSource = AudioSource
         self.Timer = 0
@@ -142,7 +184,7 @@ class _APlayer():
 
 
 
-    def read_bytes(self):
+    def read_bytes(self, numpy=False):
         if self.AudioSource and self.Pausing == False:
             
             # n秒 進む
@@ -195,8 +237,12 @@ class _APlayer():
                 #print(len(self.QBytes))
                 del self.QBytes[0]
                 self.RBytes.append(temp)
-                if len(self.RBytes) > (600 * 50):
-                    del self.RBytes[:len(self.RBytes) - (600 * 50)]
+                if self.RNum != -1:
+                    if len(self.RBytes) > (self.RNum * 50):
+                        del self.RBytes[:len(self.RBytes) - (self.RNum * 50)]
+
+                if numpy:
+                    return np.frombuffer(temp,np.int16)
                 return temp
 
             

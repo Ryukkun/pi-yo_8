@@ -1,6 +1,7 @@
 import re
 import random
 import time
+import tabulate
 
 from discord import ui, Embed, ButtonStyle, NotFound
 
@@ -17,7 +18,7 @@ class MusicController():
     def __init__(self, Info):
         self.Info = Info
         self.MA = Info.MA
-        self.Mvc = Info.MA.Music
+        self.Mvc = Info.MA.add_player('Music' ,RNum=600 ,opus=True)
         self.guild = Info.guild
         self.gid = Info.gid
         self.gn = Info.gn
@@ -284,6 +285,21 @@ class MusicController():
         
         await self._playing()
 
+    @classmethod
+    def _Calc_Time(self, Time):
+        Sec = Time % 60
+        Min = Time // 60 % 60
+        Hour = Time // 3600
+        if Sec <= 9:
+            Sec = f'0{Sec}'
+        if Hour == 0:
+            Hour = ''
+        else:
+            Hour = f'{Hour}:'
+            if Min <= 9:
+                Min = f'0{Min}'
+        
+        return f'{Hour}{Min}:{Sec}'
 
 
     async def Edit_Embed(self):
@@ -304,20 +320,6 @@ class MusicController():
             embed.set_thumbnail(url=f'https://img.youtube.com/vi/{_SAD.VideoID}/mqdefault.jpg')
             embed.set_author(name=_SAD.CH, url=_SAD.CH_Url, icon_url=_SAD.CH_Icon)
             
-            def Calc_Time(Time):
-                Sec = Time % 60
-                Min = Time // 60 % 60
-                Hour = Time // 3600
-                if Sec <= 9:
-                    Sec = f'0{Sec}'
-                if Hour == 0:
-                    Hour = ''
-                else:
-                    Hour = f'{Hour}:'
-                    if Min <= 9:
-                        Min = f'0{Min}'
-                
-                return f'{Hour}{Min}:{Sec}'
 
             def get_progress(II):
                 NTime = self.Mvc.Timer // 50
@@ -331,8 +333,8 @@ class MusicController():
                         Progress += '-'
                 return Progress
             Progress = get_progress(42)
-            NTime = Calc_Time(self.Mvc.Timer // 50)
-            Duration = Calc_Time(_SAD.St_Sec)
+            NTime = self._Calc_Time(self.Mvc.Timer // 50)
+            Duration = self._Calc_Time(_SAD.St_Sec)
             embed.set_footer(text=f'{NTime} {Progress} {Duration}')
         else:
             embed=Embed(title=_SAD.Web_Url, url=_SAD.Web_Url, colour=0xe1bd5b)
@@ -347,6 +349,139 @@ class MusicController():
         return embed
 
 
+
+
+#---------------------------------------------------------------------------------------
+#   Download
+#---------------------------------------------------------------------------------------
+    @classmethod
+    async def _download(self, arg):
+
+        # Download Embed
+
+        # よそはよそ　うちはうち
+        if re_URL_PL.match(arg):
+            return
+        if re_URL_YT.match(arg) and not re_URL_Video.match(arg):
+            return
+
+        # 君は本当に動画なのかい　どっちなんだい！
+        AudioData = await SAD(arg).Check_V()
+        if not AudioData: return
+
+        if AudioData.YT:
+            embed=Embed(title=AudioData.Title, url=AudioData.Web_Url, colour=0xe1bd5b)
+            #embed.set_thumbnail(url=f'https://img.youtube.com/vi/{AudioData.VideoID}/mqdefault.jpg')
+            embed.set_author(name=AudioData.CH, url=AudioData.CH_Url, icon_url=AudioData.CH_Icon)
+            
+        else:
+            embed=Embed(title=AudioData.Web_Url, url=AudioData.Web_Url, colour=0xe1bd5b)
+
+        if AudioData.St_Sec:
+            Duration = self._Calc_Time(AudioData.St_Sec)
+            embed.add_field(name="Length", value=Duration, inline=True)
+
+        re_video = re.compile(r'video/(.+);')
+        re_audio = re.compile(r'audio/(.+);')
+        re_codecs = re.compile(r'codecs="(.+)"')
+        re_space = re.compile(r'}(_|)( |  )\|')
+            
+        __list = []
+        _url = []
+        if AudioData.formats:
+            for F in AudioData.formats:
+                if len(_url) <= 9:
+                    space = '_'
+                else: space = ''
+                _dl = '{0['+str(len(_url))+']}'+space
+                _url.append(f'[download]({F["url"]})`')
+
+                if F.get('width'):
+                    _res = f"{F['width']}x{F['height']}"
+                elif F.get('resolution'):
+                    _res = F.get('resolution')
+                else: 
+                    _res = ''
+
+                if F.get('ext'):
+                    ext = F.get('ext')
+                else:
+                    ext = ''
+                
+                if F.get('acodec'):
+                    acodec = F.get('acodec')
+                else:
+                    acodec = ''
+
+                if F.get('vcodec'):
+                    vcodec = F.get('vcodec')
+                else:
+                    vcodec = ''
+
+                if F.get('abr'):
+                    abr = F.get('abr')
+                else:
+                    abr = '?k'
+
+
+                if res := re_codecs.search(F.get('mimeType','')):
+                    codec = res.group(1).split(', ')
+                    _type = F.get('mimeType')
+                    _type = _type.replace(f' {res.group(0)}','')
+
+                    if res := re_video.match(_type):
+                        ext = res.group(1)
+
+                        vcodec = codec[0]
+                        if len(codec) == 2:
+                            acodec = codec[1]
+                        else:
+                            acodec = 'None'
+                    
+                    elif res := re_audio.match(_type):
+                        ext = res.group(1)
+                        _res = 'audio'
+                        acodec = codec[0]
+                        abr = f"{F['bitrate']//10/100}Kbps"
+
+
+                __list.append([_dl,ext,_res,vcodec,acodec,abr])
+
+            headers = ['','EXT','RES','VCodec','ACodec','ABR']
+            table = tabulate.tabulate(tabular_data=__list, headers=headers, tablefmt='github')
+            table = re_space.sub('}|',table)
+            table = table.format(_url)
+            table = table.split('\n')
+            table[0] = '`'+table[0]
+            table[1] = '`'+table[1]
+            _embeds = [embed]
+            while table:
+                __table = ''
+                embed = Embed(colour=0xe1bd5b)
+                while len(__table) <= 4090 and len(table) >= 1:
+                    _table = __table
+                    __table += f'{table[0]}`\n'
+                    del table[0]
+
+                if len(_table) == 0:
+                    _table = __table
+
+                embed.description = _table
+                _embeds.append(embed)
+                embed = None
+
+            return _embeds
+
+
+
+        else:
+            embed=Embed(title=AudioData.Web_Url, url=AudioData.Web_Url, colour=0xe1bd5b)
+            embed_list = [embed]
+            embed=Embed(title='Download', url=AudioData.St_Url, colour=0xe1bd5b)
+            embed_list.append(embed)
+
+        return embed_list
+            
 
 
 #---------------------------------------------------------------------------------------
