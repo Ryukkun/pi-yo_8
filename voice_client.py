@@ -28,8 +28,8 @@ class MultiAudio(threading.Thread):
         self.vc.encoder.set_expected_packet_loss_percent(0.0)
         self.play_audio = self.vc.send_audio_packet
 
-    def add_player(self ,name ,RNum ,opus=False):
-        self.Players[name] = _APlayer(RNum ,opus=opus , parent=self)
+    def add_player(self ,name ,RNum ,opus=False ,def_getbyte=None):
+        self.Players[name] = _APlayer(RNum ,opus=opus ,def_getbyte=def_getbyte ,parent=self)
         self.PLen = len(self.Players)
         return self.Players[name]
 
@@ -54,20 +54,8 @@ class MultiAudio(threading.Thread):
 
     def kill(self):
         self.loop = False
-        self.Music._read_bytes(False)
-
-
-    def _update_embed(self):
-        # 秒数更新のため
-        if 0 <= self.Music.Timer < (50*60):
-            if (self.Music.Timer % (50*5)) == 1:
-                self.CLoop.create_task(self.Parent.Music.Update_Embed())
-        elif (50*60) <= self.Music.Timer < (50*1800):
-            if (self.Music.Timer % (50*10)) == 1:
-                self.CLoop.create_task(self.Parent.Music.Update_Embed())
-        elif (50*1800) <= self.Music.Timer:
-            if (self.Music.Timer % (50*30)) == 1:
-                self.CLoop.create_task(self.Parent.Music.Update_Embed())
+        for P in self.Players.values():
+            P._read_bytes(False)
 
 
     def run(self):
@@ -80,18 +68,21 @@ class MultiAudio(threading.Thread):
         delay = 1
         while self.loop:
             if self.PLen == 1:
-                Bytes = self.Music.read_bytes()
+                P = list(self.Players.values())[0]
+                Bytes = P.read_bytes()
+                if Bytes != NoneType:
+                    P.def_getbyte()
             else:
-                LBytes = []
                 Bytes = None
                 for P in self.Players.values():
-                    LBytes.append(P.read_bytes(numpy=True))
-                for P in LBytes:
-                    if P == NoneType: continue
-                    if not Bytes:
-                        Bytes = P
-                        continue
-                    Bytes += P
+                    _Byte = P.read_bytes(numpy=True)
+                    if _Byte != NoneType:
+                        P.def_getbyte()
+
+                        if Bytes == NoneType:
+                            Bytes = _Byte
+                            continue
+                        Bytes += _Byte
                 Bytes = Bytes.astype(np.int16).tobytes()
 
             # Loop Delay
@@ -103,7 +94,6 @@ class MultiAudio(threading.Thread):
  
             # Send Bytes
             if Bytes:
-                self._update_embed()
                 try:self.play_audio(Bytes, encode= (self.PLen != 1))
                 except OSError:
                     #print('Error send_audio_packet OSError')
@@ -112,7 +102,7 @@ class MultiAudio(threading.Thread):
             
 
 class _APlayer():
-    def __init__(self ,RNum ,opus ,parent):
+    def __init__(self ,RNum ,opus ,def_getbyte ,parent):
         self.AudioSource = None
         self._SAD = None
         self.Pausing = False
@@ -123,6 +113,7 @@ class _APlayer():
         self.read_fin = False
         self.read_loop = False
         self.After = None
+        self.def_getbyte = def_getbyte
         self.opus = opus
         self.QBytes = []
         self.RBytes = []

@@ -5,6 +5,7 @@ import tabulate
 
 from discord import ui, Embed, ButtonStyle, NotFound
 
+from main import DataInfo
 from audio_source import StreamAudioData as SAD
 
 
@@ -15,10 +16,10 @@ re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
 
 
 class MusicController():
-    def __init__(self, Info):
+    def __init__(self, Info:DataInfo):
         self.Info = Info
         self.MA = Info.MA
-        self.Mvc = Info.MA.add_player('Music' ,RNum=600 ,opus=True)
+        self.Mvc = Info.MA.add_player('Music' ,RNum=600 ,opus=True ,def_getbyte=self._update_embed)
         self.guild = Info.guild
         self.gid = Info.gid
         self.gn = Info.gn
@@ -255,6 +256,20 @@ class MusicController():
             if not embed: return
             # Edit
             await Reac.message.edit(embed=embed)
+
+
+    def _update_embed(self):
+        # 秒数更新のため
+        if 0 <= self.Mvc.Timer < (50*60):
+            if (self.Mvc.Timer % (50*5)) == 1:
+                self.CLoop.create_task(self.Update_Embed())
+        elif (50*60) <= self.Mvc.Timer < (50*1800):
+            if (self.Mvc.Timer % (50*10)) == 1:
+                self.CLoop.create_task(self.Update_Embed())
+        elif (50*1800) <= self.Mvc.Timer:
+            if (self.Mvc.Timer % (50*30)) == 1:
+                self.CLoop.create_task(self.Update_Embed())
+
 
 
     async def Update_Embed(self):
