@@ -3,7 +3,7 @@ import random
 import time
 import tabulate
 
-from discord import ui, Embed, ButtonStyle, NotFound
+from discord import ui, Embed, ButtonStyle, NotFound ,TextChannel ,Reaction
 
 from audio_source import StreamAudioData as SAD
 
@@ -26,7 +26,7 @@ class MusicController():
         self.Queue = []
         self.Index_PL = None
         self.PL = None
-        self.Latest_CH = None
+        self.Latest_CH:TextChannel = None
         self.Loop = True
         self.Loop_PL = True
         self.Random_PL = True
@@ -221,8 +221,10 @@ class MusicController():
         self.sending_embed = False
 
 
-    async def on_reaction_add(self, Reac, User):
+    async def on_reaction_add(self, Reac:Reaction, User):
         if User.bot or Reac.message.author.id != self.Info.client.user.id: return
+        if em := Reac.message.embeds:
+            if em[0].colour.value != 14794075: return
         self.CLoop.create_task(Reac.remove(User))
         if self.vc:
 
@@ -274,6 +276,11 @@ class MusicController():
     async def Update_Embed(self):
         if late_E := self.Latest_CH.last_message:
             if late_E.author.id == self.Info.client.user.id:
+                if late_E.embeds:
+                    if late_E.embeds[0].colour.value != 14794075:
+                        await self._playing()
+                        return
+                
                 embed = await self.Edit_Embed()
                 # embedが無効だったら 古いEmbedを削除
                 if not embed:
@@ -384,12 +391,12 @@ class MusicController():
         if not AudioData: return
 
         if AudioData.YT:
-            embed=Embed(title=AudioData.Title, url=AudioData.Web_Url, colour=0xe1bd5b)
+            embed=Embed(title=AudioData.Title, url=AudioData.Web_Url, colour=0xe1bd5c)
             embed.set_thumbnail(url=f'https://img.youtube.com/vi/{AudioData.VideoID}/mqdefault.jpg')
             embed.set_author(name=AudioData.CH, url=AudioData.CH_Url, icon_url=AudioData.CH_Icon)
             
         else:
-            embed=Embed(title=AudioData.Web_Url, url=AudioData.Web_Url, colour=0xe1bd5b)
+            embed=Embed(title=AudioData.Web_Url, url=AudioData.Web_Url, colour=0xe1bd5c)
 
         if AudioData.St_Sec:
             Duration = self._Calc_Time(AudioData.St_Sec)
@@ -453,7 +460,7 @@ class MusicController():
             _embeds = [embed]
             while table:
                 __table = ''
-                embed = Embed(colour=0xe1bd5b)
+                embed = Embed(colour=0xe1bd5c)
                 while len(__table) <= 4000:
                     if __table: 
                         del table[0]
@@ -473,9 +480,9 @@ class MusicController():
 
 
         else:
-            embed=Embed(title=AudioData.Web_Url, url=AudioData.Web_Url, colour=0xe1bd5b)
+            embed=Embed(title=AudioData.Web_Url, url=AudioData.Web_Url, colour=0xe1bd5c)
             embed_list = [embed]
-            embed=Embed(title='Download', url=AudioData.St_Url, colour=0xe1bd5b)
+            embed=Embed(title='Download', url=AudioData.St_Url, colour=0xe1bd5c)
             embed_list.append(embed)
 
         return embed_list

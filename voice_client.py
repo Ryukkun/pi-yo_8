@@ -34,14 +34,19 @@ class MultiAudio(threading.Thread):
         return self.Players[name]
 
     def _speaking(self,status: bool):
+        temp = 0
+        for P in self.Players.values():
+            if P.Loop:
+                temp += 1
         if status:
-            self._speak(SpeakingState.voice)
+            if temp == 0:
+                self.__speak(SpeakingState.voice)
         else:
-            self._speak(SpeakingState.none)
-        self.Loop = status
+            if temp == 1:
+                self.__speak(SpeakingState.none)
 
 
-    def _speak(self, speaking: SpeakingState) -> None:
+    def __speak(self, speaking: SpeakingState) -> None:
         """
         これ（self._speak）がないと謎にバグる ※botがjoinしたときに居たメンツにしか 音が聞こえない
         友達が幻聴を聞いてたら怖いよね
@@ -106,7 +111,7 @@ class _APlayer():
         self.AudioSource = None
         self._SAD = None
         self.Pausing = False
-        self.Parent = parent
+        self.Parent:MultiAudio = parent
         self.RNum = RNum
         self.Timer = 0
         self.TargetTimer = 0
@@ -156,23 +161,8 @@ class _APlayer():
         return self.Pausing
 
     def _speaking(self,status: bool):
-        if status:
-            self._speak(SpeakingState.voice)
-        else:
-            self._speak(SpeakingState.none)
+        self.Parent._speaking(status=status)
         self.Loop = status
-
-
-    def _speak(self, speaking: SpeakingState) -> None:
-        """
-        これ（self._speak）がないと謎にバグる ※botがjoinしたときに居たメンツにしか 音が聞こえない
-        友達が幻聴を聞いてたら怖いよね
-        """
-        try:
-            asyncio.run_coroutine_threadsafe(self.Parent.vc.ws.speak(speaking), self.Parent.vc.client.loop)
-        except Exception:
-            pass
-
 
 
     def read_bytes(self, numpy=False):
