@@ -36,6 +36,19 @@ g_opts = {}
 
 
 
+
+tree = client.tree
+
+@tree.command(description="年中無休でカラオケ生活 のど自慢系ぴーよ")
+@discord.app_commands.describe(arg='URL or 検索したい文字')
+async def download(ctx: discord.Interaction, arg:str):
+    if embeds := await MusicController._download(arg):
+        ctx = await commands.Context.from_interaction(ctx)
+        for em in embeds:
+            await ctx.send(embed=em, ephemeral=True)
+
+
+
 ####  基本的コマンド
 @client.event
 async def on_ready():
@@ -43,6 +56,7 @@ async def on_ready():
     print(client.user.name)
     print(client.user.id)
     print('----------------')
+    await tree.sync()
     
 
 
@@ -151,11 +165,9 @@ async def s(ctx, arg):
 #---------------------------------------------------------------------------------------
 @client.command()
 async def download(ctx:commands.Context, arg):
-    embed_list = await MusicController._download(arg)
-    while embed_list:
-        i = min(10, len(embed_list))
-        await ctx.send(embeds=embed_list[:i])
-        del embed_list[:i]
+    if embeds := await MusicController._download(arg):
+       for em in embeds:
+            await ctx.send(embed=em)
 
 @client.command()
 async def dl(ctx:commands.Context, arg):

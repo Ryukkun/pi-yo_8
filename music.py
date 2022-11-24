@@ -371,7 +371,7 @@ class MusicController():
 
         if AudioData.YT:
             embed=Embed(title=AudioData.Title, url=AudioData.Web_Url, colour=0xe1bd5b)
-            #embed.set_thumbnail(url=f'https://img.youtube.com/vi/{AudioData.VideoID}/mqdefault.jpg')
+            embed.set_thumbnail(url=f'https://img.youtube.com/vi/{AudioData.VideoID}/mqdefault.jpg')
             embed.set_author(name=AudioData.CH, url=AudioData.CH_Url, icon_url=AudioData.CH_Icon)
             
         else:
@@ -384,17 +384,15 @@ class MusicController():
         re_video = re.compile(r'video/(.+);')
         re_audio = re.compile(r'audio/(.+);')
         re_codecs = re.compile(r'codecs="(.+)"')
-        re_space = re.compile(r'}(_|)( |  )\|')
+        re_space = re.compile(r'\)` +?\|')
+        re_space2 = re.compile(r'(( |-)\|$|^\|( |-))')
+        re_space3 = re.compile(r'^\|( |-)+?\|')
             
         __list = []
-        _url = []
         if AudioData.formats:
             for F in AudioData.formats:
-                if len(_url) <= 9:
-                    space = '_'
-                else: space = ''
-                _dl = '{0['+str(len(_url))+']}'+space
-                _url.append(f'[download]({F["url"]})`')
+
+                _dl = f'[download]({F["url"]})`'
 
                 if F.get('width'):
                     _res = f"{F['width']}x{F['height']}"
@@ -403,26 +401,11 @@ class MusicController():
                 else: 
                     _res = ''
 
-                if F.get('ext'):
-                    ext = F.get('ext')
-                else:
-                    ext = ''
-                
-                if F.get('acodec'):
-                    acodec = F.get('acodec')
-                else:
-                    acodec = ''
-
-                if F.get('vcodec'):
-                    vcodec = F.get('vcodec')
-                else:
-                    vcodec = ''
-
-                if F.get('abr'):
-                    abr = F.get('abr')
-                else:
-                    abr = '?k'
-
+                ext = F.get('ext','')
+                acodec = F.get('acodec','')
+                vcodec = F.get('vcodec','')
+                abr = F.get('abr','?k')
+                protocol = F.get('protocol','')
 
                 if res := re_codecs.search(F.get('mimeType','')):
                     codec = res.group(1).split(', ')
@@ -431,40 +414,41 @@ class MusicController():
 
                     if res := re_video.match(_type):
                         ext = res.group(1)
-
                         vcodec = codec[0]
                         if len(codec) == 2:
                             acodec = codec[1]
-                        else:
-                            acodec = 'None'
                     
                     elif res := re_audio.match(_type):
                         ext = res.group(1)
                         _res = 'audio'
                         acodec = codec[0]
-                        abr = f"{F['bitrate']//10/100}Kbps"
+                        abr = f"{F['bitrate']//10/100}k"
 
+                if '3gpp' in ext or 'm3u8' in protocol:
+                    continue
 
                 __list.append([_dl,ext,_res,vcodec,acodec,abr])
 
-            headers = ['','EXT','RES','VCodec','ACodec','ABR']
+            headers = ['','EXT','RES','Video','Audio','ABR']
             table = tabulate.tabulate(tabular_data=__list, headers=headers, tablefmt='github')
-            table = re_space.sub('}|',table)
-            table = table.format(_url)
+            table = re_space.sub(')`|',table)
             table = table.split('\n')
-            table[0] = '`'+table[0]
-            table[1] = '`'+table[1]
+            table[0] = '`'+re_space2.sub('',re_space3.sub('        |',table[0]))
+            table[1] = '`'+re_space2.sub('',re_space3.sub('--------|',table[1]))
+
             _embeds = [embed]
             while table:
                 __table = ''
                 embed = Embed(colour=0xe1bd5b)
-                while len(__table) <= 4090 and len(table) >= 1:
+                while len(__table) <= 4000:
+                    if __table: 
+                        del table[0]
+                    if len(table) == 0:
+                        _table = __table
+                        break
                     _table = __table
-                    __table += f'{table[0]}`\n'
-                    del table[0]
-
-                if len(_table) == 0:
-                    _table = __table
+                    temp = re_space2.sub('',table[0])
+                    __table += f'{temp}`\n'
 
                 embed.description = _table
                 _embeds.append(embed)

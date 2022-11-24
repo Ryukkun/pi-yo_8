@@ -3,3 +3,4 @@ yt_dlp
 pytube
 ffmpeg
 bs4
+tabulate
