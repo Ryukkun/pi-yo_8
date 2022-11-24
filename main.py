@@ -148,13 +148,19 @@ async def on_reaction_add(Reac,User):
 #---------------------------------------------------------------------------------------------------
 
 @client.command()
-async def skip(ctx, arg):
+async def skip(ctx, *arg):
+    if arg:
+        arg = arg[0]
+    else: arg = None
     try:
         await g_opts[ctx.guild.id].Music._skip(arg)
     except KeyError:pass
 
 @client.command()
-async def s(ctx, arg):
+async def s(ctx, *arg):
+    if arg:
+        arg = arg[0]
+    else: arg = None
     try:
         await g_opts[ctx.guild.id].Music._skip(arg)
     except KeyError:pass

@@ -5,7 +5,6 @@ import tabulate
 
 from discord import ui, Embed, ButtonStyle, NotFound
 
-from main import DataInfo
 from audio_source import StreamAudioData as SAD
 
 
@@ -16,7 +15,7 @@ re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
 
 
 class MusicController():
-    def __init__(self, Info:DataInfo):
+    def __init__(self, Info):
         self.Info = Info
         self.MA = Info.MA
         self.Mvc = Info.MA.add_player('Music' ,RNum=600 ,opus=True ,def_getbyte=self._update_embed)
