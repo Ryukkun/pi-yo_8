@@ -413,7 +413,7 @@ class MusicController():
         if AudioData.formats:
             for F in AudioData.formats:
 
-                _dl = f'[download]({F["url"]})`'
+                _dl = f'[`download`]({F["url"]})`'
 
                 if F.get('width'):
                     _res = f"{F['width']}x{F['height']}"
@@ -454,8 +454,8 @@ class MusicController():
             table = tabulate.tabulate(tabular_data=__list, headers=headers, tablefmt='github')
             table = re_space.sub(')`|',table)
             table = table.split('\n')
-            table[0] = '`'+re_space2.sub('',re_space3.sub('        |',table[0]))
-            table[1] = '`'+re_space2.sub('',re_space3.sub('--------|',table[1]))
+            table[0] = re_space2.sub('',re_space3.sub('[`        `]()`|',table[0]))
+            table[1] = re_space2.sub('',re_space3.sub('[`--------`]()`|',table[1]))
 
             _embeds = [embed]
             while table:
