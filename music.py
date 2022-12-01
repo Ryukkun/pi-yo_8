@@ -34,6 +34,7 @@ class MusicController():
         self.CLoop = Info.loop
         self.Embed_Message = None
         self.sending_embed = False
+        self.last_embed_update:float = 0.0
 
     async def _play(self, ctx, args, Q):
         # 一時停止していた場合再生 開始
@@ -44,43 +45,52 @@ class MusicController():
         else:
             arg = ' '.join(args)
 
-        # よそはよそ　うちはうち
-        if re_URL_PL.match(arg):
-            await self._playlist(ctx,arg)
-            return
-        if re_URL_YT.match(arg) and not re_URL_Video.match(arg):
-            return
 
         # 君は本当に動画なのかい　どっちなんだい！
-        AudioData = await SAD(arg).Check_V()
-        if not AudioData: return
-
-        # playlist 再生中のお客様はお断り
-        if self.PL:
-            self.PL = None
-            self.Index_PL = None
+        res = await SAD(arg).Check()
+        if not res: return
 
         self.Latest_CH = ctx.channel
 
-        #Queueに登録
-        if Q:
-            self.Queue.append(AudioData)
-        else:
-            if self.Queue == []:
-                self.Queue.append(AudioData)
-            else:
-                self.Queue[0] = AudioData
+        if type(res) == tuple:
+            self.Index_PL = res[0]
+            self.Random_PL = res[1]
+            self.PL = res[2]
 
-        # 再生されるまでループ
-        if Q:
-            if not self.Mvc.is_playing():
-                await self.play_loop(None,0)
-            if self.Mvc.is_paused():
-                self.Mvc.resume()
-        else:
+            self.Loop = False
+            self.Queue = []
+
+            # 再生
             await self.play_loop(None,0)
             if self.Mvc.is_paused():
                 self.Mvc.resume()
+
+        else:
+            # playlist 再生中のお客様はお断り
+            if self.PL:
+                self.PL = None
+                self.Index_PL = None
+
+            #Queueに登録
+            if Q:
+                self.Queue.append(res)
+            else:
+                if self.Queue == []:
+                    self.Queue.append(res)
+                else:
+                    self.Queue[0] = res
+
+            # 再生されるまでループ
+            if Q:
+                if not self.Mvc.is_playing():
+                    await self.play_loop(None,0)
+                if self.Mvc.is_paused():
+                    self.Mvc.resume()
+            else:
+                await self.play_loop(None,0)
+                if self.Mvc.is_paused():
+                    self.Mvc.resume()
+        
 
 
 
@@ -219,6 +229,7 @@ class MusicController():
 
                 #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
         self.sending_embed = False
+        self.last_embed_update = time.perf_counter()
 
 
     async def on_reaction_add(self, Reac:Reaction, User):
@@ -274,6 +285,9 @@ class MusicController():
 
 
     async def Update_Embed(self):
+        if self.sending_embed: return
+        if (time.perf_counter() - self.last_embed_update) <= 4: return
+
         if late_E := self.Latest_CH.last_message:
             if late_E.author.id == self.Info.client.user.id:
                 if late_E.embeds:
@@ -293,6 +307,7 @@ class MusicController():
                     # メッセージが見つからなかったら 新しく作成
                     print('見つかりませんでした！')
                 else:
+                    self.last_embed_update = time.perf_counter()
                     try:
                         # Reaction 修正
                         if self.PL:

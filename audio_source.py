@@ -40,17 +40,6 @@ class StreamAudioData:
         return self
 
 
-    # Video Search
-    async def Pyt_V_Search(self):
-        pyt = pytube.Search(self.Url)
-        Vdic = await self.loop.run_in_executor(None,pyt.fetch_and_parse)
-        self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,Vdic[0][0].video_id)
-
-        await self._format()
-        self.music = True
-        self.YT = True
-        return self
-
     # 汎用人型決戦兵器
     async def Ytdlp_V(self):
         with YoutubeDL({'format': 'best','quiet':True,'noplaylist':True}) as ydl:
@@ -111,48 +100,25 @@ class StreamAudioData:
             return FFmpegPCMAudio(self.St_Url,**FFMPEG_OPTIONS)
 
 
-    async def Check_V(self):
+    async def Check(self):
         """
-        .p で指定された引数を、再生可能か判別する
-        再生可能だった場合
-        return : StreamAudioData
-        不可
-        return : None
-        """
-        ### 動画+playlist
-        if re_result := re_URL_PL_Video.match(self.Url):
-            self.Url = f'https://www.youtube.com/watch?v={re_result.group(2)}'
+        指定された引数を、再生可能か判別する
         
-        ### 文字指定
-        if not re_URL.match(self.Url):
-            return await self.Pyt_V_Search()
-
-        ### youtube 動画オンリー
-        elif re_URL_YT.match(self.Url):
-            try: return await self.Pyt_V()
-            except Exception as e:
-                print(f"Error : Audio only 失敗 {e}")
-                return
-
-        ### それ以外のサイト yt-dlp を使用
-        else:
-            try: return await self.Ytdlp_V()
-            except Exception as e:
-                print(f"Error : Audio + Video 失敗 {e}")
-                return
-
-
-
-    async def Check_P(self):
+        Playlist形式
+        return (Index, Random:bool, [urls])
+        
+        単曲
+        return self
+        
+        不可
+        return None
+        """
         ### PlayList 本体のURL ------------------------------------------------------------------------#
         if re_URL_PL.match(self.Url): 
             if Pl := await self.Pyt_P(self.Url):
                 return (0, 1, Pl)
 
         ### PlayList と 動画が一緒についてきた場合 --------------------------------------------------------------#
-        ###
-        ### ここは特別 elif の範囲だけで処理終わらせる
-        ###
         elif result_re := re_URL_PL_Video.match(self.Url):
             watch_id = result_re.group(2)
             self.Url = f'https://www.youtube.com/playlist?list={result_re.group(3)}'
@@ -172,15 +138,24 @@ class StreamAudioData:
                 return (index, 1, Pl)
             
 
+        ### youtube 動画オンリー -----------------------------------------------------------------------#
+        elif re_URL_YT.match(self.Url):
+            try: return await self.Pyt_V()
+            except Exception as e:
+                print(f"Error : Audio only 失敗 {e}")
+                return
+
+        ### それ以外のサイト yt-dlp を使用 -----------------------------------------------------------------------#
+        elif re_URL.match(self.Url):
+            try: return await self.Ytdlp_V()
+            except Exception as e:
+                print(f"Error : Audio + Video 失敗 {e}")
+                return
+
         ### URLじゃなかった場合 -----------------------------------------------------------------------#
-        elif not re_URL.match(self.Url):
+        else:
             Pl = await self.Pyt_P_Search(self.Url)
             return (0, 0, Pl)
-
-        ### その他 例外------------------------------------------------------------------------#
-        else: 
-            print("playlistじゃないみたい")
-            return
 
 
 

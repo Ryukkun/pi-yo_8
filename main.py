@@ -219,29 +219,12 @@ async def p(ctx,*args):
     await g_opts[ctx.guild.id].Music._play(ctx,args,False)
 
 
-
-
-
-
-
-############################################################################################
-#   Playlist
-############################################################################################
-
-@client.command()
-async def playlist(ctx,*args):
-    if not ctx.guild.voice_client:
-        if not await join(ctx):
-            return
-    await g_opts[ctx.guild.id].Music._playlist(ctx,args)
-
-
 @client.command()
 async def pl(ctx,*args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
             return
-    await g_opts[ctx.guild.id].Music._playlist(ctx,args)
+    await g_opts[ctx.guild.id].Music._play(ctx,args,False)
 
 
 
