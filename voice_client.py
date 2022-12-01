@@ -105,8 +105,8 @@ class MultiAudio(threading.Thread):
             if Bytes:
                 #print(Bytes)
                 try:self.play_audio(Bytes, encode=self.Enc_bool)
-                except OSError:
-                    #print('Error send_audio_packet OSError')
+                except Exception as e:
+                    print(f'Error send_audio_packet : {e}')
                     time.sleep(1)
 
             
