@@ -27,10 +27,12 @@ class MultiAudio(threading.Thread):
         self.vc.encoder = opus.Encoder()
         self.vc.encoder.set_expected_packet_loss_percent(0.0)
         self.play_audio = self.vc.send_audio_packet
+        self.Enc_bool = False
 
     def add_player(self ,name ,RNum ,opus=False ,def_getbyte=None):
         self.Players[name] = _APlayer(RNum ,opus=opus ,def_getbyte=def_getbyte ,parent=self)
         self.PLen = len(self.Players)
+        self.Enc_bool = (self.PLen != 1 or self.PLen == 1 and opus == False)
         return self.Players[name]
 
     def _speaking(self,status: bool):
@@ -71,18 +73,20 @@ class MultiAudio(threading.Thread):
         """
         _start = time.perf_counter()
         delay = 1
+        P: _APlayer
         while self.loop:
             if self.PLen == 1:
                 P = list(self.Players.values())[0]
                 Bytes = P.read_bytes()
-                if Bytes != NoneType:
+                if Bytes != NoneType and P.def_getbyte:
                     P.def_getbyte()
-            else:
+            elif self.PLen >= 2:
                 Bytes = None
                 for P in self.Players.values():
                     _Byte = P.read_bytes(numpy=True)
                     if _Byte != NoneType:
-                        P.def_getbyte()
+                        if P.def_getbyte:
+                            P.def_getbyte()
 
                         if Bytes == NoneType:
                             Bytes = _Byte
@@ -99,7 +103,8 @@ class MultiAudio(threading.Thread):
  
             # Send Bytes
             if Bytes:
-                try:self.play_audio(Bytes, encode= (self.PLen != 1))
+                #print(Bytes)
+                try:self.play_audio(Bytes, encode=self.Enc_bool)
                 except OSError:
                     #print('Error send_audio_packet OSError')
                     time.sleep(1)
@@ -204,6 +209,7 @@ class _APlayer():
             if len(self.QBytes) <= (60 * 50) and self.read_fin == False:
                 self._read_bytes(True)
 
+            #print(len(self.QBytes))
             if self.QBytes:
                 temp = self.QBytes[0]
                 if temp == 'Fin':
@@ -215,7 +221,6 @@ class _APlayer():
 
                 self.Timer += 1
                 self.TargetTimer += 1
-                #print(len(self.QBytes))
                 del self.QBytes[0]
                 self.RBytes.append(temp)
                 if self.RNum != -1:
@@ -241,6 +246,7 @@ class _APlayer():
     def __read_bytes(self):
             while len(self.QBytes) <= (120 * 50) and self.read_loop:
                 if temp := self.AudioSource.read():
+                    #print(temp)
                     self.QBytes.append(temp)
                 else: 
                     self.read_fin = True
