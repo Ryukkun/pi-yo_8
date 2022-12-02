@@ -30,7 +30,8 @@ class MusicController():
         self.vc = self.guild.voice_client
         self.Queue = []
         self.Index_PL = None
-        self.PL = None
+        self.Played_PL = []
+        self.PL = []
         self.Latest_CH:TextChannel = None
         self.Loop = True
         self.Loop_PL = True
@@ -73,7 +74,7 @@ class MusicController():
         else:
             # playlist 再生中のお客様はお断り
             if self.PL:
-                self.PL = None
+                self.PL = []
                 self.Index_PL = None
 
             #Queueに登録
@@ -119,7 +120,7 @@ class MusicController():
     #--------------------------------------------------
     # Button
     class CreateButton(ui.View):
-        def __init__(self, Parent):
+        def __init__(self, Parent:'MusicController'):
             super().__init__(timeout=None)
             self.Parent = Parent
 
@@ -251,10 +252,10 @@ class MusicController():
         if 0 <= self.Mvc.Timer < (50*60):
             if (self.Mvc.Timer % (50*5)) == 1:
                 self.CLoop.create_task(self.Update_Embed())
-        elif (50*60) <= self.Mvc.Timer < (50*1800):
+        elif self.Mvc.Timer < (50*1800):
             if (self.Mvc.Timer % (50*10)) == 1:
                 self.CLoop.create_task(self.Update_Embed())
-        elif (50*1800) <= self.Mvc.Timer:
+        else:
             if (self.Mvc.Timer % (50*30)) == 1:
                 self.CLoop.create_task(self.Update_Embed())
 
