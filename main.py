@@ -41,12 +41,19 @@ tree = client.tree
 
 @tree.command(description="年中無休でカラオケ生活 のど自慢系ぴーよ")
 @discord.app_commands.describe(arg='URL or 検索したい文字')
-async def download(ctx: discord.Interaction, arg:str):
+async def download(ctx:discord.Interaction, arg:str):
     if embeds := await MusicController._download(arg):
-        ctx = await commands.Context.from_interaction(ctx)
+        ctx:commands.Context = await commands.Context.from_interaction(ctx)
         for em in embeds:
             await ctx.send(embed=em, ephemeral=True)
 
+
+def _data(gid) -> 'DataInfo':
+    if type(gid) == discord.Guild:
+        gid = gid.id
+    elif type(gid) == commands.Context:
+        gid = gid.guild.id
+    return g_opts[gid]
 
 
 ####  基本的コマンド
@@ -61,7 +68,7 @@ async def on_ready():
 
 
 @client.command()
-async def join(ctx):
+async def join(ctx:commands.Context):
     if vc := ctx.author.voice:
         gid = ctx.guild.id
         print(f'{ctx.guild.name} : #join')
@@ -72,7 +79,7 @@ async def join(ctx):
 
 
 @client.command()
-async def bye(ctx):
+async def bye(ctx:commands.Context):
     guild = ctx.guild
     gid = guild.id
     vc = guild.voice_client
@@ -81,13 +88,13 @@ async def bye(ctx):
         await _bye(guild)
 
 
-async def _bye(guild):
+async def _bye(guild:discord.Guild):
     gid = guild.id
     vc = guild.voice_client
     # 古いEmbedを削除
-    Old_Music = g_opts[gid].Music
+    Old_Music:MusicController = _data(gid).Music
 
-    g_opts[gid].MA.kill()
+    _data(gid).MA.kill()
     del g_opts[gid]
     try: await vc.disconnect()
     except Exception: pass
@@ -99,7 +106,7 @@ async def _bye(guild):
   
   
 @client.event
-async def on_voice_state_update(member, befor, after):
+async def on_voice_state_update(member:discord.Member, befor:discord.VoiceState, after:discord.VoiceState):
 
     if not befor.channel:
         return
@@ -130,16 +137,16 @@ async def on_voice_state_update(member, befor, after):
 # GUI操作
 #--------------------------------------------------
 @client.command()
-async def playing(ctx):
+async def playing(ctx:commands.Context):
     try:
-        await g_opts[ctx.guild.id].Music._playing()
+        await _data(ctx).Music._playing()
     except KeyError:pass
 
 
 @client.event
-async def on_reaction_add(Reac,User):
+async def on_reaction_add(Reac:discord.Reaction, User:discord.Member):
     try:
-        await g_opts[User.guild.id].Music.on_reaction_add(Reac,User)
+        await _data(User.guild).Music.on_reaction_add(Reac,User)
     except KeyError:pass
 
 
@@ -148,21 +155,21 @@ async def on_reaction_add(Reac,User):
 #---------------------------------------------------------------------------------------------------
 
 @client.command()
-async def skip(ctx, *arg):
+async def skip(ctx:commands.Context, *arg):
     if arg:
         arg = arg[0]
     else: arg = None
     try:
-        await g_opts[ctx.guild.id].Music._skip(arg)
+        await _data(ctx).Music._skip(arg)
     except KeyError:pass
 
 @client.command()
-async def s(ctx, *arg):
+async def s(ctx:commands.Context, *arg):
     if arg:
         arg = arg[0]
     else: arg = None
     try:
-        await g_opts[ctx.guild.id].Music._skip(arg)
+        await _data(ctx).Music._skip(arg)
     except KeyError:pass
 
 
@@ -188,43 +195,43 @@ async def dl(ctx:commands.Context, arg):
 ##############################################################################
 
 @client.command()
-async def queue(ctx,*args):
+async def queue(ctx:commands.Context, *args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
             return
-    await g_opts[ctx.guild.id].Music._play(ctx,args,True)
+    await _data(ctx).Music._play(ctx,args,True)
 
 
 @client.command()
-async def q(ctx,*args):
+async def q(ctx:commands.Context, *args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
             return
-    await g_opts[ctx.guild.id].Music._play(ctx,args,True)
+    await _data(ctx).Music._play(ctx,args,True)
 
 
 @client.command()
-async def play(ctx,*args):
+async def play(ctx:commands.Context, *args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
             return
-    await g_opts[ctx.guild.id].Music._play(ctx,args,False)
+    await _data(ctx).Music._play(ctx,args,False)
 
 
 @client.command()
-async def p(ctx,*args):
+async def p(ctx:commands.Context, *args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
             return
-    await g_opts[ctx.guild.id].Music._play(ctx,args,False)
+    await _data(ctx).Music._play(ctx,args,False)
 
 
 @client.command()
-async def pl(ctx,*args):
+async def pl(ctx:commands.Context, *args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
             return
-    await g_opts[ctx.guild.id].Music._play(ctx,args,False)
+    await _data(ctx).Music._play(ctx,args,False)
 
 
 
@@ -236,7 +243,7 @@ async def pl(ctx,*args):
 
 
 class DataInfo():
-    def __init__(self, guild):
+    def __init__(self, guild:discord.Guild):
         self.guild = guild
         self.gn = guild.name
         self.gid = guild.id

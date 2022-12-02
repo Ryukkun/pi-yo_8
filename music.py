@@ -7,6 +7,8 @@ from discord import ui, Embed, ButtonStyle, NotFound ,TextChannel ,Reaction
 
 from audio_source import StreamAudioData as SAD
 
+if __name__ == '__main__':
+    from main import DataInfo
 
 re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
 re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
@@ -15,7 +17,7 @@ re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
 
 
 class MusicController():
-    def __init__(self, Info):
+    def __init__(self, Info:DataInfo):
         self.Info = Info
         self.MA = Info.MA
         self.Mvc = Info.MA.add_player('Music' ,RNum=600 ,opus=True ,def_getbyte=self._update_embed)

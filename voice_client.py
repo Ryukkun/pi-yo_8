@@ -29,7 +29,7 @@ class MultiAudio(threading.Thread):
         self.play_audio = self.vc.send_audio_packet
         self.Enc_bool = False
 
-    def add_player(self ,name ,RNum ,opus=False ,def_getbyte=None):
+    def add_player(self ,name ,RNum ,opus=False ,def_getbyte=None) -> '_APlayer':
         self.Players[name] = _APlayer(RNum ,opus=opus ,def_getbyte=def_getbyte ,parent=self)
         self.PLen = len(self.Players)
         self.Enc_bool = (self.PLen != 1 or self.PLen == 1 and opus == False)
