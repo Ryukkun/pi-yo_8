@@ -127,15 +127,13 @@ class StreamAudioData:
             if Pl := await self.Pyt_P(self.Url):
 
                 # Playlist Index 特定
-                index = None
+                index = 0
                 for i, temp in enumerate(Pl):
                     if watch_id in temp:
-                        index = i
+                        index = i-1
                         break
-                if not index:
-                    index = 0
             
-                return (index, 1, Pl)
+                return (index, 0, Pl)
             
 
         ### youtube 動画オンリー -----------------------------------------------------------------------#
@@ -159,6 +157,53 @@ class StreamAudioData:
 
 
 
+
+    async def Check_V(self):
+        """
+        .p で指定された引数を、再生可能か判別する
+
+        再生可能だった場合
+        return self
+
+        不可
+        return None
+        """
+        ### 動画+playlist
+        if re_result := re_URL_PL_Video.match(self.Url):
+            self.Url = f'https://www.youtube.com/watch?v={re_result.group(2)}'
+        
+        ### 文字指定
+        if not re_URL.match(self.Url):
+            return await self.Pyt_V_Search()
+
+        ### youtube 動画オンリー
+        elif re_URL_YT.match(self.Url):
+            try: return await self.Pyt_V()
+            except Exception as e:
+                print(f"Error : Audio only 失敗 {e}")
+                return
+
+        ### それ以外のサイト yt-dlp を使用
+        else:
+            try: return await self.Ytdlp_V()
+            except Exception as e:
+                print(f"Error : Audio + Video 失敗 {e}")
+                return
+
+
+
+
+
+    # Video Search
+    async def Pyt_V_Search(self):
+        pyt = pytube.Search(self.Url)
+        Vdic = await self.loop.run_in_executor(None,pyt.fetch_and_parse)
+        self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,Vdic[0][0].video_id)
+
+        await self._format()
+        self.music = True
+        self.YT = True
+        return 
 
     # Playlist Search
     async def Pyt_P_Search(self,Url):

@@ -17,7 +17,10 @@ re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
 
 
 class MusicController():
-    def __init__(self, Info:DataInfo):
+    def __init__(self, _Info):
+        try: Info:DataInfo
+        except Exception: pass
+        Info = _Info
         self.Info = Info
         self.MA = Info.MA
         self.Mvc = Info.MA.add_player('Music' ,RNum=600 ,opus=True ,def_getbyte=self._update_embed)
@@ -95,35 +98,6 @@ class MusicController():
         
 
 
-
-
-    async def _playlist(self, ctx ,args):
-        # 一時停止していた場合再生 開始
-        if args == ():
-            if self.Mvc.is_paused():
-                self.Mvc.resume()
-            return
-        elif type(args) == str:
-            arg = args
-        else:
-            arg = ' '.join(args)
-
-        # 君はほんとにplaylistなのかい　どっちなんだい！
-        if res := await SAD(arg).Check_P():
-            self.Index_PL = res[0]
-            self.Random_PL = res[1]
-            self.PL = res[2]
-        else:
-            return
-        self.Latest_CH = ctx.channel
-        self.Loop = False
-        #self.Index_PL -= 1
-        self.Queue = []
-
-        # 再生
-        await self.play_loop(None,0)
-        if self.Mvc.is_paused():
-            self.Mvc.resume()
 
 
     async def _skip(self, sec):
