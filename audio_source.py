@@ -28,11 +28,15 @@ class StreamAudioData:
         self.music = None
         self.YT = None
         self.CH_Icon = None
+        self.index = None
         
     # YT Video Load
     async def Pyt_V(self):
         self.Vid = re_URL_Video.match(self.Url).group(4)
         self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,self.Vid)
+        if not self.Vdic.get('streamingData'):
+            with YoutubeDL({'format': 'bestaudio','quiet':True}) as ydl:
+                self.Vdic = await self.loop.run_in_executor(None,ydl.extract_info,self.Url,False)
 
         await self._format()
         self.music = True
@@ -60,19 +64,33 @@ class StreamAudioData:
 
 
     async def _format(self):
-        self.formats = self.Vdic['streamingData'].get('formats',[])
-        self.formats.extend(self.Vdic['streamingData'].get('adaptiveFormats',[]))
-        res = []
-        for fm in self.formats:
-            if 249 <= fm['itag'] <= 251 or 139 <= fm['itag'] <= 141:
-                res.append(fm)
-        self.St_Url = res[-1]['url']
-        self.Title = self.Vdic["videoDetails"]["title"]
-        self.CH = self.Vdic["videoDetails"]["author"]
-        self.CH_Url = f'https://www.youtube.com/channel/{self.Vdic["videoDetails"]["channelId"]}'
-        self.VideoID = self.Vdic["videoDetails"]["videoId"]
-        self.St_Vol = self.Vdic['playerConfig']['audioConfig'].get('loudnessDb')
-        self.St_Sec = int(self.Vdic['videoDetails']['lengthSeconds'])
+
+        # pytube
+        if self.Vdic.get('streamingData'):
+            self.formats = self.Vdic['streamingData'].get('formats',[])
+            self.formats.extend(self.Vdic['streamingData'].get('adaptiveFormats',[]))
+            res = []
+            for fm in self.formats:
+                if 249 <= fm['itag'] <= 251 or 139 <= fm['itag'] <= 141:
+                    res.append(fm)
+            self.St_Url = res[-1]['url']
+            self.Title = self.Vdic["videoDetails"]["title"]
+            self.CH = self.Vdic["videoDetails"]["author"]
+            self.CH_Url = f'https://www.youtube.com/channel/{self.Vdic["videoDetails"]["channelId"]}'
+            self.VideoID = self.Vdic["videoDetails"]["videoId"]
+            self.St_Vol = self.Vdic['playerConfig']['audioConfig'].get('loudnessDb')
+            self.St_Sec = int(self.Vdic['videoDetails']['lengthSeconds'])
+
+        else:
+            self.formats = self.Vdic['formats']
+            self.St_Url = self.Vdic['url']
+            self.Title = self.Vdic["title"]
+            self.CH = self.Vdic["channel"]
+            self.CH_Url = self.Vdic["channel_url"]
+            self.VideoID = self.Vdic["id"]
+            self.St_Vol = 5.0
+            self.St_Sec = int(self.Vdic["duration"])
+
         self.Web_Url = f"https://youtu.be/{self.VideoID}"
         async with aiohttp.ClientSession() as session:
             async with session.get(self.CH_Url) as resp:
@@ -86,7 +104,6 @@ class StreamAudioData:
         if self.music:
             volume = -20.0
             if Vol := self.St_Vol:
-                Vol /= 2
                 volume -= Vol
             FFMPEG_OPTIONS['before_options'] = "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 2147483647 -probesize 2147483647"
             FFMPEG_OPTIONS['options'] += f' -af "volume={volume}dB"'
@@ -128,9 +145,8 @@ class StreamAudioData:
 
                 # Playlist Index 特定
                 index = 0
-                for i, temp in enumerate(Pl):
+                for index, temp in enumerate(Pl):
                     if watch_id in temp:
-                        index = i-1
                         break
             
                 return (index, 0, Pl)
@@ -198,12 +214,13 @@ class StreamAudioData:
     async def Pyt_V_Search(self):
         pyt = pytube.Search(self.Url)
         Vdic = await self.loop.run_in_executor(None,pyt.fetch_and_parse)
-        self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,Vdic[0][0].video_id)
 
-        await self._format()
+        self.Url = Vdic[0][0].watch_url
+        res = await self.Pyt_V()
+
         self.music = True
         self.YT = True
-        return 
+        return res
 
     # Playlist Search
     async def Pyt_P_Search(self,Url):

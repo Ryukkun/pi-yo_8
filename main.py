@@ -210,7 +210,7 @@ async def q(ctx:commands.Context, *args):
     await _data(ctx).Music._play(ctx,args,True)
 
 
-@client.command()
+@client.command(aliases=['ok','ts'])
 async def play(ctx:commands.Context, *args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
@@ -253,7 +253,6 @@ class DataInfo():
         self.config = config
         self.MA = MultiAudio(guild, client, self)
         self.Music = MusicController(self)
-        self.MA.start()
 
 
 

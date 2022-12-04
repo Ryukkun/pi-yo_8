@@ -2,8 +2,10 @@ import re
 import random
 import time
 import tabulate
+import asyncio
 
-from discord import ui, Embed, ButtonStyle, NotFound ,TextChannel ,Reaction
+from discord import ui, Embed, ButtonStyle, NotFound, TextChannel, Reaction, Message, SelectOption, Interaction
+from discord.ext import tasks
 
 from audio_source import StreamAudioData as SAD
 
@@ -15,6 +17,36 @@ re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.
 re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
 
 
+class CreateSelect(ui.Select):
+    def __init__(self,parent:'MusicController',args) -> None:
+        self.loop = asyncio.get_event_loop()
+        self.parent = parent
+        select_opt = []
+        _audio: SAD
+        #print(args)
+        for i, _audio in enumerate(args):
+            title = _audio.Title
+            if i >= 25:
+                break
+            if len(title) >= 100:
+                title = title[0:100]
+            select_opt.append(SelectOption(label=title,value=str(i),default=(select_opt == [])))
+
+        super().__init__(placeholder='キュー表示', options=select_opt)
+
+
+    async def callback(self, interaction: Interaction):
+        #await interaction.response.send_message(f'{interaction.user.name}は{self.values[0]}を選択しました')
+        self.loop.create_task(interaction.response.defer())
+        for i in range(int(self.values[0])):
+            if self.parent.Queue:
+                self.parent.Rewind.append(self.parent.Queue[0])
+                del self.parent.Queue[0]
+            elif self.parent.Next_PL['PL']:
+                self.parent.Rewind.append(self.parent.Next_PL['PL'])
+                del self.parent.Next_PL['PL'][0]
+        await self.parent.play_loop(None,0)
+        #print(f'{interaction.user.name}は{self.values[0]}を選択しました')
 
 class MusicController():
     def __init__(self, _Info):
@@ -23,24 +55,24 @@ class MusicController():
         Info = _Info
         self.Info = Info
         self.MA = Info.MA
-        self.Mvc = Info.MA.add_player('Music' ,RNum=600 ,opus=True ,def_getbyte=self._update_embed)
+        self.Mvc = Info.MA.add_player('Music' ,RNum=600 ,opus=True)
         self.guild = Info.guild
         self.gid = Info.gid
         self.gn = Info.gn
         self.vc = self.guild.voice_client
         self.Queue = []
         self.Index_PL = None
-        self.Played_PL = []
+        self.Next_PL = {'PL':[],'index':None}
         self.PL = []
         self.Latest_CH:TextChannel = None
-        self.Loop = True
-        self.Loop_PL = True
-        self.Random_PL = True
+        self.status = {'loop':True,'loop_pl':True,'random_pl':True}
+        self.last_status = self.status.copy()
         self.Rewind = []
         self.CLoop = Info.loop
         self.Embed_Message = None
-        self.sending_embed = False
+        self.def_doing = {'_playing':False,'_load_next_pl':False}
         self.last_embed_update:float = 0.0
+        self.run_loop.start()
 
     async def _play(self, ctx, args, Q):
         # 一時停止していた場合再生 開始
@@ -59,12 +91,14 @@ class MusicController():
         self.Latest_CH = ctx.channel
 
         if type(res) == tuple:
-            self.Index_PL = res[0]
-            self.Random_PL = res[1]
+            self.Index_PL = self.Next_PL['index'] = res[0] - 1
+            self.status['random_pl'] = res[1]
             self.PL = res[2]
+            self.Next_PL['PL'] = []
 
-            self.Loop = False
+            self.status['loop'] = False
             self.Queue = []
+            self.last_status = self.status.copy()
 
             # 再生
             await self.play_loop(None,0)
@@ -123,40 +157,34 @@ class MusicController():
         def __init__(self, Parent:'MusicController'):
             super().__init__(timeout=None)
             self.Parent = Parent
+            self.add_item(CreateSelect(Parent,Parent.Queue + Parent.Next_PL['PL']))
+
 
         @ui.button(label="<")
-        async def def_button0(self, interaction, button):
+        async def def_button0(self, interaction:Interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
 
-
             if not Parent.Rewind: return
             AudioData = Parent.Rewind[-1]
-            if len(Parent.Queue) >= 1:
-                del Parent.Queue[0]
             Parent.Queue.insert(0,AudioData)
             del Parent.Rewind[-1]
             if Parent.PL:
-                index = None
-                for i, temp in enumerate(Parent.PL):
-                    if AudioData.VideoID in temp:
-                        index = i
-                        break
-                if index:
-                    Parent.Index_PL = index
+                if type(AudioData.index) == int:
+                    Parent.Index_PL = AudioData.index
 
             await Parent.play_loop(None,0)
             if Parent.Mvc.is_paused():
                 Parent.Mvc.resume()
 
         @ui.button(label="10↩︎")
-        async def def_button1(self, interaction, button):
+        async def def_button1(self, interaction:Interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
             Parent.Mvc.TargetTimer -= 10*50
 
         @ui.button(label="⏯",style=ButtonStyle.blurple)
-        async def def_button2(self, interaction, button):
+        async def def_button2(self, interaction:Interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
 
@@ -166,16 +194,16 @@ class MusicController():
             elif Parent.Mvc.is_playing():
                 print(f'{Parent.gn} : #stop')
                 Parent.Mvc.pause()
-                await Parent.Update_Embed()
+                await Parent.update_embed()
 
         @ui.button(label="↪︎10")
-        async def def_button3(self, interaction, button):
+        async def def_button3(self, interaction:Interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
             Parent.Mvc.TargetTimer += 10*50
 
         @ui.button(label=">")
-        async def def_button4(self, interaction, button):
+        async def def_button4(self, interaction:Interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
             await Parent._skip(None)
@@ -184,28 +212,30 @@ class MusicController():
 
 
     async def _playing(self):
-        if self.sending_embed: return
-        self.sending_embed = True
-        if self.Mvc.is_playing():
-            
-            # Get Embed
-            if embed := await self.Edit_Embed():
+        if self.def_doing['_playing']: return
+        self.def_doing['_playing'] = True
+        try :
+            if self.Mvc.is_playing():
+                
+                # Get Embed
+                if embed := await self.generate_embed():
 
-                # 古いEmbedを削除
-                if late_E := self.Embed_Message:
-                    try: await late_E.delete()
-                    except NotFound: pass
+                    # 古いEmbedを削除
+                    if late_E := self.Embed_Message:
+                        try: await late_E.delete()
+                        except NotFound: pass
 
-                # 新しいEmbed
-                Sended_Mes = await self.Latest_CH.send(embed=embed,view=self.CreateButton(self))
-                self.Embed_Message = Sended_Mes 
-                self.CLoop.create_task(Sended_Mes.add_reaction("🔁"))
-                if self.PL:
-                    self.CLoop.create_task(Sended_Mes.add_reaction("♻"))
-                    self.CLoop.create_task(Sended_Mes.add_reaction("🔀"))
+                    # 新しいEmbed
+                    Sended_Mes = await self.Latest_CH.send(embed=embed,view=self.CreateButton(self))
+                    self.Embed_Message = Sended_Mes 
+                    self.CLoop.create_task(Sended_Mes.add_reaction("🔁"))
+                    if self.PL:
+                        self.CLoop.create_task(Sended_Mes.add_reaction("♻"))
+                        self.CLoop.create_task(Sended_Mes.add_reaction("🔀"))
 
-                #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
-        self.sending_embed = False
+                    #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
+        except Exception: pass
+        self.def_doing['_playing'] = False
         self.last_embed_update = time.perf_counter()
 
 
@@ -219,84 +249,73 @@ class MusicController():
             #### Setting
             # 単曲ループ
             if Reac.emoji =='🔁':
-                if not self.Loop:
-                    self.Loop = True
+                if not self.status['loop']:
+                    self.status['loop'] = True
                 else:
-                    self.Loop = False
+                    self.status['loop'] = False
 
             # Playlistループ
             if Reac.emoji =='♻':
-                if self.Loop_PL:        #True => False
-                    self.Loop_PL = False
+                if self.status['loop_pl']:        #True => False
+                    self.status['loop_pl'] = False
                 else:                   #False => True
-                    self.Loop_PL = True
+                    self.status['loop_pl'] = True
 
             # Random
             if Reac.emoji =='🔀':
-                if self.Random_PL:      #True => False
-                    self.Random_PL = False
+                if self.status['random_pl']:      #True => False
+                    self.status['random_pl'] = False
                 else:                   #False => True
-                    self.Random_PL = True
-
+                    self.status['random_pl'] = True
 
             #### Message
-            # Get Embed
-            embed = await self.Edit_Embed()
-            if not embed: return
-            # Edit
-            await Reac.message.edit(embed=embed)
-
-
-    def _update_embed(self):
-        # 秒数更新のため
-        if 0 <= self.Mvc.Timer < (50*60):
-            if (self.Mvc.Timer % (50*5)) == 1:
-                self.CLoop.create_task(self.Update_Embed())
-        elif self.Mvc.Timer < (50*1800):
-            if (self.Mvc.Timer % (50*10)) == 1:
-                self.CLoop.create_task(self.Update_Embed())
-        else:
-            if (self.Mvc.Timer % (50*30)) == 1:
-                self.CLoop.create_task(self.Update_Embed())
+            if self.def_doing['_playing']: return
+            if (time.perf_counter() - self.last_embed_update) <= 2: return
+            await self._edit_embed(Reac.message)
 
 
 
-    async def Update_Embed(self):
-        if self.sending_embed: return
+
+    async def update_embed(self):
+        if self.def_doing['_playing']: return
         if (time.perf_counter() - self.last_embed_update) <= 4: return
 
         if late_E := self.Latest_CH.last_message:
             if late_E.author.id == self.Info.client.user.id:
                 if late_E.embeds:
-                    if late_E.embeds[0].colour.value != 14794075:
-                        await self._playing()
-                        return
-                
-                embed = await self.Edit_Embed()
-                # embedが無効だったら 古いEmbedを削除
-                if not embed:
-                    try: await late_E.delete()
-                    except NotFound: pass
-                    return
-
-                try: await late_E.edit(embed= embed)
-                except NotFound:
-                    # メッセージが見つからなかったら 新しく作成
-                    print('見つかりませんでした！')
-                else:
-                    self.last_embed_update = time.perf_counter()
-                    try:
-                        # Reaction 修正
-                        if self.PL:
-                            await late_E.add_reaction('♻')
-                            await late_E.add_reaction('🔀')
-                        else:
-                            await late_E.clear_reaction('♻')
-                            await late_E.clear_reaction('🔀')
-                    except Exception: pass
-                    return
-        
+                    if late_E.embeds[0].colour.value == 14794075:
+                        if await self._edit_embed(late_E):
+                            return
         await self._playing()
+
+
+
+    async def _edit_embed(self, late_E:Message):
+        self.last_embed_update = time.perf_counter()
+        embed = await self.generate_embed()
+        # embedが無効だったら 古いEmbedを削除
+        if not embed:
+            try: await late_E.delete()
+            except NotFound: pass
+            return True
+
+        try: await late_E.edit(embed= embed,view=self.CreateButton(self))
+        except NotFound:
+            # メッセージが見つからなかったら 新しく作成
+            print('見つかりませんでした！')
+        else:
+            try:
+                # Reaction 修正
+                if self.PL:
+                    await late_E.add_reaction('♻')
+                    await late_E.add_reaction('🔀')
+                else:
+                    await late_E.clear_reaction('♻')
+                    await late_E.clear_reaction('🔀')
+            except Exception: pass
+            return True
+
+
 
     @classmethod
     def _Calc_Time(self, Time):
@@ -315,17 +334,17 @@ class MusicController():
         return f'{Hour}{Min}:{Sec}'
 
 
-    async def Edit_Embed(self):
-        
+    async def generate_embed(self):
+        _SAD:SAD
         if _SAD := self.Mvc._SAD: pass
         else: return
 
         # emoji
         V_loop= PL_loop= Random_P= ':red_circle:'
-        if self.Loop: V_loop = ':green_circle:'
+        if self.status['loop']: V_loop = ':green_circle:'
         if self.PL:
-            if self.Loop_PL: PL_loop = ':green_circle:'
-            if self.Random_PL: Random_P = ':green_circle:'
+            if self.status['loop_pl']: PL_loop = ':green_circle:'
+            if self.status['random_pl']: Random_P = ':green_circle:'
 
         # Embed
         if _SAD.YT:
@@ -484,42 +503,65 @@ class MusicController():
 #---------------------------------------------------------------------------------------
 #   再生 Loop
 #---------------------------------------------------------------------------------------
+    async def _load_next_pl(self):
+        if self.def_doing['_load_next_pl']: return
+        self.def_doing['_load_next_pl'] = True
+        while len(self.Next_PL['PL']) <= 19:
+            if self.status['random_pl']:
+                for_count = 0
+                new_index = 0
+                while self.Next_PL['index'] == (new_index := random.randint(0,len(self.PL) - 1)):
+                    for_count += 1
+                    if for_count == 10: break
+
+            else:
+                new_index = self.Next_PL['index'] + 1
+            if new_index >= len(self.PL):
+                new_index = 0
+                if self.status['loop_pl'] == False:
+                    break
+
+            url = self.PL[new_index]
+            try :AudioData = await SAD(url).Pyt_V()
+            except Exception as e:
+                print(f'Error : Playlist Extract {e}')
+                break
+
+            AudioData.index = new_index
+            self.Next_PL['PL'].append(AudioData)
+            self.Next_PL['index'] = new_index
+            print(new_index)
+
+        self.def_doing['_load_next_pl'] = False
+
+
+
     async def play_loop(self, played, did_time):
         # あなたは用済みよ
         if not self.vc: return
 
         # Queue削除
         if self.Queue:
-            if self.Loop != 1 and self.Queue[0].St_Url == played or (time.time() - did_time) <= 0.5:
+            if self.status['loop'] == False and self.Queue[0].St_Url == played or (time.time() - did_time) <= 0.5:
                 self.Rewind.append(self.Queue[0])
                 del self.Queue[0]
-
+                
         # Playlistのお客様Only
-        if self.PL and self.Queue == []:
-            if self.Random_PL:
-                for_count = 0
-                while self.Index_PL == (new_index := random.randint(0,len(self.PL) - 1)):
-                    for_count += 1
-                    if for_count == 10: break
-                self.Index_PL = new_index
-            else:
-                self.Index_PL += 1
-            if self.Index_PL >= len(self.PL):
-                self.Index_PL = 0
-                if self.Loop_PL == 0:
-                    del self.PL
-                    del self.Index_PL
-                    return
+        if self.PL:
+            if self.Queue == []:
+                self.CLoop.create_task(self._load_next_pl())
 
-            extract_url = self.PL[self.Index_PL]
-            try :AudioData = await SAD(extract_url).Pyt_V()
-            except Exception as e:
-                print(f'Error : Playlist Extract {e}')
-                return
-            # Queue
-            self.Queue.append(AudioData)
-            # Print
-            print(f"{self.gn} : Paylist add Queue  [Now len: {str(len(self.Queue))}]")
+                # 最初が読み込まれるまで wait
+                while not self.Next_PL['PL']:
+                    await asyncio.sleep(0.1)
+
+                # Queue
+                self.Queue.append(self.Next_PL['PL'][0])
+                self.Index_PL = self.Next_PL['PL'][0].index
+                del self.Next_PL['PL'][0]
+
+                # Print
+                print(f"{self.gn} : Paylist add Queue  [Now len: {str(len(self.Queue))},{str(len(self.Next_PL['PL']))}]")
 
         # 再生
         if self.Queue != []:
@@ -528,3 +570,22 @@ class MusicController():
             print(f"{self.gn} : Play  [Now len: {str(len(self.Queue))}]")
                 
             await self.Mvc.play(AudioData,after=lambda : self.CLoop.create_task(self.play_loop(AudioData.St_Url,played_time)))
+
+
+    @tasks.loop(seconds=7.0)
+    async def run_loop(self):
+        
+        try:
+            if self.PL and self.status['random_pl'] != self.last_status['random_pl']:
+                while self.def_doing['_load_next_pl']:
+                    self.Next_PL['PL'] = [i for i in range(25)]
+                    await asyncio.sleep(1)
+                self.last_status = self.status.copy()
+                self.Queue = [self.Queue[0]]
+                self.Next_PL['PL'] = []
+                self.Next_PL['index'] = self.Index_PL
+                self.CLoop.create_task(self._load_next_pl())
+        
+            self.CLoop.create_task(self.update_embed())
+        except Exception as e:
+            print(e)

@@ -5,18 +5,18 @@ import time
 import numpy as np
 
 from types import NoneType
-from discord import SpeakingState, opus
+from discord import SpeakingState, opus, Guild
+from discord.ext import commands
 
 
-class MultiAudio(threading.Thread):
+class MultiAudio:
     """
     Discord に存在する AudioPlayer は 同時に1つまでの音源の再生にしか対応していないため
     独自で Playerを作成 
     self.run は制御方法知らんから、常にループしてる 0.02秒(20ms) 間隔で 
     """
-    def __init__(self,guild,client,parent) -> None:
+    def __init__(self, guild:Guild, client:commands.Bot, parent) -> None:
         self.loop = True
-        super(MultiAudio, self).__init__(daemon=True)
         self.guild = guild
         self.gid = guild.id
         self.vc = guild.voice_client
@@ -28,6 +28,7 @@ class MultiAudio(threading.Thread):
         self.vc.encoder.set_expected_packet_loss_percent(0.0)
         self.play_audio = self.vc.send_audio_packet
         self.Enc_bool = False
+        threading.Thread(target=self.run,daemon=True).start()
 
     def add_player(self ,name ,RNum ,opus=False ,def_getbyte=None) -> '_APlayer':
         self.Players[name] = _APlayer(RNum ,opus=opus ,def_getbyte=def_getbyte ,parent=self)
@@ -75,13 +76,13 @@ class MultiAudio(threading.Thread):
         delay = 1
         P: _APlayer
         while self.loop:
+            Bytes = None
             if self.PLen == 1:
                 P = list(self.Players.values())[0]
                 Bytes = P.read_bytes()
                 if Bytes != NoneType and P.def_getbyte:
                     P.def_getbyte()
             elif self.PLen >= 2:
-                Bytes = None
                 for P in self.Players.values():
                     _Byte = P.read_bytes(numpy=True)
                     if _Byte != NoneType:
@@ -111,7 +112,7 @@ class MultiAudio(threading.Thread):
 
             
 
-class _APlayer():
+class _APlayer:
     def __init__(self ,RNum ,opus ,def_getbyte ,parent):
         self.AudioSource = None
         self._SAD = None
