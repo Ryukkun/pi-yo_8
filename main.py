@@ -95,6 +95,7 @@ async def _bye(guild:discord.Guild):
     Old_Music:MusicController = _data(gid).Music
 
     _data(gid).MA.kill()
+    _data(gid).Music.run_loop.cancel()
     del g_opts[gid]
     try: await vc.disconnect()
     except Exception: pass
@@ -154,17 +155,8 @@ async def on_reaction_add(Reac:discord.Reaction, User:discord.Member):
 #   Skip
 #---------------------------------------------------------------------------------------------------
 
-@client.command()
+@client.command(aliases=['s'])
 async def skip(ctx:commands.Context, *arg):
-    if arg:
-        arg = arg[0]
-    else: arg = None
-    try:
-        await _data(ctx).Music._skip(arg)
-    except KeyError:pass
-
-@client.command()
-async def s(ctx:commands.Context, *arg):
     if arg:
         arg = arg[0]
     else: arg = None
@@ -176,16 +168,10 @@ async def s(ctx:commands.Context, *arg):
 #---------------------------------------------------------------------------------------
 #   Download
 #---------------------------------------------------------------------------------------
-@client.command()
+@client.command(aliases=['dl'])
 async def download(ctx:commands.Context, arg):
     if embeds := await MusicController._download(arg):
        for em in embeds:
-            await ctx.send(embed=em)
-
-@client.command()
-async def dl(ctx:commands.Context, arg):
-    if embeds := await MusicController._download(arg):
-        for em in embeds:
             await ctx.send(embed=em)
 
 
@@ -194,7 +180,7 @@ async def dl(ctx:commands.Context, arg):
 # Play & Queue
 ##############################################################################
 
-@client.command()
+@client.command(aliases=['q'])
 async def queue(ctx:commands.Context, *args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
@@ -202,38 +188,13 @@ async def queue(ctx:commands.Context, *args):
     await _data(ctx).Music._play(ctx,args,True)
 
 
-@client.command()
-async def q(ctx:commands.Context, *args):
-    if not ctx.guild.voice_client:
-        if not await join(ctx):
-            return
-    await _data(ctx).Music._play(ctx,args,True)
 
-
-@client.command(aliases=['ok','ts'])
+@client.command(aliases=['p','pl'])
 async def play(ctx:commands.Context, *args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
             return
     await _data(ctx).Music._play(ctx,args,False)
-
-
-@client.command()
-async def p(ctx:commands.Context, *args):
-    if not ctx.guild.voice_client:
-        if not await join(ctx):
-            return
-    await _data(ctx).Music._play(ctx,args,False)
-
-
-@client.command()
-async def pl(ctx:commands.Context, *args):
-    if not ctx.guild.voice_client:
-        if not await join(ctx):
-            return
-    await _data(ctx).Music._play(ctx,args,False)
-
-
 
 
 
