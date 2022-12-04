@@ -32,7 +32,7 @@ class CreateSelect(ui.Select):
                 title = title[0:100]
             select_opt.append(SelectOption(label=title,value=str(i),default=(select_opt == [])))
 
-        super().__init__(placeholder='キュー表示', options=select_opt)
+        super().__init__(placeholder='キュー表示', options=select_opt, row=0)
 
 
     async def callback(self, interaction: Interaction):
@@ -160,7 +160,7 @@ class MusicController():
             self.add_item(CreateSelect(Parent,Parent.Queue + Parent.Next_PL['PL']))
 
 
-        @ui.button(label="<")
+        @ui.button(label="<",row=1)
         async def def_button0(self, interaction:Interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
@@ -177,13 +177,13 @@ class MusicController():
             if Parent.Mvc.is_paused():
                 Parent.Mvc.resume()
 
-        @ui.button(label="10↩︎")
+        @ui.button(label="10↩︎",row=1)
         async def def_button1(self, interaction:Interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
             Parent.Mvc.TargetTimer -= 10*50
 
-        @ui.button(label="⏯",style=ButtonStyle.blurple)
+        @ui.button(label="⏯",style=ButtonStyle.blurple,row=1)
         async def def_button2(self, interaction:Interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
@@ -196,13 +196,13 @@ class MusicController():
                 Parent.Mvc.pause()
                 await Parent.update_embed()
 
-        @ui.button(label="↪︎10")
+        @ui.button(label="↪︎10",row=1)
         async def def_button3(self, interaction:Interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
             Parent.Mvc.TargetTimer += 10*50
 
-        @ui.button(label=">")
+        @ui.button(label=">",row=1)
         async def def_button4(self, interaction:Interaction, button):
             Parent = self.Parent
             Parent.CLoop.create_task(interaction.response.defer())
@@ -279,6 +279,7 @@ class MusicController():
     async def update_embed(self):
         if self.def_doing['_playing']: return
         if (time.perf_counter() - self.last_embed_update) <= 4: return
+        if not self.Latest_CH: return
 
         if late_E := self.Latest_CH.last_message:
             if late_E.author.id == self.Info.client.user.id:
@@ -530,7 +531,7 @@ class MusicController():
             AudioData.index = new_index
             self.Next_PL['PL'].append(AudioData)
             self.Next_PL['index'] = new_index
-            print(new_index)
+            #print(new_index)
 
         self.def_doing['_load_next_pl'] = False
 
