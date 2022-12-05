@@ -1,13 +1,14 @@
 import threading
 import asyncio
 import time
-
 import numpy as np
 
 from types import NoneType
+from typing import Optional
 from discord import SpeakingState, opus, Guild
 from discord.ext import commands
 
+from audio_source import StreamAudioData
 
 class MultiAudio:
     """
@@ -132,7 +133,7 @@ class _APlayer:
         self.Loop = False
         
 
-    async def play(self,_SAD,after):
+    async def play(self,_SAD:StreamAudioData,after):
         self._SAD = _SAD
         self.Duration = _SAD.St_Sec
         AudioSource = await _SAD.AudioSource(self.opus)
@@ -147,6 +148,8 @@ class _APlayer:
         self.resume()
 
     def stop(self):
+        if self.AudioSource:
+            self._speaking(False)
         self.AudioSource = None
         self._SAD = None
 
@@ -172,67 +175,82 @@ class _APlayer:
 
 
     def read_bytes(self, numpy=False):
-        if self.AudioSource and self.Pausing == False:
-            
+        if self.AudioSource:
             # n秒 進む
             if self.Timer < self.TargetTimer:
                 Dif = self.TargetTimer - self.Timer
+
                 if len(self.QBytes) < Dif:
-                    if not self.QBytes and self.read_fin:
-                        self.Timer = self._SAD.St_Sec * 50
-                        self.TargetTimer = self.Timer
-                    else:
-                        self.Timer += len(self.QBytes)
-                        self.RBytes += self.QBytes
-                        self.QBytes = []
-                        self._read_bytes(True)
+                    sec = self.TargetTimer // 50
+                    if sec > self._SAD.St_Sec:
+                        self._finish()
                         return
+                    self.Timer = self.TargetTimer
+                    self.Parent.CLoop.create_task(self._new_asouce_sec(sec))
+
+
                 else:
                     self.Timer = self.TargetTimer
                     self.RBytes += self.QBytes[:Dif]
                     del self.QBytes[:Dif]
 
+
             # n秒 前に戻る
             if self.Timer > self.TargetTimer:
                 Dif = self.Timer - self.TargetTimer
-                if len(self.RBytes) <= Dif:
-                    self.Timer -= len(self.RBytes)
-                    self.TargetTimer = self.Timer
-                    #print(self.Timer)
-                    self.QBytes = self.RBytes + self.QBytes
-                    self.RBytes = []
+
+                if len(self.RBytes) < Dif:
+                    sec = self.TargetTimer // 50
+                    if sec < 0: sec = 0
+                    self.Timer = self.TargetTimer
+                    self.Parent.CLoop.create_task(self._new_asouce_sec(sec))
+
                 else:
                     self.QBytes = self.RBytes[-Dif:] + self.QBytes
                     del self.RBytes[-Dif:]
                     self.Timer = self.TargetTimer
-
+            
             # Read Bytes
-            if len(self.QBytes) <= (60 * 50) and self.read_fin == False:
+            if len(self.QBytes) <= (45 * 50) and self.read_fin == False:
                 self._read_bytes(True)
 
-            #print(len(self.QBytes))
-            if self.QBytes:
-                temp = self.QBytes[0]
-                if temp == 'Fin':
-                    self.AudioSource = None
-                    self._SAD = None
-                    self._speaking(False)
-                    self.After()
-                    return
+            if self.Pausing == False:
+                #print(len(self.QBytes))
+                if self.QBytes:
+                    temp = self.QBytes[0]
+                    # 終了
+                    if temp == 'Fin':
+                        self._finish()
+                        return
 
-                self.Timer += 1
-                self.TargetTimer += 1
-                del self.QBytes[0]
-                self.RBytes.append(temp)
-                if self.RNum != -1:
-                    if len(self.RBytes) > (self.RNum * 50):
-                        del self.RBytes[:len(self.RBytes) - (self.RNum * 50)]
+                    self.Timer += 1
+                    self.TargetTimer += 1
+                    del self.QBytes[0]
+                    self.RBytes.append(temp)
+                    if self.RNum != -1:
+                        if len(self.RBytes) > (self.RNum * 50):
+                            del self.RBytes[:len(self.RBytes) - (self.RNum * 50)]
 
-                if numpy:
-                    return np.frombuffer(temp,np.int16)
-                return temp
+                    if numpy:
+                        return np.frombuffer(temp,np.int16)
+                    return temp
 
-            
+
+    async def _new_asouce_sec(self, sec):
+        self.AudioSource = await self._SAD.AudioSource(self.opus, sec)
+        self.Timer = self.TargetTimer = sec * 50
+        self.QBytes = []
+        self.RBytes = []
+        self.read_fin = False
+
+
+    def _finish(self):
+        self.AudioSource = None
+        self._SAD = None
+        self._speaking(False)
+        if self.After:
+            self.After()
+
 
     def _read_bytes(self, status):
         if status:
@@ -245,13 +263,16 @@ class _APlayer:
 
 
     def __read_bytes(self):
-            while len(self.QBytes) <= (120 * 50) and self.read_loop:
-                if temp := self.AudioSource.read():
-                    #print(temp)
-                    self.QBytes.append(temp)
-                else: 
-                    self.read_fin = True
-                    self.QBytes.append('Fin')
+            while len(self.QBytes) <= (90 * 50) and self.read_loop:
+                try:
+                    if temp := self.AudioSource.read():
+                        #print(temp)
+                        self.QBytes.append(temp)
+                    else: 
+                        self.read_fin = True
+                        self.QBytes.append('Fin')
+                        break
+                except Exception:
                     break
 
             self.read_loop = False

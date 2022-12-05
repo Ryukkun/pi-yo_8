@@ -99,13 +99,20 @@ class StreamAudioData:
         self.CH_Icon = CH_Icon.find('link',rel="image_src").get('href')
 
 
-    async def AudioSource(self, opus:bool):
-        FFMPEG_OPTIONS = {'options': '-vn -application lowdelay -loglevel quiet'}
+    async def AudioSource(self, opus:bool, sec=0):
+        FFMPEG_OPTIONS = {
+            'before_options': '',
+            'options': f'-vn -application lowdelay -loglevel quiet'
+            }
+
+        if int(sec):
+            FFMPEG_OPTIONS['before_options'] += f'-ss {sec}'
+        
         if self.music:
             volume = -20.0
             if Vol := self.St_Vol:
                 volume -= Vol
-            FFMPEG_OPTIONS['before_options'] = "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 2147483647 -probesize 2147483647"
+            FFMPEG_OPTIONS['before_options'] += " -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 2147483647 -probesize 2147483647"
             FFMPEG_OPTIONS['options'] += f' -af "volume={volume}dB"'
 
         if opus:

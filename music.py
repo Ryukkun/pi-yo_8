@@ -55,7 +55,7 @@ class MusicController():
         Info = _Info
         self.Info = Info
         self.MA = Info.MA
-        self.Mvc = Info.MA.add_player('Music' ,RNum=600 ,opus=True)
+        self.Mvc = Info.MA.add_player('Music' ,RNum=30 ,opus=True)
         self.guild = Info.guild
         self.gid = Info.gid
         self.gn = Info.gn
@@ -144,6 +144,7 @@ class MusicController():
                     self.Rewind.append(self.Queue[0])
                     del self.Queue[0]
                     print(f'{self.gn} : #次の曲へ skip')
+                    self.Mvc.stop()
                     await self.play_loop(None,0)
 
 
@@ -565,7 +566,7 @@ class MusicController():
                 print(f"{self.gn} : Paylist add Queue  [Now len: {str(len(self.Queue))},{str(len(self.Next_PL['PL']))}]")
 
         # 再生
-        if self.Queue != []:
+        if self.Queue:
             AudioData = self.Queue[0]
             played_time = time.time()
             print(f"{self.gn} : Play  [Now len: {str(len(self.Queue))}]")
