@@ -3,8 +3,8 @@ import os
 import asyncio
 from discord.ext import commands
 
-from voice_client import MultiAudio
-from music import MusicController
+from pi_yo_8.voice_client import MultiAudio
+from pi_yo_8.music import MusicController
 
 
 

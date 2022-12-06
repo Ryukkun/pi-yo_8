@@ -8,7 +8,7 @@ from typing import Optional
 from discord import SpeakingState, opus, Guild
 from discord.ext import commands
 
-from audio_source import StreamAudioData
+from .audio_source import StreamAudioData
 
 class MultiAudio:
     """

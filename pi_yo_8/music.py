@@ -7,10 +7,10 @@ import asyncio
 from discord import ui, Embed, ButtonStyle, NotFound, TextChannel, Reaction, Message, SelectOption, Interaction
 from discord.ext import tasks
 
-from audio_source import StreamAudioData as SAD
+from .audio_source import StreamAudioData as SAD
 
 if __name__ == '__main__':
-    from main import DataInfo
+    from ..main import DataInfo
 
 re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
 re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
