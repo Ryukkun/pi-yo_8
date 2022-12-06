@@ -4,10 +4,11 @@ import time
 import tabulate
 import asyncio
 
-from discord import ui, Embed, ButtonStyle, NotFound, TextChannel, Reaction, Message, SelectOption, Interaction
+from discord import Embed, NotFound, TextChannel, Reaction, Message
 from discord.ext import tasks
 
 from .audio_source import StreamAudioData as SAD
+from .view import CreateButton
 
 if __name__ == '__main__':
     from ..main import DataInfo
@@ -21,36 +22,7 @@ re_skip_set_m = re.compile(r'^(\d+):(\d+)$')
 
 
 
-class CreateSelect(ui.Select):
-    def __init__(self,parent:'MusicController',args) -> None:
-        self.loop = asyncio.get_event_loop()
-        self.parent = parent
-        select_opt = []
-        _audio: SAD
-        #print(args)
-        for i, _audio in enumerate(args):
-            title = _audio.Title
-            if i >= 25:
-                break
-            if len(title) >= 100:
-                title = title[0:100]
-            select_opt.append(SelectOption(label=title,value=str(i),default=(select_opt == [])))
 
-        super().__init__(placeholder='キュー表示', options=select_opt, row=0)
-
-
-    async def callback(self, interaction: Interaction):
-        #await interaction.response.send_message(f'{interaction.user.name}は{self.values[0]}を選択しました')
-        self.loop.create_task(interaction.response.defer())
-        for i in range(int(self.values[0])):
-            if self.parent.Queue:
-                self.parent.Rewind.append(self.parent.Queue[0])
-                del self.parent.Queue[0]
-            elif self.parent.Next_PL['PL']:
-                self.parent.Rewind.append(self.parent.Next_PL['PL'])
-                del self.parent.Next_PL['PL'][0]
-        await self.parent.play_loop(None,0)
-        #print(f'{interaction.user.name}は{self.values[0]}を選択しました')
 
 class MusicController():
     def __init__(self, _Info):
@@ -181,65 +153,6 @@ class MusicController():
     #--------------------------------------------------
     # GUI操作
     #--------------------------------------------------
-    # Button
-    class CreateButton(ui.View):
-        def __init__(self, Parent:'MusicController'):
-            super().__init__(timeout=None)
-            self.Parent = Parent
-            self.add_item(CreateSelect(Parent,Parent.Queue + Parent.Next_PL['PL']))
-
-
-        @ui.button(label="<",row=1)
-        async def def_button0(self, interaction:Interaction, button):
-            Parent = self.Parent
-            Parent.CLoop.create_task(interaction.response.defer())
-
-            if not Parent.Rewind: return
-            AudioData = Parent.Rewind[-1]
-            Parent.Queue.insert(0,AudioData)
-            del Parent.Rewind[-1]
-            if Parent.PL:
-                if type(AudioData.index) == int:
-                    Parent.Index_PL = AudioData.index
-
-            await Parent.play_loop(None,0)
-            if Parent.Mvc.is_paused():
-                Parent.Mvc.resume()
-
-        @ui.button(label="10↩︎",row=1)
-        async def def_button1(self, interaction:Interaction, button):
-            Parent = self.Parent
-            Parent.CLoop.create_task(interaction.response.defer())
-            Parent.Mvc.TargetTimer -= 10*50
-
-        @ui.button(label="⏯",style=ButtonStyle.blurple,row=1)
-        async def def_button2(self, interaction:Interaction, button):
-            Parent = self.Parent
-            Parent.CLoop.create_task(interaction.response.defer())
-
-            if Parent.Mvc.is_paused():
-                print(f'{Parent.gn} : #resume')
-                Parent.Mvc.resume()
-            elif Parent.Mvc.is_playing():
-                print(f'{Parent.gn} : #stop')
-                Parent.Mvc.pause()
-                await Parent.update_embed()
-
-        @ui.button(label="↪︎10",row=1)
-        async def def_button3(self, interaction:Interaction, button):
-            Parent = self.Parent
-            Parent.CLoop.create_task(interaction.response.defer())
-            Parent.Mvc.TargetTimer += 10*50
-
-        @ui.button(label=">",row=1)
-        async def def_button4(self, interaction:Interaction, button):
-            Parent = self.Parent
-            Parent.CLoop.create_task(interaction.response.defer())
-            await Parent._skip(None)
-
-
-
-
     async def _playing(self):
         if self.def_doing['_playing']: return
         self.def_doing['_playing'] = True
@@ -255,7 +168,7 @@ class MusicController():
                         except NotFound: pass
 
                     # 新しいEmbed
-                    Sended_Mes = await self.Latest_CH.send(embed=embed,view=self.CreateButton(self))
+                    Sended_Mes = await self.Latest_CH.send(embed=embed,view=CreateButton(self))
                     self.Embed_Message = Sended_Mes 
                     self.CLoop.create_task(Sended_Mes.add_reaction("🔁"))
                     if self.PL:
