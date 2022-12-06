@@ -15,6 +15,10 @@ if __name__ == '__main__':
 re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
 re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
 re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
+re_skip = re.compile(r'^((-|)\d+)([hms])$')
+re_skip_set_h = re.compile(r'^(\d+):(\d+):(\d+)$')
+re_skip_set_m = re.compile(r'^(\d+):(\d+)$')
+
 
 
 class CreateSelect(ui.Select):
@@ -133,12 +137,35 @@ class MusicController():
         
 
 
-
-
-    async def _skip(self, sec):
+    async def _skip(self, sec:str):
         if self.vc:
             if sec:
+                try:sec = int(sec)
+                except Exception:
+                    sec = sec.lower()
+                    if res := re_skip.match(sec):
+                        sec = int(res.group(1))
+                        suf = res.group(3)
+                        if suf == 'h':
+                            sec = sec * 3600
+                        elif suf == 'm':
+                            sec = sec * 60
+
+                    elif res := re_skip_set_h.match(sec):
+                        sec = int(res.group(3))
+                        sec += int(res.group(2)) * 60
+                        sec += int(res.group(1)) * 3600
+                        self.Mvc.TargetTimer = sec * 50
+                        return
+
+                    elif res := re_skip_set_m.match(sec):
+                        sec = int(res.group(2))
+                        sec += int(res.group(1)) * 60
+                        self.Mvc.TargetTimer = sec * 50
+                        return
+
                 self.Mvc.TargetTimer += int(sec) * 50
+
             else:
                 if self.Queue:
                     self.Rewind.append(self.Queue[0])
@@ -146,6 +173,7 @@ class MusicController():
                     print(f'{self.gn} : #次の曲へ skip')
                     self.Mvc.stop()
                     await self.play_loop(None,0)
+
 
 
 
