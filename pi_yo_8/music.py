@@ -242,7 +242,7 @@ class MusicController():
             except NotFound: pass
             return True
 
-        try: await late_E.edit(embed= embed,view=self.CreateButton(self))
+        try: await late_E.edit(embed= embed,view=CreateButton(self))
         except NotFound:
             # メッセージが見つからなかったら 新しく作成
             print('見つかりませんでした！')
