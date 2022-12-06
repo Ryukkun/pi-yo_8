@@ -11,7 +11,7 @@
                
 - `,playing` 再生中の曲のURL<br><br>
 
-- Play(,p)
+- Play(,p ,pl)
   - `,play(,p) 文字列` Youtubeから検索して即再生 例) `,p in love with a fox`
   - `,play(,p) URL` URL先を即再生
     - とりま いい感じに再生するから安心して
