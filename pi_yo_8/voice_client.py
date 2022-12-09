@@ -73,7 +73,6 @@ class MultiAudio:
         最後に音声データ送信　ドルチェ
         """
         _start = time.perf_counter()
-        delay = 1
         P: _APlayer
         while self.loop:
             Bytes = None
@@ -98,6 +97,10 @@ class MultiAudio:
             # Loop Delay
             _start += 0.02
             delay = max(0, _start - time.perf_counter())
+            if delay == 0:
+                if (_start - time.perf_counter()) <= -0.5:
+                    _start = time.perf_counter() + 0.02
+                    delay = 0.02
             time.sleep(delay)
             # if delay == 0:
             #     print(time.perf_counter() - _start)
