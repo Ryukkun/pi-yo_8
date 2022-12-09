@@ -47,7 +47,7 @@ class MusicController():
         self.CLoop = Info.loop
         self.Embed_Message = None
         self.def_doing = {'_playing':False,'_load_next_pl':False}
-        self.last_embed_update:float = 0.0
+        self.last_action:float = 0.0
         self.run_loop.start()
 
     async def _play(self, ctx, args, Q):
@@ -65,6 +65,7 @@ class MusicController():
         if not res: return
 
         self.Latest_CH = ctx.channel
+        self.last_action = time.time()
 
         if type(res) == tuple:
             self.Index_PL = self.Next_PL['index'] = res[0] - 1
@@ -111,6 +112,8 @@ class MusicController():
 
     async def _skip(self, sec:str):
         if self.vc:
+
+            self.last_action = time.time()
             if sec:
                 try:sec = int(sec)
                 except Exception:
@@ -178,7 +181,6 @@ class MusicController():
                     #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
         except Exception: pass
         self.def_doing['_playing'] = False
-        self.last_embed_update = time.perf_counter()
 
 
     async def on_reaction_add(self, Reac:Reaction, User):
@@ -187,6 +189,8 @@ class MusicController():
             if em[0].colour.value != 14794075: return
         self.CLoop.create_task(Reac.remove(User))
         if self.vc:
+            
+            self.last_action = time.time()
 
             #### Setting
             # 単曲ループ
@@ -210,17 +214,11 @@ class MusicController():
                 else:                   #False => True
                     self.status['random_pl'] = True
 
-            #### Message
-            if self.def_doing['_playing']: return
-            if (time.perf_counter() - self.last_embed_update) <= 2: return
-            await self._edit_embed(Reac.message)
-
 
 
 
     async def update_embed(self):
         if self.def_doing['_playing']: return
-        if (time.perf_counter() - self.last_embed_update) <= 4: return
         if not self.Latest_CH: return
 
         if late_E := self.Latest_CH.last_message:
@@ -234,7 +232,6 @@ class MusicController():
 
 
     async def _edit_embed(self, late_E:Message):
-        self.last_embed_update = time.perf_counter()
         embed = await self.generate_embed()
         # embedが無効だったら 古いEmbedを削除
         if not embed:
@@ -515,7 +512,7 @@ class MusicController():
             await self.Mvc.play(AudioData,after=lambda : self.CLoop.create_task(self.play_loop(AudioData.St_Url,played_time)))
 
 
-    @tasks.loop(seconds=7.0)
+    @tasks.loop(seconds=5.0)
     async def run_loop(self):
         
         try:
@@ -528,7 +525,17 @@ class MusicController():
                 self.Next_PL['PL'] = []
                 self.Next_PL['index'] = self.Index_PL
                 self.CLoop.create_task(self._load_next_pl())
-        
-            self.CLoop.create_task(self.update_embed())
+
+            now = time.time()
+            delay = now - self.last_action
+            if delay < 30:
+                self.CLoop.create_task(self.update_embed())
+            elif delay < 300:
+                if 0 <= (now % 10) < 5:
+                    self.CLoop.create_task(self.update_embed())
+            else:
+                if 0 <= (now % 20) < 5:
+                    self.CLoop.create_task(self.update_embed())
+
         except Exception as e:
             print(e)

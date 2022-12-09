@@ -1,4 +1,5 @@
 import asyncio
+import time
 from discord import ui, Interaction, SelectOption ,ButtonStyle
 
 from .audio_source import StreamAudioData as SAD
@@ -19,6 +20,7 @@ class CreateButton(ui.View):
     @ui.button(label="<",row=1)
     async def def_button0(self, interaction:Interaction, button):
         Parent = self.Parent
+        Parent.last_action = time.time()
         Parent.CLoop.create_task(interaction.response.defer())
 
         if not Parent.Rewind: return
@@ -36,12 +38,14 @@ class CreateButton(ui.View):
     @ui.button(label="10↩︎",row=1)
     async def def_button1(self, interaction:Interaction, button):
         Parent = self.Parent
+        Parent.last_action = time.time()
         Parent.CLoop.create_task(interaction.response.defer())
         Parent.Mvc.TargetTimer -= 10*50
 
     @ui.button(label="⏯",style=ButtonStyle.blurple,row=1)
     async def def_button2(self, interaction:Interaction, button):
         Parent = self.Parent
+        Parent.last_action = time.time()
         Parent.CLoop.create_task(interaction.response.defer())
 
         if Parent.Mvc.is_paused():
@@ -55,6 +59,7 @@ class CreateButton(ui.View):
     @ui.button(label="↪︎10",row=1)
     async def def_button3(self, interaction:Interaction, button):
         Parent = self.Parent
+        Parent.last_action = time.time()
         Parent.CLoop.create_task(interaction.response.defer())
         Parent.Mvc.TargetTimer += 10*50
 
@@ -89,6 +94,7 @@ class CreateSelect(ui.Select):
     async def callback(self, interaction: Interaction):
         #await interaction.response.send_message(f'{interaction.user.name}は{self.values[0]}を選択しました')
         self.loop.create_task(interaction.response.defer())
+        self.parent.last_action = time.time()
         for i in range(int(self.values[0])):
             if self.parent.Queue:
                 self.parent.Rewind.append(self.parent.Queue[0])
