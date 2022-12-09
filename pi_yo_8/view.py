@@ -14,7 +14,8 @@ class CreateButton(ui.View):
         try: self.Parent:MusicController
         except Exception: pass
         self.Parent = Parent
-        self.add_item(CreateSelect(Parent,Parent.Queue + Parent.Next_PL['PL']))
+        select_opt = None
+        self.add_item(CreateSelect(self, Parent, (Parent.Queue + Parent.Next_PL['PL'])))
 
 
     @ui.button(label="<",row=1)
@@ -72,11 +73,11 @@ class CreateButton(ui.View):
 
 
 class CreateSelect(ui.Select):
-    def __init__(self, parent, args) -> None:
+    def __init__(self, parent1, parent2, args) -> None:
         self.loop = asyncio.get_event_loop()
         try: self.parent:MusicController
         except Exception: pass
-        self.parent = parent
+        self.parent = parent2
         select_opt = []
         _audio: SAD
         #print(args)
@@ -88,6 +89,7 @@ class CreateSelect(ui.Select):
                 title = title[0:100]
             select_opt.append(SelectOption(label=title,value=str(i),default=(select_opt == [])))
 
+        parent1.select_opt = select_opt
         super().__init__(placeholder='キュー表示', options=select_opt, row=0)
 
 

@@ -4,7 +4,7 @@ import time
 import tabulate
 import asyncio
 
-from discord import Embed, NotFound, TextChannel, Reaction, Message
+from discord import Embed, NotFound, TextChannel, Reaction, Message, SelectMenu
 from discord.ext import tasks
 
 from .audio_source import StreamAudioData as SAD
@@ -189,7 +189,7 @@ class MusicController():
             if em[0].colour.value != 14794075: return
         self.CLoop.create_task(Reac.remove(User))
         if self.vc:
-            
+
             self.last_action = time.time()
 
             #### Setting
@@ -239,7 +239,21 @@ class MusicController():
             except NotFound: pass
             return True
 
-        try: await late_E.edit(embed= embed,view=CreateButton(self))
+        # viewを変更する必要があるか
+        view = CreateButton(self)
+        menu_change = True
+        for v in late_E.components:
+            v = v.children[0]
+            if type(v) == SelectMenu:
+                if [temp.label for temp in view.select_opt] == [temp.label for temp in v.options]:
+                    menu_change = False
+                break
+
+        try:
+            if menu_change:
+                await late_E.edit(embed= embed,view=view)
+            else:
+                await late_E.edit(embed= embed)
         except NotFound:
             # メッセージが見つからなかったら 新しく作成
             print('見つかりませんでした！')
