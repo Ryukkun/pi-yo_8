@@ -4,3 +4,4 @@ pytube
 ffmpeg
 bs4
 tabulate
+numpy
