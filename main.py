@@ -106,31 +106,31 @@ async def _bye(guild:discord.Guild):
     del Old_Music
   
   
-@client.event
-async def on_voice_state_update(member:discord.Member, befor:discord.VoiceState, after:discord.VoiceState):
+# @client.event
+# async def on_voice_state_update(member:discord.Member, befor:discord.VoiceState, after:discord.VoiceState):
 
-    if not befor.channel:
-        return
-    if befor.channel != after.channel:
+#     if not befor.channel:
+#         return
+#     if befor.channel != after.channel:
 
-        # 強制切断検知
-        if member.id == client.user.id and not after.channel:
-            await asyncio.sleep(1)
-            guild = befor.channel.guild
-            if guild.id in g_opts:
-                print(f'{guild.name} : #強制切断検知')
-                await _bye(guild)
-                return
+#         # 強制切断検知
+#         if member.id == client.user.id and not after.channel:
+#             await asyncio.sleep(1)
+#             guild = befor.channel.guild
+#             if guild.id in g_opts:
+#                 print(f'{guild.name} : #強制切断検知')
+#                 await _bye(guild)
+#                 return
 
-        # voice channelに誰もいなくなったことを確認
-        if vc := befor.channel.guild.voice_client:
-            if not befor.channel == vc.channel:
-                return
-            if mems := befor.channel.members:
-                for mem in mems:
-                    if not mem.bot:
-                        return
-                await bye(befor.channel)
+#         # voice channelに誰もいなくなったことを確認
+#         if vc := befor.channel.guild.voice_client:
+#             if not befor.channel == vc.channel:
+#                 return
+#             if mems := befor.channel.members:
+#                 for mem in mems:
+#                     if not mem.bot:
+#                         return
+#                 await bye(befor.channel)
 
 
 
