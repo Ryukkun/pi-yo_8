@@ -1,4 +1,7 @@
 import subprocess
+import os
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 try:
     subprocess.run(['pip','install','-r','requirements.txt'])
