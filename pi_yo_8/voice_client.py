@@ -94,10 +94,6 @@ class MultiAudio:
             # Loop Delay
             _start += 0.02
             delay = max(0, _start - time.perf_counter())
-            if delay == 0:
-                if (_start - time.perf_counter()) <= -0.5:
-                    _start = time.perf_counter() + 0.02
-                    delay = 0.02
             time.sleep(delay)
  
             # Send Bytes
