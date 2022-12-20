@@ -249,17 +249,15 @@ class _APlayer:
 
     def __read_bytes(self):
         Qappend = self.QBytes.append
-        Aread = self.AudioSource.read
-        while len(self.QBytes) <= (90 * 50) and self.read_loop:
-            try:
-                if byte := Aread():
-                    #print(temp)
+        try:
+            while len(self.QBytes) <= (90 * 50) and self.read_loop:
+                if byte := self.AudioSource.read():
                     Qappend(byte)
                 else: 
                     self.read_fin = True
                     Qappend('Fin')
                     break
-            except Exception:
-                break
+        except Exception:
+            pass
 
         self.read_loop = False

@@ -530,6 +530,7 @@ class MusicController():
     async def run_loop(self):
         
         try:
+            # PlayList再生時に 次の動画を取得する
             if self.PL and self.status['random_pl'] != self.last_status['random_pl']:
                 while self.def_doing['_load_next_pl']:
                     self.Next_PL['PL'] = [i for i in range(25)]
@@ -540,6 +541,7 @@ class MusicController():
                 self.Next_PL['index'] = self.Index_PL
                 self.CLoop.create_task(self._load_next_pl())
 
+            # Embed
             now = time.time()
             delay = now - self.last_action
             if delay < 30:
@@ -551,5 +553,7 @@ class MusicController():
                 if 0 <= (now % 20) < 5:
                     self.CLoop.create_task(self.update_embed())
 
+            # 再生されないバグの解消
+            #self.Mvc.read_fin = False
         except Exception as e:
             print(e)
