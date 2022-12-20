@@ -107,7 +107,7 @@ class MusicController():
                 await self.play_loop(None,0)
                 if self.Mvc.is_paused():
                     self.Mvc.resume()
-        
+
 
 
     async def _skip(self, sec:str):
@@ -130,16 +130,16 @@ class MusicController():
                         sec = int(res.group(3))
                         sec += int(res.group(2)) * 60
                         sec += int(res.group(1)) * 3600
-                        self.Mvc.TargetTimer = sec * 50
+                        self.Mvc.skip_time((sec * 50) - self.Mvc.Timer)
                         return
 
                     elif res := re_skip_set_m.match(sec):
                         sec = int(res.group(2))
                         sec += int(res.group(1)) * 60
-                        self.Mvc.TargetTimer = sec * 50
+                        self.Mvc.skip_time((sec * 50) - self.Mvc.Timer)
                         return
 
-                self.Mvc.TargetTimer += int(sec) * 50
+                self.Mvc.skip_time((int(sec) * 50) - self.Mvc.Timer)
 
             else:
                 if self.Queue:

@@ -41,7 +41,7 @@ class CreateButton(ui.View):
         Parent = self.Parent
         Parent.last_action = time.time()
         Parent.CLoop.create_task(interaction.response.defer())
-        Parent.Mvc.TargetTimer -= 10*50
+        Parent.Mvc.skip_time(-10*50)
 
     @ui.button(label="⏯",style=ButtonStyle.blurple,row=1)
     async def def_button2(self, interaction:Interaction, button):
@@ -62,7 +62,7 @@ class CreateButton(ui.View):
         Parent = self.Parent
         Parent.last_action = time.time()
         Parent.CLoop.create_task(interaction.response.defer())
-        Parent.Mvc.TargetTimer += 10*50
+        Parent.Mvc.skip_time(10*50)
 
     @ui.button(label=">",row=1)
     async def def_button4(self, interaction:Interaction, button):
