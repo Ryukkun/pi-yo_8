@@ -31,7 +31,7 @@ intents.message_content = True
 intents.reactions = True
 intents.voice_states = True
 client = commands.Bot(command_prefix=config.Prefix,intents=intents)
-g_opts = {}
+g_opts:dict[int, 'DataInfo'] = {}
 
 
 
