@@ -21,22 +21,24 @@ class MultiAudio:
         self.vc = guild.voice_client
         self.CLoop = client.loop
         self.Parent = parent
-        self.Players = {}
+        self.Players = []
         self.PLen = 0
         self.vc.encoder = opus.Encoder()
         self.vc.encoder.set_expected_packet_loss_percent(0.0)
         self.Enc_bool = False
         threading.Thread(target=self.run,daemon=True).start()
 
-    def add_player(self ,name ,RNum=0 ,opus=False) -> '_APlayer':
-        self.Players[name] = _APlayer(RNum ,opus=opus ,parent=self)
+    def add_player(self ,RNum=0 ,opus=False) -> '_APlayer':
+        player = _APlayer(RNum ,opus=opus ,parent=self)
+        self.Players.append(player)
+        self.P1_read_bytes = player.read_bytes
         self.PLen = len(self.Players)
         self.Enc_bool = (self.PLen != 1 or self.PLen == 1 and opus == False)
-        return self.Players[name]
+        return player
 
     def _speaking(self,status: bool):
         temp = 0
-        for P in self.Players.values():
+        for P in self.Players:
             if P.Loop:
                 temp += 1
         if status:
@@ -60,7 +62,7 @@ class MultiAudio:
 
     def kill(self):
         self.loop = False
-        for P in self.Players.values():
+        for P in self.Players:
             P._read_bytes(False)
 
 
@@ -71,18 +73,15 @@ class MultiAudio:
         最後に音声データ送信　ドルチェ
         """
         send_audio = self.vc.send_audio_packet
-        P_read_bytes = None
         _start = time.perf_counter()
         P: _APlayer
         while self.loop:
             Bytes = None
             if self.PLen == 1:
-                if not P_read_bytes:
-                    P_read_bytes = list(self.Players.values())[0].read_bytes
-                Bytes = P_read_bytes()
+                Bytes = self.P1_read_bytes()
 
             elif self.PLen >= 2:
-                for P in self.Players.values():
+                for P in self.Players:
                     _Byte = P.read_bytes(numpy=True)
                     if _Byte != None:
                         if Bytes == None:
