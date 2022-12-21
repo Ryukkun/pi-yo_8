@@ -73,7 +73,7 @@ class MultiAudio:
         """
         これずっとloopしてます 止まりません loopの悪魔
         音声データ (Bytes) を取得し、必要があれば Numpy で読み込んで 合成しています
-        最後に音声データ送信　ドルチェ
+        最後に音声データ送信
         """
         send_audio = self.vc.send_audio_packet
         _start = time.perf_counter()
@@ -96,6 +96,11 @@ class MultiAudio:
             # Loop Delay
             _start += 0.02
             delay = max(0, _start - time.perf_counter())
+            if delay == 0:
+                #print(-(_start - time.perf_counter()))
+                if (_start - time.perf_counter()) <= -0.5:
+                    _start = time.perf_counter() + 0.02
+                    delay = 0.02
             time.sleep(delay)
  
             # Send Bytes
