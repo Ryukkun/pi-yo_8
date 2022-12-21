@@ -8,6 +8,9 @@ from discord.ext import commands
 
 from .audio_source import StreamAudioData
 
+
+lock = threading.Lock()
+
 class MultiAudio:
     """
     Discord に存在する AudioPlayer は 同時に1つまでの音源の再生にしか対応していないため
@@ -105,12 +108,12 @@ class MultiAudio:
             
 
 class _APlayer:
-    def __init__(self ,RNum ,opus ,parent):
+    def __init__(self ,RNum ,opus ,parent:'MultiAudio'):
         self.AudioSource = None
         self._SAD = None
         self.Pausing = False
-        self.Parent:MultiAudio = parent
-        self.RNum = RNum
+        self.Parent = parent
+        self.RNum = RNum*50
         self.Timer = 0
         self.read_fin = False
         self.read_loop = False
@@ -120,15 +123,15 @@ class _APlayer:
         self.RBytes = []
         self.Duration = None
         self.Loop = False
-        
+    
 
     async def play(self,_SAD:StreamAudioData,after):
         self._SAD = _SAD
         self.Duration = _SAD.St_Sec
         AudioSource = await _SAD.AudioSource(self.opus)
         # 最初のロードは少し時間かかるから先にロード
-        self.QBytes = []
-        self.RBytes = []
+        self.QBytes.clear()
+        self.RBytes.clear()
         self.AudioSource = AudioSource
         self.Timer = 0
         self.read_fin = False
@@ -163,7 +166,7 @@ class _APlayer:
 
     def skip_time(self, stime:int):
         # n秒 進む
-        if stime > 0:
+        if 0 < stime:
             if len(self.QBytes) < stime:
                 target_time = self.Timer + stime
                 target_sec = target_time // 50
@@ -173,31 +176,35 @@ class _APlayer:
                 self.Parent.CLoop.create_task(self._new_asouce_sec(target_sec))
 
             else:
-                self.Timer += stime
-                self.RBytes += self.QBytes[:stime]
+                with lock:
+                    self.Timer += stime
+                self.RBytes.extend(self.QBytes[:stime])
                 del self.QBytes[:stime]
 
         # n秒 前に戻る
-        elif 0 > stime:
+        elif stime < 0:
             stime = -stime
+            target_time = self.Timer - stime
+            if target_time < 0:
+                stime += target_time
 
             if len(self.RBytes) < stime:
-                target_time = self.Timer - stime
                 target_sec = target_time // 50
                 if target_sec < 0: target_sec = 0
                 self.Parent.CLoop.create_task(self._new_asouce_sec(target_sec))
 
             else:
-                self.QBytes = self.RBytes[-stime:] + self.QBytes
+                with lock:
+                    self.QBytes = self.RBytes[-stime:] + self.QBytes
+                    self.Timer -= stime
                 del self.RBytes[-stime:]
-                self.Timer -= stime
-    
+
 
 
     def read_bytes(self, numpy=False):
         if self.AudioSource:            
             # Read Bytes
-            if len(self.QBytes) <= (45 * 50) and self.read_fin == False:
+            if len(self.QBytes) <= (45 * 50):
                 self._read_bytes(True)
 
             if self.Pausing == False:
@@ -209,11 +216,12 @@ class _APlayer:
                         self._finish()
                         return
 
-                    self.Timer += 1
-                    if self.RNum != 0:
-                        self.RBytes.append(_byte)
-                        if len(self.RBytes) > self.RNum:
-                            del self.RBytes[:len(self.RBytes) - self.RNum]
+                    with lock:
+                        self.Timer += 1
+                        if self.RNum != 0:
+                            self.RBytes.append(_byte)
+                            if len(self.RBytes) > self.RNum:
+                                del self.RBytes[:len(self.RBytes) - self.RNum]
 
                     if numpy:
                         return np.frombuffer(_byte,np.int16)
@@ -223,8 +231,8 @@ class _APlayer:
     async def _new_asouce_sec(self, sec):
         self.AudioSource = await self._SAD.AudioSource(self.opus, sec)
         self.Timer = sec * 50
-        self.QBytes = []
-        self.RBytes = []
+        self.QBytes.clear()
+        self.RBytes.clear()
         self.read_fin = False
 
 
@@ -247,14 +255,13 @@ class _APlayer:
 
 
     def __read_bytes(self):
-        Qappend = self.QBytes.append
         try:
             while len(self.QBytes) <= (90 * 50) and self.read_loop:
                 if byte := self.AudioSource.read():
-                    Qappend(byte)
+                    self.QBytes.append(byte)
                 else: 
                     self.read_fin = True
-                    Qappend('Fin')
+                    self.QBytes.append('Fin')
                     break
         except Exception:
             pass

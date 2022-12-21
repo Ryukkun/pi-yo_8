@@ -31,7 +31,7 @@ class MusicController():
         Info = _Info
         self.Info = Info
         self.MA = Info.MA
-        self.Mvc = Info.MA.add_player('Music' ,RNum=30 ,opus=True)
+        self.Mvc = Info.MA.add_player(RNum=30 ,opus=True)
         self.guild = Info.guild
         self.gid = Info.gid
         self.gn = Info.gn
@@ -553,7 +553,5 @@ class MusicController():
                 if 0 <= (now % 20) < 5:
                     self.CLoop.create_task(self.update_embed())
 
-            # 再生されないバグの解消
-            #self.Mvc.read_fin = False
         except Exception as e:
             print(e)
