@@ -1,7 +1,7 @@
 import discord
 import os
 import asyncio
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from pi_yo_8.voice_client import MultiAudio
 from pi_yo_8.music import MusicController
@@ -48,14 +48,6 @@ async def download(ctx:discord.Interaction, arg:str):
             await ctx.send(embed=em, ephemeral=True)
 
 
-def _data(gid) -> 'DataInfo':
-    if type(gid) == discord.Guild:
-        gid = gid.id
-    elif type(gid) == commands.Context:
-        gid = gid.guild.id
-    return g_opts[gid]
-
-
 ####  基本的コマンド
 @client.event
 async def on_ready():
@@ -92,10 +84,11 @@ async def _bye(guild:discord.Guild):
     gid = guild.id
     vc = guild.voice_client
     # 古いEmbedを削除
-    Old_Music:MusicController = _data(gid).Music
+    Old_Music:MusicController = g_opts[gid].Music
 
-    _data(gid).MA.kill()
-    _data(gid).Music.run_loop.cancel()
+    g_opts[gid].loop_5.cancel()
+    g_opts[gid].MA.kill()
+    g_opts[gid].Music.run_loop.cancel()
     del g_opts[gid]
     try: await vc.disconnect()
     except Exception: pass
@@ -104,33 +97,6 @@ async def _bye(guild:discord.Guild):
     if late_E := Old_Music.Embed_Message:
         await late_E.delete()
     del Old_Music
-  
-  
-# @client.event
-# async def on_voice_state_update(member:discord.Member, befor:discord.VoiceState, after:discord.VoiceState):
-
-#     if not befor.channel:
-#         return
-#     if befor.channel != after.channel:
-
-#         # 強制切断検知
-#         if member.id == client.user.id and not after.channel:
-#             await asyncio.sleep(1)
-#             guild = befor.channel.guild
-#             if guild.id in g_opts:
-#                 print(f'{guild.name} : #強制切断検知')
-#                 await _bye(guild)
-#                 return
-
-#         # voice channelに誰もいなくなったことを確認
-#         if vc := befor.channel.guild.voice_client:
-#             if not befor.channel == vc.channel:
-#                 return
-#             if mems := befor.channel.members:
-#                 for mem in mems:
-#                     if not mem.bot:
-#                         return
-#                 await bye(befor.channel)
 
 
 
@@ -140,14 +106,14 @@ async def _bye(guild:discord.Guild):
 @client.command()
 async def playing(ctx:commands.Context):
     try:
-        await _data(ctx).Music._playing()
+        await g_opts[ctx.guild.id].Music._playing()
     except KeyError:pass
 
 
 @client.event
 async def on_reaction_add(Reac:discord.Reaction, User:discord.Member):
     try:
-        await _data(User.guild).Music.on_reaction_add(Reac,User)
+        await g_opts[User.guild.id].Music.on_reaction_add(Reac,User)
     except KeyError:pass
 
 
@@ -161,7 +127,7 @@ async def skip(ctx:commands.Context, *arg):
         arg = arg[0]
     else: arg = None
     try:
-        await _data(ctx).Music._skip(arg)
+        await g_opts[ctx.guild.id].Music._skip(arg)
     except KeyError:pass
 
 
@@ -185,7 +151,7 @@ async def queue(ctx:commands.Context, *args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
             return
-    await _data(ctx).Music._play(ctx,args,True)
+    await g_opts[ctx.guild.id].Music._play(ctx,args,True)
 
 
 
@@ -194,7 +160,7 @@ async def play(ctx:commands.Context, *args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
             return
-    await _data(ctx).Music._play(ctx,args,False)
+    await g_opts[ctx.guild.id].Music._play(ctx,args,False)
 
 
 
@@ -214,7 +180,29 @@ class DataInfo():
         self.config = config
         self.MA = MultiAudio(guild, client, self)
         self.Music = MusicController(self)
+        self.loop_5.start()
 
+
+    @tasks.loop(seconds=5.0)
+    async def loop_5(self):
+        mems = self.vc.channel.members
+        # 強制切断検知
+        if not client.user.id in [_.id for _ in mems]:
+            self.count_loop += 1
+            if 2 <= self.count_loop:
+                print(f'{self.gn} : #強制切断')
+                await _bye(self.guild)
+
+        # voice channelに誰もいなくなったことを確認
+        elif not False in [_.bot for _ in mems]:
+            self.count_loop += 1
+            if 2 <= self.count_loop:
+                print(f'{self.gn} : #誰もいなくなったため 切断')
+                await _bye(self.guild)
+
+        # Reset Count
+        else:
+            self.count_loop = 0
 
 
 client.run(config.Token)
