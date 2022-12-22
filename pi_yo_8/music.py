@@ -17,8 +17,8 @@ re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
 re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
 re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
 re_skip = re.compile(r'^((-|)\d+)([hms])$')
-re_skip_set_h = re.compile(r'^(\d+):(\d+):(\d+)$')
-re_skip_set_m = re.compile(r'^(\d+):(\d+)$')
+re_skip_set_h = re.compile(r'^(\d+)[:;,](\d+)[:;,](\d+)$')
+re_skip_set_m = re.compile(r'^(\d+)[:;,](\d+)$')
 
 
 
@@ -139,7 +139,7 @@ class MusicController():
                         self.Mvc.skip_time((sec * 50) - self.Mvc.Timer)
                         return
 
-                self.Mvc.skip_time((int(sec) * 50) - self.Mvc.Timer)
+                self.Mvc.skip_time(int(sec) * 50)
 
             else:
                 if self.Queue:

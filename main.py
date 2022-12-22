@@ -106,6 +106,7 @@ async def _bye(guild:discord.Guild):
 @client.command()
 async def playing(ctx:commands.Context):
     try:
+        g_opts[ctx.guild.id].Music.Latest_CH = ctx.channel
         await g_opts[ctx.guild.id].Music._playing()
     except KeyError:pass
 
