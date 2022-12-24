@@ -83,20 +83,20 @@ async def bye(ctx:commands.Context):
 async def _bye(guild:discord.Guild):
     gid = guild.id
     vc = guild.voice_client
-    # 古いEmbedを削除
-    Old_Music:MusicController = g_opts[gid].Music
 
-    g_opts[gid].loop_5.cancel()
+    _ = g_opts[gid].Music
+    g_opts[gid].loop_5.stop()
     g_opts[gid].MA.kill()
-    g_opts[gid].Music.run_loop.cancel()
     del g_opts[gid]
+    
+    await asyncio.sleep(0.1)
     try: await vc.disconnect()
     except Exception: pass
 
-    await asyncio.sleep(1.0)
-    if late_E := Old_Music.Embed_Message:
+    if late_E := _.Embed_Message:
         await late_E.delete()
-    del Old_Music
+    
+    
 
 
 
@@ -186,8 +186,11 @@ class DataInfo():
 
     @tasks.loop(seconds=5.0)
     async def loop_5(self):
-        mems = self.vc.channel.members
+        # Music Embed
+        await self.Music._loop_5()
+
         # 強制切断検知
+        mems = self.vc.channel.members
         if not client.user.id in [_.id for _ in mems]:
             self.count_loop += 1
             if 2 <= self.count_loop:

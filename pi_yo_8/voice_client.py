@@ -24,12 +24,19 @@ class MultiAudio:
         self.vc = guild.voice_client
         self.CLoop = client.loop
         self.Parent = parent
-        self.Players = []
+        self.Players:list['_APlayer'] = []
         self.PLen = 0
         self.vc.encoder = opus.Encoder()
         self.vc.encoder.set_expected_packet_loss_percent(0.0)
         self.Enc_bool = False
         threading.Thread(target=self.run,daemon=True).start()
+
+
+    def kill(self):
+        self.loop = False
+        for P in self.Players:
+            P._read_bytes(False)
+
 
     def add_player(self ,RNum=0 ,opus=False) -> '_APlayer':
         player = _APlayer(RNum ,opus=opus ,parent=self)
@@ -63,12 +70,6 @@ class MultiAudio:
             pass
 
 
-    def kill(self):
-        self.loop = False
-        for P in self.Players:
-            P._read_bytes(False)
-
-
     def run(self):
         """
         これずっとloopしてます 止まりません loopの悪魔
@@ -77,7 +78,6 @@ class MultiAudio:
         """
         send_audio = self.vc.send_audio_packet
         _start = time.perf_counter()
-        P: _APlayer
         while self.loop:
             Bytes = None
             if self.PLen == 1:

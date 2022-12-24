@@ -48,7 +48,6 @@ class MusicController():
         self.Embed_Message = None
         self.def_doing = {'_playing':False,'_load_next_pl':False}
         self.last_action:float = 0.0
-        self.run_loop.start()
 
     async def _play(self, ctx, args, Q):
         # 一時停止していた場合再生 開始
@@ -526,8 +525,7 @@ class MusicController():
             await self.Mvc.play(AudioData,after=lambda : self.CLoop.create_task(self.play_loop(AudioData.St_Url,played_time)))
 
 
-    @tasks.loop(seconds=5.0)
-    async def run_loop(self):
+    async def _loop_5(self):
         
         try:
             # PlayList再生時に 次の動画を取得する
