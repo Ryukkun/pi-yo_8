@@ -93,6 +93,7 @@ async def _bye(guild:discord.Guild):
     try: await vc.disconnect()
     except Exception: pass
 
+    await asyncio.sleep(5)
     if late_E := _.Embed_Message:
         await late_E.delete()
     
