@@ -5,7 +5,7 @@ import tabulate
 import asyncio
 
 from discord import Embed, NotFound, TextChannel, Reaction, Message, SelectMenu
-from discord.ext import tasks
+from discord.ext.commands import Context
 
 from .audio_source import StreamAudioData as SAD
 from .view import CreateButton
@@ -20,6 +20,12 @@ re_skip = re.compile(r'^((-|)\d+)([hms])$')
 re_skip_set_h = re.compile(r'^(\d+)[:;,](\d+)[:;,](\d+)$')
 re_skip_set_m = re.compile(r'^(\d+)[:;,](\d+)$')
 
+re_video = re.compile(r'video/(.+);')
+re_audio = re.compile(r'audio/(.+);')
+re_codecs = re.compile(r'codecs="(.+)"')
+re_space = re.compile(r'\)` +?\|')
+re_space2 = re.compile(r'(( |-)\|$|^\|( |-))')
+re_space3 = re.compile(r'^\|( |-)+?\|')
 
 
 
@@ -49,7 +55,7 @@ class MusicController():
         self.def_doing = {'_playing':False,'_load_next_pl':False}
         self.last_action:float = 0.0
 
-    async def _play(self, ctx, args, Q):
+    async def _play(self, ctx:Context, args, Q):
         # 一時停止していた場合再生 開始
         if args == ():
             if self.Mvc.is_paused():
@@ -366,12 +372,6 @@ class MusicController():
             Duration = self._Calc_Time(AudioData.St_Sec)
             embed.add_field(name="Length", value=Duration, inline=True)
 
-        re_video = re.compile(r'video/(.+);')
-        re_audio = re.compile(r'audio/(.+);')
-        re_codecs = re.compile(r'codecs="(.+)"')
-        re_space = re.compile(r'\)` +?\|')
-        re_space2 = re.compile(r'(( |-)\|$|^\|( |-))')
-        re_space3 = re.compile(r'^\|( |-)+?\|')
             
         __list = []
         if AudioData.formats:
