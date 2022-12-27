@@ -55,6 +55,12 @@ class MusicController():
         self.def_doing = {'_playing':False,'_load_next_pl':False}
         self.last_action:float = 0.0
 
+
+    def _update_action(self, channel):
+        self.Latest_CH = channel
+        self.last_action = time.perf_counter()
+
+
     async def _play(self, ctx:Context, args, Q):
         # 一時停止していた場合再生 開始
         if args == ():
@@ -65,50 +71,63 @@ class MusicController():
             arg = ' '.join(args)
 
 
-        # 君は本当に動画なのかい　どっちなんだい！
-        res = await SAD(arg).Check()
-        if not res: return
+        if Q:
+            #### Queue True
+            # 君は本当に動画なのかい　どっちなんだい！
+            res = await SAD(arg).Check_V()
+            if not res: return
+            self._update_action(ctx.channel)
 
-        self.Latest_CH = ctx.channel
-        self.last_action = time.time()
-
-        if type(res) == tuple:
-            self.Index_PL = self.Next_PL['index'] = res[0] - 1
-            self.status['random_pl'] = res[1]
-            self.PL = res[2]
-            self.Next_PL['PL'] = []
-
-            self.status['loop'] = False
-            self.Queue = []
-            self.last_status = self.status.copy()
-
-            # 再生
-            await self.play_loop(None,0)
-            if self.Mvc.is_paused():
-                self.Mvc.resume()
-
-        else:
             # playlist 再生中のお客様はお断り
             if self.PL:
                 self.PL = []
                 self.Index_PL = None
 
             #Queueに登録
-            if Q:
-                self.Queue.append(res)
+            self.Queue.append(res)
+
+            # 再生されるまでループ
+            if not self.Mvc.is_playing():
+                await self.play_loop(None,0)
+            if self.Mvc.is_paused():
+                self.Mvc.resume()
+
+
+        else:
+            #### Queue False
+            # 君は本当に動画なのかい　どっちなんだい！
+            res = await SAD(arg).Check()
+            if not res: return
+            self._update_action(ctx.channel)
+
+            if type(res) == tuple:
+                self.Index_PL = self.Next_PL['index'] = res[0] - 1
+                self.status['random_pl'] = res[1]
+                self.PL = res[2]
+                self.Next_PL['PL'] = []
+
+                self.status['loop'] = False
+                self.Queue = []
+                self.last_status = self.status.copy()
+
+                # 再生
+                await self.play_loop(None,0)
+                if self.Mvc.is_paused():
+                    self.Mvc.resume()
+
             else:
+                # playlist 再生中のお客様はお断り
+                if self.PL:
+                    self.PL = []
+                    self.Index_PL = None
+
+                #Queueに登録
                 if self.Queue == []:
                     self.Queue.append(res)
                 else:
                     self.Queue[0] = res
 
-            # 再生されるまでループ
-            if Q:
-                if not self.Mvc.is_playing():
-                    await self.play_loop(None,0)
-                if self.Mvc.is_paused():
-                    self.Mvc.resume()
-            else:
+                # 再生されるまでループ
                 await self.play_loop(None,0)
                 if self.Mvc.is_paused():
                     self.Mvc.resume()
