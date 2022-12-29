@@ -59,7 +59,7 @@ class MusicController():
 
     def _update_action(self, channel):
         self.Latest_CH = channel
-        self.last_action = time.perf_counter()
+        self.last_action = time.time()
 
     def _reset_pl(self):
         ' Playlistのキュー をリセットする '
@@ -71,6 +71,7 @@ class MusicController():
 
 
     async def _play(self, ctx:Context, args, Q):
+        self._update_action(ctx.channel)
         # 一時停止していた場合再生 開始
         if args == ():
             if self.Mvc.is_paused():
@@ -85,7 +86,6 @@ class MusicController():
             # 君は本当に動画なのかい　どっちなんだい！
             res = await SAD(arg).Check_V()
             if not res: return
-            self._update_action(ctx.channel)
 
             # playlist 再生中のお客様はお断り
             self._reset_pl()
@@ -105,7 +105,6 @@ class MusicController():
             # 君は本当に動画なのかい　どっちなんだい！
             res = await SAD(arg).Check()
             if not res: return
-            self._update_action(ctx.channel)
 
             if type(res) == tuple:
                 self.Index_PL = self.Next_PL['index'] = res[0] - 1
@@ -343,14 +342,14 @@ class MusicController():
                 for I in range(II):
                     I = I * Duration
                     if I <= NTime < (I + Duration):
-                        Progress += '॥' if self.Mvc.Pausing else '▶'
+                        Progress += '||' if self.Mvc.Pausing else '▶'
                     else:
                         Progress += '-'
                 return Progress
-            Progress = get_progress(42)
+            Progress = get_progress(40)
             NTime = self._Calc_Time(self.Mvc.Timer // 50)
             Duration = self._Calc_Time(_SAD.St_Sec)
-            embed.set_footer(text=f'`{NTime} {Progress} {Duration}`')
+            embed.set_footer(text=f'{NTime} {Progress} {Duration}')
         else:
             embed=Embed(title=_SAD.Web_Url, url=_SAD.Web_Url, colour=EmBase.player_color())
 

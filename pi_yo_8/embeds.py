@@ -21,11 +21,11 @@ class EmBase:
         '''
         bot ベースカラー
         '''
-        return Colour.from_str(0xe1bd5c)
+        return Colour.from_str('#e1bd5c')
 
     @classmethod
     def player_color(self):
         '''
         自作Player の カラー
         '''
-        return Colour.from_str(0xe1bd5b)
+        return Colour.from_str('#e1bd5b')

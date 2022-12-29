@@ -1,6 +1,8 @@
 import discord
 import os
 import asyncio
+import time
+import psutil
 from discord.ext import commands, tasks
 
 from pi_yo_8.voice_client import MultiAudio
@@ -56,6 +58,16 @@ async def on_ready():
     print(client.user.id)
     print('----------------')
     await tree.sync()
+
+    activity = discord.Activity(name='華麗なる美声', type=discord.ActivityType.listening)
+    await client.change_presence(activity=activity)
+    # Bot Activity
+    # while True:
+    #     mem = psutil.virtual_memory()
+    #     detail = f'CPU: {psutil.cpu_percent()}%   Mem: {mem.used//100000000/10}/{mem.total//100000000/10}'
+    #     activity = discord.Activity(name='華麗なる美声', type=discord.ActivityType.listening)
+    #     await client.change_presence(activity=activity)
+    #     await asyncio.sleep(60)
     
 
 
