@@ -24,12 +24,12 @@ class MultiAudio:
         self.vc = guild.voice_client
         self.CLoop = client.loop
         self.Parent = parent
-        self.Players:list['_APlayer'] = []
+        self.Players:list['_AudioTrack'] = []
         self.PLen = 0
         self.vc.encoder = opus.Encoder()
         self.vc.encoder.set_expected_packet_loss_percent(0.0)
         self.Enc_bool = False
-        threading.Thread(target=self.run,daemon=True).start()
+        self.doing = {'run_loop':False}
 
 
     def kill(self):
@@ -38,8 +38,8 @@ class MultiAudio:
             P._read_bytes(False)
 
 
-    def add_player(self ,RNum=0 ,opus=False) -> '_APlayer':
-        player = _APlayer(RNum ,opus=opus ,parent=self)
+    def add_player(self ,RNum=0 ,opus=False) -> '_AudioTrack':
+        player = _AudioTrack(RNum ,opus=opus ,parent=self)
         self.Players.append(player)
         self.P1_read_bytes = player.read_bytes
         self.PLen = len(self.Players)
@@ -54,6 +54,9 @@ class MultiAudio:
         if status:
             if temp == 0:
                 self.__speak(SpeakingState.voice)
+                with lock:
+                    if not self.doing['run_loop']:
+                        threading.Thread(target=self.run_loop,daemon=True).start()
         else:
             if temp == 1:
                 self.__speak(SpeakingState.none)
@@ -70,14 +73,17 @@ class MultiAudio:
             pass
 
 
-    def run(self):
+    def run_loop(self):
         """
-        これずっとloopしてます 止まりません loopの悪魔
+        音声データをを送る　別スレッドで動作する 
         音声データ (Bytes) を取得し、必要があれば Numpy で読み込んで 合成しています
         最後に音声データ送信
         """
         send_audio = self.vc.send_audio_packet
         _start = time.perf_counter()
+        fin_loop = 0
+        with lock:
+            self.doing['run_loop'] = True
         while self.loop:
             Bytes = None
             if self.PLen == 1:
@@ -105,14 +111,22 @@ class MultiAudio:
  
             # Send Bytes
             if Bytes:
+                fin_loop = 0
                 try:send_audio(Bytes, encode=self.Enc_bool)
                 except Exception as e:
                     print(f'Error send_audio_packet : {e}')
                     time.sleep(10)
+            # thread fin
+            else:
+                fin_loop += 1
+                if 1500 < fin_loop:
+                    break
 
+        with lock:
+            self.doing['run_loop'] = False
             
 
-class _APlayer:
+class _AudioTrack:
     def __init__(self ,RNum ,opus ,parent:'MultiAudio'):
         self.AudioSource = None
         self._SAD = None
