@@ -342,7 +342,7 @@ class MusicController():
                 for I in range(II):
                     I = I * Duration
                     if I <= NTime < (I + Duration):
-                        Progress += '||' if self.Mvc.Pausing else '▶'
+                        Progress += '||' if self.Mvc.Pausing else '>'
                     else:
                         Progress += '-'
                 return Progress
