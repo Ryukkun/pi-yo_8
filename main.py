@@ -4,6 +4,7 @@ import asyncio
 import time
 import psutil
 from discord.ext import commands, tasks
+from typing import Dict
 
 from pi_yo_8.voice_client import MultiAudio
 from pi_yo_8.music import MusicController
@@ -33,7 +34,7 @@ intents.message_content = True
 intents.reactions = True
 intents.voice_states = True
 client = commands.Bot(command_prefix=config.Prefix,intents=intents)
-g_opts:dict[int, 'DataInfo'] = {}
+g_opts:Dict[int, 'DataInfo'] = {}
 
 
 
