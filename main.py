@@ -118,8 +118,9 @@ async def speed(ctx:commands.Context, arg:float):
     vc = guild.voice_client
     if vc:
         if data := g_opts.get(gid):
-            data.Music.Mvc.speed = float(arg)
-            await data.Music.Mvc._new_asouce_sec(data.Music.Mvc.Timer // 50)
+            if 0.01 < arg < 10.0 and data.Music.Mvc.speed != arg:
+                data.Music.Mvc.speed = arg
+                data.loop.create_task(data.Music.Mvc.update_asouce_sec())
 
 
 @client.command()
@@ -129,8 +130,9 @@ async def pitch(ctx:commands.Context, arg:int):
     vc = guild.voice_client
     if vc:
         if data := g_opts.get(gid):
-            data.Music.Mvc.pitch = int(arg)
-            await data.Music.Mvc._new_asouce_sec(data.Music.Mvc.Timer // 50)
+            if -12 <= arg <= 12 and data.Music.Mvc.pitch != arg:
+                data.Music.Mvc.pitch = arg
+                data.loop.create_task(data.Music.Mvc.update_asouce_sec())
 
 
 #--------------------------------------------------

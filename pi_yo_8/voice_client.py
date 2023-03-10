@@ -144,6 +144,7 @@ class _AudioTrack:
         self.RBytes = []
         self.Duration = None
         self.Loop = False
+        self.first_delay = False
     
 
     async def play(self,_SAD:StreamAudioData,after):
@@ -157,6 +158,7 @@ class _AudioTrack:
         self.Timer = 0.0
         self.read_fin = False
         self.After = after
+        self.first_delay = False
         self.resume()
 
     def stop(self):
@@ -227,6 +229,15 @@ class _AudioTrack:
             # Read Bytes
             if len(self.QBytes) <= (45 * 50):
                 self._read_bytes(True)
+            
+            if not self.QBytes:
+                self.first_delay = True
+                return
+            if self.first_delay:
+                if (3 * 50) < len(self.QBytes):
+                    self.first_delay = False
+                else:
+                    return
 
             if self.Pausing == False:
                 #print(len(self.QBytes))
@@ -255,6 +266,7 @@ class _AudioTrack:
         self.QBytes.clear()
         self.RBytes.clear()
         self.read_fin = False
+        self.first_delay = False
 
 
     async def update_asouce_sec(self):
