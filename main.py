@@ -2,6 +2,7 @@ import discord
 import os
 import asyncio
 import time
+import logging
 from discord.ext import commands, tasks
 from typing import Dict
 
@@ -244,4 +245,4 @@ class DataInfo():
             self.count_loop = 0
 
 
-client.run(config.Token)
+client.run(config.Token, log_level=logging.WARNING)
