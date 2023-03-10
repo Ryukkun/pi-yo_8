@@ -257,6 +257,10 @@ class _AudioTrack:
         self.read_fin = False
 
 
+    async def update_asouce_sec(self):
+        await self._new_asouce_sec(self.Timer // 50)
+
+
     def _finish(self):
         self.AudioSource = None
         self._SAD = None

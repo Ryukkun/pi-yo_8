@@ -252,7 +252,12 @@ class MusicController():
         if late_E := self.Latest_CH.last_message:
             if late_E.author.id == self.Info.client.user.id:
                 if late_E.embeds:
-                    if late_E.embeds[0].colour.value == EmBase.player_color().value:
+                    em_color = late_E.embeds[0].colour.value
+                    if em_color == EmBase.dont_replace_color().value:
+                        if await self._edit_embed(self.Embed_Message):
+                            return
+
+                    if em_color == EmBase.player_color().value:
                         if await self._edit_embed(late_E):
                             return
         await self._playing()

@@ -29,3 +29,10 @@ class EmBase:
         自作Player の カラー
         '''
         return Colour.from_str('#e1bd5b')
+    
+    @classmethod
+    def dont_replace_color(self):
+        '''
+        playingに上書きされないカラー
+        '''
+        return Colour.from_str('#e1bd5a')

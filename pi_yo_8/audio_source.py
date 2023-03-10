@@ -284,15 +284,17 @@ class StreamAudioData:
             pitch = 1
         else:
             pitch = 2 ** (pitch / 12)
-            speed = speed / pitch
+            #speed = speed / pitch
 
 
         if pitch != 1:
-            af.append('aresample=48000')
-            af.append(f'asetrate={48000*pitch}')
+            #af.append('aresample=48000')
+            #af.append(f'asetrate={48000*pitch}')
+            af.append(f'rubberband=pitch={pitch}')
         
         if float(speed) != 1.0:
-            af.append(f'atempo={speed}')
+            #af.append(f'atempo={speed}')
+            af.append(f'rubberband=tempo={speed}')
 
         if self.music:
             volume = -20.0
