@@ -3,18 +3,18 @@ import time
 from discord import ui, Interaction, SelectOption ,ButtonStyle
 
 from .audio_source import StreamAudioData as SAD
-if __name__ == '__main__':
-    from .music import MusicController
+    
 
 
 # Button
 class CreateButton(ui.View):
     def __init__(self, Parent):
         super().__init__(timeout=None)
-        try: self.Parent:MusicController
+        try:
+            from .music import MusicController
+            self.Parent:MusicController
         except Exception: pass
         self.Parent = Parent
-        select_opt = None
         self.add_item(CreateSelect(self, Parent, (Parent.Queue + Parent.Next_PL['PL'])))
 
 
