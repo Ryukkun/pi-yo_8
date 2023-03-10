@@ -133,7 +133,9 @@ class _AudioTrack:
         self.Pausing = False
         self.Parent = parent
         self.RNum = RNum*50
-        self.Timer = 0
+        self.Timer:float = 0.0
+        self.pitch:int = 0
+        self.speed:float = 1.0
         self.read_fin = False
         self.read_loop = False
         self.After = None
@@ -147,12 +149,12 @@ class _AudioTrack:
     async def play(self,_SAD:StreamAudioData,after):
         self._SAD = _SAD
         self.Duration = _SAD.St_Sec
-        AudioSource = await _SAD.AudioSource(self.opus)
+        AudioSource = await _SAD.AudioSource(self.opus, speed=self.speed, pitch=self.pitch)
         # 最初のロードは少し時間かかるから先にロード
         self.QBytes.clear()
         self.RBytes.clear()
         self.AudioSource = AudioSource
-        self.Timer = 0
+        self.Timer = 0.0
         self.read_fin = False
         self.After = after
         self.resume()
@@ -187,7 +189,7 @@ class _AudioTrack:
         # n秒 進む
         if 0 < stime:
             if len(self.QBytes) < stime:
-                target_time = self.Timer + stime
+                target_time = int(self.Timer) + stime
                 target_sec = target_time // 50
                 if target_sec > self._SAD.St_Sec:
                     self._finish()
@@ -196,14 +198,14 @@ class _AudioTrack:
 
             else:
                 with lock:
-                    self.Timer += stime
+                    self.Timer += float(stime)
                 self.RBytes.extend(self.QBytes[:stime])
                 del self.QBytes[:stime]
 
         # n秒 前に戻る
         elif stime < 0:
             stime = -stime
-            target_time = self.Timer - stime
+            target_time = int(self.Timer) - stime
             if target_time < 0:
                 stime += target_time
 
@@ -215,7 +217,7 @@ class _AudioTrack:
             else:
                 with lock:
                     self.QBytes = self.RBytes[-stime:] + self.QBytes
-                    self.Timer -= stime
+                    self.Timer -= float(stime)
                 del self.RBytes[-stime:]
 
 
@@ -236,7 +238,7 @@ class _AudioTrack:
                         return
 
                     with lock:
-                        self.Timer += 1
+                        self.Timer += (1.0 * self.speed)
                         if self.RNum != 0:
                             self.RBytes.append(_byte)
                             if len(self.RBytes) > self.RNum:
@@ -248,8 +250,8 @@ class _AudioTrack:
 
 
     async def _new_asouce_sec(self, sec):
-        self.AudioSource = await self._SAD.AudioSource(self.opus, sec)
-        self.Timer = sec * 50
+        self.AudioSource = await self._SAD.AudioSource(self.opus, sec, speed=self.speed, pitch=self.pitch)
+        self.Timer = float(sec * 50)
         self.QBytes.clear()
         self.RBytes.clear()
         self.read_fin = False

@@ -2,7 +2,6 @@ import discord
 import os
 import asyncio
 import time
-import psutil
 from discord.ext import commands, tasks
 from typing import Dict
 
@@ -112,6 +111,26 @@ async def _bye(guild:discord.Guild):
     
     
 
+@client.command()
+async def speed(ctx:commands.Context, arg:float):
+    guild = ctx.guild
+    gid = guild.id
+    vc = guild.voice_client
+    if vc:
+        if data := g_opts.get(gid):
+            data.Music.Mvc.speed = float(arg)
+            await data.Music.Mvc._new_asouce_sec(data.Music.Mvc.Timer // 50)
+
+
+@client.command()
+async def pitch(ctx:commands.Context, arg:int):
+    guild = ctx.guild
+    gid = guild.id
+    vc = guild.voice_client
+    if vc:
+        if data := g_opts.get(gid):
+            data.Music.Mvc.pitch = int(arg)
+            await data.Music.Mvc._new_asouce_sec(data.Music.Mvc.Timer // 50)
 
 
 #--------------------------------------------------

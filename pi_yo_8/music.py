@@ -158,13 +158,13 @@ class MusicController():
                         sec = int(res.group(3))
                         sec += int(res.group(2)) * 60
                         sec += int(res.group(1)) * 3600
-                        self.Mvc.skip_time((sec * 50) - self.Mvc.Timer)
+                        self.Mvc.skip_time((sec * 50) - int(self.Mvc.Timer))
                         return
 
                     elif res := re_skip_set_m.match(sec):
                         sec = int(res.group(2))
                         sec += int(res.group(1)) * 60
-                        self.Mvc.skip_time((sec * 50) - self.Mvc.Timer)
+                        self.Mvc.skip_time((sec * 50) - int(self.Mvc.Timer))
                         return
 
                 self.Mvc.skip_time(int(sec) * 50)
@@ -336,7 +336,7 @@ class MusicController():
             
 
             def get_progress(II):
-                NTime = self.Mvc.Timer // 50
+                NTime = int(self.Mvc.Timer) // 50
                 Duration = _SAD.St_Sec / II
                 Progress = ''
                 for I in range(II):
@@ -347,7 +347,7 @@ class MusicController():
                         Progress += '-'
                 return Progress
             Progress = get_progress(40)
-            NTime = self._Calc_Time(self.Mvc.Timer // 50)
+            NTime = self._Calc_Time(int(self.Mvc.Timer) // 50)
             Duration = self._Calc_Time(_SAD.St_Sec)
             embed.set_footer(text=f'{NTime} {Progress} {Duration}')
         else:
