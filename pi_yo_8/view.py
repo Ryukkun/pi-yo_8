@@ -72,12 +72,12 @@ class CreateButton(ui.View):
         Parent.CLoop.create_task(interaction.response.defer())
         await Parent._skip(None)
 
-    @ui.button(label="⚙️",row=2)
+    @ui.button(label="⚙️", row=2)
     async def def_button5(self, interaction:Interaction, button):
         parent = self.Parent
         await interaction.response.send_message(
             embed= PlayConfigEmbed(parent.Mvc),
-            view= PlayConfigSpeedView(parent),
+            view= PlayConfigView(parent),
             ephemeral= False
             )
         
@@ -122,28 +122,12 @@ class CreateSelect(ui.Select):
 def PlayConfigEmbed(Mvc:_AudioTrack):
     embed = Embed(colour=EmBase.dont_replace_color())
     embed.add_field(name='再生速度 (0.01 - 100)', value=f'x{round(Mvc.speed,2)}', inline=True)
-    embed.add_field(name='ピッチ (-12 ~ 12)', value=f'x{Mvc.pitch}', inline=True)
+    embed.add_field(name='ピッチ (-12 ~ 12)', value=f'{Mvc.pitch}', inline=True)
     return embed
 
 
-class PlayConfigSelect(ui.Select):
-    def __init__(self, parent, select:int=0) -> None:
-        self.parent = parent
-        select_opt:list[SelectOption] = []
-        select_opt.append(SelectOption(label='スピード', value=0))
-        select_opt.append(SelectOption(label='ピッチ', value=1))
-        select_opt[select].default = True
-        super().__init__(placeholder='設定', options=select_opt, row=0)
 
-    async def callback(self, interaction: Interaction):
-        await interaction.response.defer()
-        value = int(self.values[0])
-        if value == 0:
-            await interaction.message.edit(view=PlayConfigSpeedView(self.parent))
-        elif value == 1:
-            await interaction.message.edit(view=PlayConfigPitchView(self.parent))
-
-class PlayConfigSpeedView(ui.View):
+class PlayConfigView(ui.View):
     def __init__(self, parent):
         try:
             from .music import MusicController
@@ -151,13 +135,12 @@ class PlayConfigSpeedView(ui.View):
         except Exception: pass
 
         super().__init__(timeout=None)
-        self.add_item(PlayConfigSelect(parent, select=0))
         self.parent = parent
         self.loop = self.parent.CLoop
         self.Mvc = self.parent.Mvc
 
     
-    @ui.button(label="-0.1", row=1)
+    @ui.button(label="- 0.1", row=0)
     async def speed_m(self, interaction:Interaction, button):
         self.loop.create_task(interaction.response.defer())
         speed = self.parent.Mvc.speed - 0.1
@@ -167,7 +150,7 @@ class PlayConfigSpeedView(ui.View):
             await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
         
 
-    @ui.button(label="スピードリセット", row=1, style=ButtonStyle.blurple)
+    @ui.button(label="スピードリセット", row=0, style=ButtonStyle.blurple)
     async def speed_reset(self, interaction:Interaction, button):
         self.loop.create_task(interaction.response.defer())
         if self.parent.Mvc.speed != 1.0:
@@ -176,7 +159,7 @@ class PlayConfigSpeedView(ui.View):
             await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
 
 
-    @ui.button(label="+0.1", row=1)
+    @ui.button(label="+ 0.1", row=0)
     async def speed_p(self, interaction:Interaction, button):
         self.loop.create_task(interaction.response.defer())
         speed = self.parent.Mvc.speed + 0.1
@@ -186,28 +169,7 @@ class PlayConfigSpeedView(ui.View):
             await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
 
 
-    @ui.button(label="delete", row=1, style=ButtonStyle.red)
-    async def delete(self, interaction:Interaction, button):
-        await interaction.response.defer()
-        await interaction.message.delete()
-        
-
-
-class PlayConfigPitchView(ui.View):
-    def __init__(self, parent):
-        try:
-            from .music import MusicController
-            self.parent:MusicController
-        except Exception: pass
-
-        super().__init__(timeout=None)
-        self.add_item(PlayConfigSelect(parent, select=1))
-        self.parent = parent
-        self.loop = self.parent.CLoop
-        self.Mvc = self.parent.Mvc
-
-
-    @ui.button(label="半音下げる", row=1)
+    @ui.button(label="- 半音", row=1)
     async def pitch_m(self, interaction:Interaction, button):
         self.loop.create_task(interaction.response.defer())
         pitch = self.parent.Mvc.pitch - 1
@@ -226,7 +188,7 @@ class PlayConfigPitchView(ui.View):
             await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
 
 
-    @ui.button(label="半音上げる", row=1)
+    @ui.button(label="+ 半音", row=1)
     async def pitch_p(self, interaction:Interaction, button):
         self.loop.create_task(interaction.response.defer())
         pitch = self.parent.Mvc.pitch + 1
@@ -236,7 +198,13 @@ class PlayConfigPitchView(ui.View):
             await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
 
 
-    @ui.button(label="delete", row=1, style=ButtonStyle.red)
+    @ui.button(label="delete", row=0, style=ButtonStyle.red)
+    async def delete(self, interaction:Interaction, button):
+        await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
+        await interaction.response.defer()
+
+
+    @ui.button(label="delete", row=0, style=ButtonStyle.red)
     async def delete(self, interaction:Interaction, button):
         await interaction.response.defer()
         await interaction.message.delete()
