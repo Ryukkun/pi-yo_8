@@ -23,6 +23,12 @@
 - `/download URL or 文字列` 他人に表示されない。機能は上記と同じ<br><br>
 
 
+## ☆ 開発頑張った偉いね
+- Python 3.8.10にて制作
+- ffmpeg (スピード、ピッチの調節に **rubberband** を使用したため、有効化必須)
+- OS : Windows MacOS Linux(Ubuntu) にて動作確認済み
+
+
 # 基本的に GUI操作
 music bot用のチャットチャンネルを、作っておいた方がいいよー！
 ### 作ったやつ天才か！？
