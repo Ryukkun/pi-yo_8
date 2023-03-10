@@ -25,7 +25,7 @@
 
 ## ☆ 開発頑張った偉いね
 - Python 3.8.10にて制作
-- ffmpeg (スピード、ピッチの調節に **rubberband** を使用したため、有効化必須)
+- ffmpeg （スピード、ピッチの調節に **rubberband** を使用したため、有効化必須）
 - OS : Windows MacOS Linux(Ubuntu) にて動作確認済み<br><br>
 
 
