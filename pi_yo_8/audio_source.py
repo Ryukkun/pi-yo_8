@@ -77,21 +77,21 @@ class FFmpegPCMAudio(FFmpegAudio):
         executable: str = 'ffmpeg',
         pipe: bool = False,
         stderr: Optional[IO[str]] = None,
-        before_options: Optional[str] = None,
-        options: Optional[str] = None,
+        before_options: Optional[list] = None,
+        options: Optional[list] = None,
     ) -> None:
         args = []
         subprocess_kwargs = {'stdin': subprocess.PIPE if pipe else subprocess.DEVNULL, 'stderr': stderr}
 
-        if isinstance(before_options, str):
-            args.extend(shlex.split(before_options))
+        if before_options:
+            args.extend(before_options)
 
         args.append('-i')
         args.append('-' if pipe else source)
         args.extend(('-ac', '2', '-loglevel', 'warning', '-b:a', '128k'))
 
-        if isinstance(options, str):
-            args.extend(shlex.split(options))
+        if options:
+            args.extend(options)
 
         args.append('pipe:1')
 
@@ -167,14 +167,14 @@ class FFmpegOpusAudio(FFmpegAudio):
         executable: str = 'ffmpeg',
         pipe: bool = False,
         stderr: Optional[IO[bytes]] = None,
-        before_options: Optional[str] = None,
-        options: Optional[str] = None,
+        before_options: Optional[list] = None,
+        options: Optional[list] = None,
     ) -> None:
         args = []
         subprocess_kwargs = {'stdin': subprocess.PIPE if pipe else subprocess.DEVNULL, 'stderr': stderr}
 
-        if isinstance(before_options, str):
-            args.extend(shlex.split(before_options))
+        if before_options:
+            args.extend(before_options)
 
         args.append('-i')
         args.append('-' if pipe else source)
@@ -187,8 +187,8 @@ class FFmpegOpusAudio(FFmpegAudio):
                      '-loglevel', 'warning'))
         # fmt: on
 
-        if isinstance(options, str):
-            args.extend(shlex.split(options))
+        if options:
+            args.extend(options)
 
         args.append('pipe:1')
 
@@ -287,25 +287,18 @@ class StreamAudioData:
 
 
     async def AudioSource(self, opus:bool, sec:int=0, speed:float=1.0, pitch:int=0):
-        FFMPEG_OPTIONS = {
-            'before_options': '',
-            'options': f'-vn -application lowdelay -loglevel quiet'
-            }
+        before_options = []
+        options = ['-vn', '-application', 'lowdelay', '-loglevel', 'quiet']
         af = []
 
         # Sec
         if int(sec):
-            FFMPEG_OPTIONS['before_options'] += f'-ss {sec}'
+            before_options.extend(('-ss' ,str(sec)))
         
         # Pitch
-        if pitch == 0:
-            pitch = 1
-        else:
+        if pitch != 0:
             pitch = 2 ** (pitch / 12)
             #speed = speed / pitch
-
-
-        if pitch != 1:
             #af.append('aresample=48000')
             #af.append(f'asetrate={48000*pitch}')
             af.append(f'rubberband=pitch={pitch}')
@@ -315,25 +308,23 @@ class StreamAudioData:
             af.append(f'rubberband=tempo={speed}')
 
         if self.music:
-            volume = -20.0
+            volume = -15.0
             if Vol := self.St_Vol:
                 volume -= Vol
-            FFMPEG_OPTIONS['before_options'] += " -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 2147483647 -probesize 2147483647"
+            before_options.extend(('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-analyzeduration', '2147483647', '-probesize', '2147483647'))
             af.append(f'volume={volume}dB')
         
         # af -> str
         if af:
-            af = f'-af {",".join(af)} '
-        else:
-            af = ''
+            options.extend(('-af', ','.join(af) ))
 
         if opus:
-            FFMPEG_OPTIONS['options'] += f' -c:a libopus {af}-ar 48000'
-            return FFmpegOpusAudio(self.St_Url,**FFMPEG_OPTIONS)
+            options.extend(('-c:a', 'libopus', '-ar', '48000'))
+            return FFmpegOpusAudio(self.St_Url, before_options=before_options, options=options)
 
         else:
-            FFMPEG_OPTIONS['options'] += f' -c:a pcm_s16le {af}-ar 48000'
-            return FFmpegPCMAudio(self.St_Url,**FFMPEG_OPTIONS)
+            options.extend(('-c:a', 'pcm_s16le', '-ar', '48000'))
+            return FFmpegPCMAudio(self.St_Url, before_options=before_options, options=options)
 
 
     async def Check(self):

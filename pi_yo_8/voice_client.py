@@ -11,6 +11,30 @@ from .audio_source import StreamAudioData
 
 lock = threading.Lock()
 
+
+class _Attribute:
+    def __init__(self, init, min, max, update_asource) -> None:
+        self.get = init
+        self.update_asource = update_asource
+        self.min = min
+        self.max = max
+    
+    async def set(self, num):
+        res = await self._check(num)
+        return res
+
+    async def add(self, num):
+        res = await self._check(self.get + num)
+        return res
+
+    async def _check(self, num):
+        if self.min <= num <= self.max:
+            self.get = num
+            await self.update_asource()
+            return True
+
+
+
 class MultiAudio:
     """
     Discord に存在する AudioPlayer は 同時に1つまでの音源の再生にしか対応していないため
@@ -134,8 +158,8 @@ class _AudioTrack:
         self.Parent = parent
         self.RNum = RNum*50
         self.Timer:float = 0.0
-        self.pitch:int = 0
-        self.speed:float = 1.0
+        self.pitch = _Attribute(init=0, min=-60, max=60, update_asource=self.update_asouce_sec)
+        self.speed = _Attribute(init=1.0, min=-0.1, max=3.0, update_asource=self.update_asouce_sec)
         self.read_fin = False
         self.read_loop = False
         self.After = None
@@ -150,7 +174,7 @@ class _AudioTrack:
     async def play(self,_SAD:StreamAudioData,after):
         self._SAD = _SAD
         self.Duration = _SAD.St_Sec
-        AudioSource = await _SAD.AudioSource(self.opus, speed=self.speed, pitch=self.pitch)
+        AudioSource = await _SAD.AudioSource(self.opus, speed=self.speed.get, pitch=self.pitch.get)
         # 最初のロードは少し時間かかるから先にロード
         self.QBytes.clear()
         self.RBytes.clear()
@@ -249,7 +273,7 @@ class _AudioTrack:
                         return
 
                     with lock:
-                        self.Timer += (1.0 * self.speed)
+                        self.Timer += (1.0 * self.speed.get)
                         if self.RNum != 0:
                             self.RBytes.append(_byte)
                             if len(self.RBytes) > self.RNum:
@@ -261,7 +285,7 @@ class _AudioTrack:
 
 
     async def _new_asouce_sec(self, sec):
-        self.AudioSource = await self._SAD.AudioSource(self.opus, sec, speed=self.speed, pitch=self.pitch)
+        self.AudioSource = await self._SAD.AudioSource(self.opus, sec, speed=self.speed.get, pitch=self.pitch.get)
         self.Timer = float(sec * 50)
         self.QBytes.clear()
         self.RBytes.clear()

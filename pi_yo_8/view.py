@@ -121,8 +121,8 @@ class CreateSelect(ui.Select):
 
 def PlayConfigEmbed(Mvc:_AudioTrack):
     embed = Embed(colour=EmBase.dont_replace_color())
-    embed.add_field(name='再生速度 (0.1 - 10)', value=f'x{round(Mvc.speed,2)}', inline=True)
-    embed.add_field(name='ピッチ (-12 ~ 12)', value=f'{Mvc.pitch}', inline=True)
+    embed.add_field(name='テンポ (x0.1 ~ x3.0)', value=f'x{round(Mvc.speed.get,2)}', inline=True)
+    embed.add_field(name='キー', value=f'{Mvc.pitch.get}', inline=True)
     return embed
 
 
@@ -138,24 +138,25 @@ class PlayConfigView(ui.View):
         self.parent = parent
         self.loop = self.parent.CLoop
         self.Mvc = self.parent.Mvc
+        self.speed = self.Mvc.speed
+        self.pitch = self.Mvc.pitch
 
+
+    async def edit_message(self, interaction:Interaction):
+        await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
 
     async def edit_speed(self, interaction:Interaction, num:float):
         self.loop.create_task(interaction.response.defer())
-        speed = self.parent.Mvc.speed + num
-        if 0.01 < speed < 10.0:
-            self.parent.Mvc.speed = speed
-            self.loop.create_task(self.parent.Mvc.update_asouce_sec())
-            await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
+        res = await self.speed.add(num)
+        if res:
+            await self.edit_message(interaction)
 
 
     async def edit_pitch(self, interaction:Interaction, num:int):
         self.loop.create_task(interaction.response.defer())
-        pitch = self.parent.Mvc.pitch + num
-        if -12 <= pitch <= 12:
-            self.parent.Mvc.pitch = pitch
-            self.loop.create_task(self.parent.Mvc.update_asouce_sec())
-            await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
+        res = await self.pitch.add(num)
+        if res:
+            await self.edit_message(interaction)
 
 
     @ui.button(label="- 0.5", row=0)
@@ -168,13 +169,12 @@ class PlayConfigView(ui.View):
         await self.edit_speed(interaction, -0.1)
         
 
-    @ui.button(label="スピード リセット", row=0, style=ButtonStyle.blurple)
+    @ui.button(label="テンポリセット", row=0, style=ButtonStyle.blurple)
     async def speed_reset(self, interaction:Interaction, button):
         self.loop.create_task(interaction.response.defer())
-        if self.parent.Mvc.speed != 1.0:
-            self.parent.Mvc.speed = 1.0
-            self.loop.create_task(self.parent.Mvc.update_asouce_sec())
-            await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
+        res = await self.speed.set(1.0)
+        if res:
+            await self.edit_message(interaction)
 
 
     @ui.button(label="+ 0.1", row=0)
@@ -187,31 +187,30 @@ class PlayConfigView(ui.View):
         await self.edit_speed(interaction, 0.5)
 
 
-    @ui.button(label="- 全音", row=1)
+    @ui.button(label="- 2", row=1)
     async def pitch_m2(self, interaction:Interaction, button):
         await self.edit_pitch(interaction, -2)
 
 
-    @ui.button(label="- 半音", row=1)
+    @ui.button(label="- 1", row=1)
     async def pitch_m1(self, interaction:Interaction, button):
         await self.edit_pitch(interaction, -1)
 
 
-    @ui.button(label="ピッチリセット", row=1, style=ButtonStyle.blurple)
+    @ui.button(label="キー　リセット", row=1, style=ButtonStyle.blurple)
     async def pitch_reset(self, interaction:Interaction, button):
         self.loop.create_task(interaction.response.defer())
-        if self.parent.Mvc.pitch != 0:
-            self.parent.Mvc.pitch = 0
-            self.loop.create_task(self.parent.Mvc.update_asouce_sec())
-            await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
+        res = await self.pitch.set(0)
+        if res:
+            await self.edit_message(interaction)
 
 
-    @ui.button(label="+ 半音", row=1)
+    @ui.button(label="+ 1", row=1)
     async def pitch_p1(self, interaction:Interaction, button):
         await self.edit_pitch(interaction, 1)
 
 
-    @ui.button(label="+ 全音", row=1)
+    @ui.button(label="+ 2", row=1)
     async def pitch_p2(self, interaction:Interaction, button):
         await self.edit_pitch(interaction, 2)
 
