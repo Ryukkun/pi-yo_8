@@ -17,13 +17,18 @@ class CreateButton(ui.View):
             self.Parent:MusicController
         except Exception: pass
         self.Parent = Parent
-        self.add_item(CreateSelect(self, Parent, (Parent.Queue + Parent.Next_PL['PL'])))
+        self.add_item(CreateSelect(self, (self.Parent.Queue + self.Parent.Next_PL['PL'])))
+        self.add_item(CreateStatusButton(self, '🔁', 'loop'))
+        if self.Parent.PL:
+            self.add_item(CreateStatusButton(self, '♻', 'loop_pl'))
+            self.add_item(CreateStatusButton(self, '🔀', 'random_pl'))
+        self.add_item(CreateSettingButton(self))
 
 
     @ui.button(label="<",row=1)
     async def def_button0(self, interaction:Interaction, button):
         Parent = self.Parent
-        Parent.last_action = time.time()
+        Parent._update_action()
         Parent.CLoop.create_task(interaction.response.defer())
 
         if not Parent.Rewind: return
@@ -41,14 +46,14 @@ class CreateButton(ui.View):
     @ui.button(label="10↩︎",row=1)
     async def def_button1(self, interaction:Interaction, button):
         Parent = self.Parent
-        Parent.last_action = time.time()
+        Parent._update_action()
         Parent.CLoop.create_task(interaction.response.defer())
         Parent.Mvc.skip_time(-10*50)
 
     @ui.button(label="⏯",style=ButtonStyle.blurple,row=1)
     async def def_button2(self, interaction:Interaction, button):
         Parent = self.Parent
-        Parent.last_action = time.time()
+        Parent._update_action()
         Parent.CLoop.create_task(interaction.response.defer())
 
         if Parent.Mvc.is_paused():
@@ -62,33 +67,60 @@ class CreateButton(ui.View):
     @ui.button(label="↪︎10",row=1)
     async def def_button3(self, interaction:Interaction, button):
         Parent = self.Parent
-        Parent.last_action = time.time()
+        Parent._update_action()
         Parent.CLoop.create_task(interaction.response.defer())
         Parent.Mvc.skip_time(10*50)
 
     @ui.button(label=">",row=1)
     async def def_button4(self, interaction:Interaction, button):
         Parent = self.Parent
+        Parent._update_action()
         Parent.CLoop.create_task(interaction.response.defer())
-        await Parent._skip(None)
+        await Parent.skip(None)
 
-    @ui.button(label="⚙️", row=2)
-    async def def_button5(self, interaction:Interaction, button):
-        parent = self.Parent
+
+
+class CreateSettingButton(ui.Button):
+    def __init__(self, parent:'CreateButton'):
+        self.parent = parent.Parent
+        super().__init__(label="⚙️", row=2)
+
+    async def callback(self, interaction: Interaction):
+        self.parent._update_action()
         await interaction.response.send_message(
-            embed= PlayConfigEmbed(parent.Mvc),
-            view= PlayConfigView(parent),
+            embed= PlayConfigEmbed(self.parent.Mvc),
+            view= PlayConfigView(self.parent),
             ephemeral= False
             )
-        
+
+
+class CreateStatusButton(ui.Button):
+    def __init__(self, parent:'CreateButton', label:str, status_name:str):
+        self.parent = parent
+        self.name = status_name
+        super().__init__(label=label, row=2, style=self.style_check())
+
+    def style_check(self):
+        if self.parent.Parent.status[self.name]:
+            return ButtonStyle.green
+        else:
+            return ButtonStyle.red
+    
+    async def callback(self, interaction: Interaction):
+        status = self.parent.Parent.status
+        status[self.name] = not status[self.name]
+        self.style = self.style_check()
+        self.parent.Parent._update_action()
+        await interaction.response.edit_message(view=self.parent)
+
+
 
 
 class CreateSelect(ui.Select):
-    def __init__(self, parent1, parent2, args) -> None:
+    def __init__(self, parent:'CreateButton', args) -> None:
         self.loop = asyncio.get_event_loop()
-        try: self.parent1:'CreateButton'
-        except Exception: pass
-        self.parent = parent2
+        self.parent = parent
+        self.parent2 = parent.Parent
         select_opt = []
         _audio: SAD
         #print(args)
@@ -100,22 +132,23 @@ class CreateSelect(ui.Select):
                 title = title[0:100]
             select_opt.append(SelectOption(label=title,value=str(i),default=(select_opt == [])))
 
-        parent1.select_opt = select_opt
+        parent.select_opt = select_opt
         super().__init__(placeholder='キュー表示', options=select_opt, row=0)
 
 
     async def callback(self, interaction: Interaction):
         #await interaction.response.send_message(f'{interaction.user.name}は{self.values[0]}を選択しました')
         self.loop.create_task(interaction.response.defer())
-        self.parent.last_action = time.time()
+        music = self.parent2
+        music._update_action()
         for i in range(int(self.values[0])):
-            if self.parent.Queue:
-                self.parent.Rewind.append(self.parent.Queue[0])
-                del self.parent.Queue[0]
-            elif self.parent.Next_PL['PL']:
-                self.parent.Rewind.append(self.parent.Next_PL['PL'])
-                del self.parent.Next_PL['PL'][0]
-        await self.parent.play_loop(None,0)
+            if music.Queue:
+                music.Rewind.append(music.Queue[0])
+                del music.Queue[0]
+            elif music.Next_PL['PL']:
+                music.Rewind.append(music.Next_PL['PL'])
+                del music.Next_PL['PL'][0]
+        await music.play_loop(None,0)
         #print(f'{interaction.user.name}は{self.values[0]}を選択しました')
 
 
@@ -148,6 +181,7 @@ class PlayConfigView(ui.View):
     async def edit_speed(self, interaction:Interaction, num:float):
         self.loop.create_task(interaction.response.defer())
         res = await self.speed.add(num)
+        self.parent._update_action()
         if res:
             await self.edit_message(interaction)
 
@@ -155,6 +189,7 @@ class PlayConfigView(ui.View):
     async def edit_pitch(self, interaction:Interaction, num:int):
         self.loop.create_task(interaction.response.defer())
         res = await self.pitch.add(num)
+        self.parent._update_action()
         if res:
             await self.edit_message(interaction)
 
@@ -217,11 +252,12 @@ class PlayConfigView(ui.View):
 
     @ui.button(label="↺", row=2, style=ButtonStyle.red)
     async def reload(self, interaction:Interaction, button):
-        await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
-        await interaction.response.defer()
+        self.parent._update_action()
+        await interaction.response.edit_message(embed=PlayConfigEmbed(self.Mvc))
 
 
     @ui.button(label="delete", row=2, style=ButtonStyle.red)
     async def delete(self, interaction:Interaction, button):
+        self.parent._update_action()
         await interaction.response.defer()
         await interaction.message.delete()

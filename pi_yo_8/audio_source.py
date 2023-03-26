@@ -4,7 +4,6 @@ import re
 import pytube
 import io
 import subprocess
-import shlex
 
 from typing import Union, Optional, IO
 from yt_dlp import YoutubeDL

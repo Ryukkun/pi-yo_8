@@ -53,13 +53,15 @@ class MusicController():
         self.Rewind = []
         self.CLoop = Info.loop
         self.Embed_Message = None
-        self.def_doing = {'_playing':False,'_load_next_pl':False}
+        self.def_doing = {'playing':False,'_load_next_pl':False}
         self.last_action:float = 0.0
 
 
-    def _update_action(self, channel):
-        self.Latest_CH = channel
+    def _update_action(self, channel= None):
         self.last_action = time.time()
+        if channel:
+            self.Latest_CH = channel
+            
 
     def _reset_pl(self):
         ' Playlistのキュー をリセットする '
@@ -70,75 +72,78 @@ class MusicController():
             self.Next_PL['index'] = None
 
 
-    async def _play(self, ctx:Context, args, Q):
+    async def def_queue(self, ctx:Context, args):
         self._update_action(ctx.channel)
         # 一時停止していた場合再生 開始
         if args == ():
-            if self.Mvc.is_paused():
-                self.Mvc.resume()
+            self.Mvc.resume()
             return
         else:
             arg = ' '.join(args)
 
 
-        if Q:
-            #### Queue True
-            # 君は本当に動画なのかい　どっちなんだい！
-            res = await SAD(arg).Check_V()
-            if not res: return
+        # 君は本当に動画なのかい　どっちなんだい！
+        res = await SAD(arg).Check_V()
+        if not res: return
 
+        # playlist 再生中のお客様はお断り
+        self._reset_pl()
+
+        #Queueに登録
+        self.Queue.append(res)
+
+        # 再生されるまでループ
+        if not self.Mvc.is_playing():
+            await self.play_loop(None,0)
+        self.Mvc.resume()
+
+
+
+    async def play(self, ctx:Context, args):
+        self._update_action(ctx.channel)
+        # 一時停止していた場合再生 開始
+        if args == ():
+            self.Mvc.resume()
+            return
+        else:
+            arg = ' '.join(args)
+
+
+        # 君は本当に動画なのかい　どっちなんだい！
+        res = await SAD(arg).Check()
+        if not res: return
+
+        if type(res) == tuple:
+            self.Index_PL = self.Next_PL['index'] = res[0] - 1
+            self.status['random_pl'] = res[1]
+            self.PL = res[2]
+            self.Next_PL['PL'] = []
+
+            self.status['loop'] = False
+            self.Queue = []
+            self.last_status = self.status.copy()
+
+            # 再生
+            await self.play_loop(None,0)
+            self.Mvc.resume()
+
+        else:
             # playlist 再生中のお客様はお断り
             self._reset_pl()
 
             #Queueに登録
-            self.Queue.append(res)
+            if self.Queue == []:
+                self.Queue.append(res)
+            else:
+                self.Queue[0] = res
 
             # 再生されるまでループ
-            if not self.Mvc.is_playing():
-                await self.play_loop(None,0)
-            if self.Mvc.is_paused():
-                self.Mvc.resume()
-
-
-        else:
-            #### Queue False
-            # 君は本当に動画なのかい　どっちなんだい！
-            res = await SAD(arg).Check()
-            if not res: return
-
-            if type(res) == tuple:
-                self.Index_PL = self.Next_PL['index'] = res[0] - 1
-                self.status['random_pl'] = res[1]
-                self.PL = res[2]
-                self.Next_PL['PL'] = []
-
-                self.status['loop'] = False
-                self.Queue = []
-                self.last_status = self.status.copy()
-
-                # 再生
-                await self.play_loop(None,0)
-                if self.Mvc.is_paused():
-                    self.Mvc.resume()
-
-            else:
-                # playlist 再生中のお客様はお断り
-                self._reset_pl()
-
-                #Queueに登録
-                if self.Queue == []:
-                    self.Queue.append(res)
-                else:
-                    self.Queue[0] = res
-
-                # 再生されるまでループ
-                await self.play_loop(None,0)
-                if self.Mvc.is_paused():
-                    self.Mvc.resume()
+            await self.play_loop(None,0)
+            self.Mvc.resume()
 
 
 
-    async def _skip(self, sec:str):
+    async def skip(self, sec:str):
         if self.vc:
 
             self.last_action = time.time()
@@ -184,31 +189,31 @@ class MusicController():
     #--------------------------------------------------
     # GUI操作
     #--------------------------------------------------
-    async def _playing(self):
-        if self.def_doing['_playing']: return
-        self.def_doing['_playing'] = True
-        try :
-            if self.Mvc.is_playing():
-                
-                # Get Embed
-                if embed := await self.generate_embed():
+    async def playing(self):
+        if self.def_doing['playing']: return
+        self.def_doing['playing'] = True
 
-                    # 古いEmbedを削除
-                    if late_E := self.Embed_Message:
-                        try: await late_E.delete()
-                        except NotFound: pass
+        if self.Mvc.is_playing():
+            
+            # Get Embed
+            if embed := await self.generate_embed():
 
-                    # 新しいEmbed
-                    Sended_Mes = await self.Latest_CH.send(embed=embed,view=CreateButton(self))
-                    self.Embed_Message = Sended_Mes 
-                    self.CLoop.create_task(Sended_Mes.add_reaction("🔁"))
-                    if self.PL:
-                        self.CLoop.create_task(Sended_Mes.add_reaction("♻"))
-                        self.CLoop.create_task(Sended_Mes.add_reaction("🔀"))
+                # 古いEmbedを削除
+                if late_E := self.Embed_Message:
+                    try: await late_E.delete()
+                    except NotFound: pass
 
-                    #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
-        except Exception: pass
-        self.def_doing['_playing'] = False
+                # 新しいEmbed
+                Sended_Mes = await self.Latest_CH.send(embed=embed,view=CreateButton(self))
+                self.Embed_Message = Sended_Mes 
+                self.CLoop.create_task(Sended_Mes.add_reaction("🔁"))
+                if self.PL:
+                    self.CLoop.create_task(Sended_Mes.add_reaction("♻"))
+                    self.CLoop.create_task(Sended_Mes.add_reaction("🔀"))
+
+                #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
+
+        self.def_doing['playing'] = False
 
 
     async def on_reaction_add(self, Reac:Reaction, User):
@@ -246,7 +251,7 @@ class MusicController():
 
 
     async def update_embed(self):
-        if self.def_doing['_playing']: return
+        if self.def_doing['playing']: return
         if not self.Latest_CH: return
 
         if late_E := self.Latest_CH.last_message:
@@ -260,7 +265,7 @@ class MusicController():
                     if em_color == EmBase.player_color().value:
                         if await self._edit_embed(late_E):
                             return
-        await self._playing()
+        await self.playing()
 
 
 
@@ -374,7 +379,7 @@ class MusicController():
 #   Download
 #---------------------------------------------------------------------------------------
     @classmethod
-    async def _download(self, arg):
+    async def download(self, arg):
 
         # Download Embed
 

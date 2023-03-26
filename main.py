@@ -139,15 +139,9 @@ async def pitch(ctx:commands.Context, arg:int):
 async def playing(ctx:commands.Context):
     try:
         g_opts[ctx.guild.id].Music.Latest_CH = ctx.channel
-        await g_opts[ctx.guild.id].Music._playing()
+        await g_opts[ctx.guild.id].Music.playing()
     except KeyError:pass
 
-
-@client.event
-async def on_reaction_add(Reac:discord.Reaction, User:discord.Member):
-    try:
-        await g_opts[User.guild.id].Music.on_reaction_add(Reac,User)
-    except KeyError:pass
 
 
 #---------------------------------------------------------------------------------------------------
@@ -160,7 +154,7 @@ async def skip(ctx:commands.Context, *arg):
         arg = arg[0]
     else: arg = None
     try:
-        await g_opts[ctx.guild.id].Music._skip(arg)
+        await g_opts[ctx.guild.id].Music.skip(arg)
     except KeyError:pass
 
 
@@ -169,7 +163,7 @@ async def skip(ctx:commands.Context, *arg):
 #---------------------------------------------------------------------------------------
 @client.command(aliases=['dl'])
 async def download(ctx:commands.Context, arg):
-    if embeds := await MusicController._download(arg):
+    if embeds := await MusicController.download(arg):
        for em in embeds:
             await ctx.send(embed=em)
 
@@ -184,7 +178,7 @@ async def queue(ctx:commands.Context, *args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
             return
-    await g_opts[ctx.guild.id].Music._play(ctx,args,True)
+    await g_opts[ctx.guild.id].Music.def_queue(ctx,args)
 
 
 
@@ -193,7 +187,7 @@ async def play(ctx:commands.Context, *args):
     if not ctx.guild.voice_client:
         if not await join(ctx):
             return
-    await g_opts[ctx.guild.id].Music._play(ctx,args,False)
+    await g_opts[ctx.guild.id].Music.play(ctx,args)
 
 
 

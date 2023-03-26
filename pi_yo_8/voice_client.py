@@ -154,7 +154,7 @@ class _AudioTrack:
     def __init__(self ,RNum ,opus ,parent:'MultiAudio'):
         self.AudioSource = None
         self._SAD = None
-        self.Pausing = False
+        self.Pausing = True
         self.Parent = parent
         self.RNum = RNum*50
         self.Timer:float = 0.0
@@ -192,8 +192,9 @@ class _AudioTrack:
         self._SAD = None
 
     def resume(self):
-        self.Pausing = False
-        self._speaking(True)
+        if self.Pausing:
+            self.Pausing = False
+            self._speaking(True)
 
     def pause(self):
         self.Pausing = True
