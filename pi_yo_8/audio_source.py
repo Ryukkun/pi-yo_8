@@ -309,10 +309,10 @@ class AnalysisUrl:
 
         ### URLじゃなかった場合 -----------------------------------------------------------------------#
         else:
-            pl = await StreamAudioData().Pyt_P_Search(arg)
+            self.sad = await StreamAudioData().Pyt_P_Search(arg)
             self.index = -1
             self.random_pl = False
-            self.sad = pl
+            self.playlist = True
         
         if not self.sad:return
         return self

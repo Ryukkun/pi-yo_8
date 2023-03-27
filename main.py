@@ -45,7 +45,7 @@ tree = client.tree
 @tree.command(description="年中無休でカラオケ生活 のど自慢系ぴーよ")
 @discord.app_commands.describe(arg='URL or 検索したい文字')
 async def download(ctx:discord.Interaction, arg:str):
-    if embeds := await MusicController._download(arg):
+    if embeds := await MusicController.download(arg):
         ctx:commands.Context = await commands.Context.from_interaction(ctx)
         for em in embeds:
             await ctx.send(embed=em, ephemeral=True)

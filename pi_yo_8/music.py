@@ -19,11 +19,7 @@ re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
 re_skip = re.compile(r'^((-|)\d+)([hms])$')
 re_skip_set_h = re.compile(r'^(\d+)[:;,](\d+)[:;,](\d+)$')
 re_skip_set_m = re.compile(r'^(\d+)[:;,](\d+)$')
-re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
-re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
-re_URL_PL_Video = re.compile(r'https://(www.|)youtube.com/watch\?v=(.+)&list=(.+)')
-re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
-re_URL = re.compile(r'http')
+
 
 
 re_video = re.compile(r'video/(.+);')
@@ -351,6 +347,7 @@ class MusicController():
         AudioData = await AnalysisUrl().video_check(arg)
         if not AudioData: return
 
+        AudioData = AudioData.sad
         if AudioData.YT:
             embed=Embed(title=AudioData.Title, url=AudioData.web_url, colour=EmBase.main_color())
             embed.set_thumbnail(url=f'https://img.youtube.com/vi/{AudioData.VideoID}/mqdefault.jpg')
