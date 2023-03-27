@@ -18,8 +18,8 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 try: import config
 except Exception:
     CLines= [
-        "Prefix = '.'",
-        "Token = None"
+        "Prefix = ','",
+        "Token = ''"
     ]
     with open('config.py','w') as f:
         f.write('\n'.join(CLines))
