@@ -7,6 +7,7 @@ from typing import Optional, Literal
 from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
 from discord.ext.commands import Context
 
+from .audio_source import AnalysisUrl
 from .audio_source import StreamAudioData as SAD
 from .view import CreateButton
 from .embeds import EmBase
@@ -89,7 +90,7 @@ class MusicController():
 
 
         # 君は本当に動画なのかい　どっちなんだい！
-        res = await SAD(arg).Check_V()
+        res = await AnalysisUrl().video_check()
         if not res: return
 
         # playlist 再生中のお客様はお断り
@@ -118,26 +119,29 @@ class MusicController():
 
 
         # 君は本当に動画なのかい　どっちなんだい！
-        res = await self.url_check(arg)
+        res = await AnalysisUrl().url_check(arg)
         if not res: return
 
-        if res == 'pl':
+        if res.playlist:
             self.Next_PL['PL'] = []
+            self.Next_PL['index'] = res.index
+            self.status['random_pl'] = res.random_pl
+            self.PL = res.sad
 
             self.status['loop'] = False
             self.Queue = []
             self.last_status = self.status.copy()
 
 
-        elif res == 'video':
+        else:
             # playlist 再生中のお客様はお断り
             self._reset_pl()
 
             #Queueに登録
             if self.Queue == []:
-                self.Queue.append(res)
+                self.Queue.append(res.sad)
             else:
-                self.Queue[0] = res
+                self.Queue[0] = res.sad
 
         # 再生されるまでループ
         await self.play_loop(None,0)
@@ -344,7 +348,7 @@ class MusicController():
             return
 
         # 君は本当に動画なのかい　どっちなんだい！
-        AudioData = await SAD(arg).Check_V()
+        AudioData = await AnalysisUrl().video_check(arg)
         if not AudioData: return
 
         if AudioData.YT:
@@ -462,7 +466,7 @@ class MusicController():
                     break
 
             url = self.PL[new_index]
-            try :AudioData = await SAD(url).Pyt_V()
+            try :AudioData = await SAD().Pyt_V(url)
             except Exception as e:
                 print(f'Error : Playlist Extract {e}')
                 break

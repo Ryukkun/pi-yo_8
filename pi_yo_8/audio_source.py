@@ -5,7 +5,7 @@ import pytube
 import io
 import subprocess
 
-from typing import Union, Optional, IO
+from typing import Union, Optional, IO, Literal
 from yt_dlp import YoutubeDL
 from bs4 import BeautifulSoup
 from pytube.innertube import InnerTube
@@ -204,10 +204,14 @@ class FFmpegOpusAudio(FFmpegAudio):
 
 class AnalysisUrl:
     def __init__(self) -> None:
-        self.playlist:Optional[bool] = None
+        self.arg:Optional[str] = None
+        self.playlist:Optional[bool] = False
+        self.index:Optional[int] = None
+        self.random_pl:Optional[bool] = None
+        self.sad:Optional[StreamAudioData] = None
 
 
-    async def video_check(self, arg:str):
+    async def video_check(self, arg:str) -> 'AnalysisUrl':
         """
         .p で指定された引数を、再生可能か判別する
 
@@ -217,31 +221,35 @@ class AnalysisUrl:
         不可
         return None
         """
+        self.arg = arg
         ### 動画+playlist
         if re_result := re_URL_PL_Video.match(arg):
             arg = f'https://www.youtube.com/watch?v={re_result.group(2)}'
         
         ### 文字指定
         if not re_URL.match(arg):
-            return await SAD().Pyt_V_Search(arg)
+            self.sad = await StreamAudioData().Pyt_V_Search(arg)
 
         ### youtube 動画オンリー
         elif re_URL_YT.match(arg):
-            try: return await SAD().Pyt_V(arg)
+            try: 
+                self.sad = await StreamAudioData().Pyt_V(arg)
             except Exception as e:
                 print(f"Error : Audio only 失敗 {e}")
-                return
 
         ### それ以外のサイト yt-dlp を使用
         else:
-            try: return await SAD().Ytdlp_V(arg)
+            try:
+                self.sad = await StreamAudioData().Ytdlp_V(arg)
             except Exception as e:
                 print(f"Error : Audio + Video 失敗 {e}")
-                return
+
+        if not self.sad:return
+        return self
 
 
 
-    async def url_check(self, arg:str) -> Literal['pl', 'video', None]:
+    async def url_check(self, arg:str) -> 'AnalysisUrl':
         """
         指定された引数を、再生可能か判別する
         
@@ -254,13 +262,14 @@ class AnalysisUrl:
         不可
         return None
         """
+        self.arg = arg
         ### PlayList 本体のURL ------------------------------------------------------------------------#
         if re_URL_PL.match(arg): 
-            if pl := await SAD().Pyt_P(arg):
-                self.Index_PL = self.Next_PL['index'] = -1
-                self.status['random_pl'] = True
-                self.PL = pl
-                return 'pl'      
+            if pl := await StreamAudioData().Pyt_P(arg):
+                self.playlist = True
+                self.index = -1
+                self.random_pl = True
+                self.sad = pl 
 
         ### PlayList と 動画が一緒についてきた場合 --------------------------------------------------------------#
         elif result_re := re_URL_PL_Video.match(arg):
@@ -268,45 +277,45 @@ class AnalysisUrl:
             arg = f'https://www.youtube.com/playlist?list={result_re.group(3)}'
 
             # Load Video in the Playlist 
-            if pl := await SAD().Pyt_P(arg):
+            if pl := await StreamAudioData().Pyt_P(arg):
 
                 # Playlist Index 特定
                 index = 0
                 for index, temp in enumerate(pl):
                     if watch_id in temp:
                         break
-                
-                self.Index_PL = self.Next_PL['index'] = index - 1
-                self.status['random_pl'] = False
-                self.PL = pl
-                return 'pl'
-            
+
+                self.playlist = True
+                self.index = index - 1
+                self.random_pl = False
+                self.sad = pl
+
 
         ### youtube 動画オンリー -----------------------------------------------------------------------#
         elif re_URL_YT.match(arg):
             try: 
-                await SAD().Pyt_V(arg)
-                return 'pl'
+                self.sad = await StreamAudioData().Pyt_V(arg)
             except Exception as e:
                 print(f"Error : Audio only 失敗 {e}")
-                return
+
 
         ### それ以外のサイト yt-dlp を使用 -----------------------------------------------------------------------#
         elif re_URL.match(arg):
             try: 
-                await SAD().Ytdlp_V(arg)
-                return 'video'
+                self.sad = await StreamAudioData().Ytdlp_V(arg)
             except Exception as e:
                 print(f"Error : Audio + Video 失敗 {e}")
-                return
+
 
         ### URLじゃなかった場合 -----------------------------------------------------------------------#
         else:
-            pl = await SAD().Pyt_P_Search(arg)
-            self.Index_PL = self.Next_PL['index'] = -1
-            self.status['random_pl'] = False
-            self.PL = pl
-            return 'pl'
+            pl = await StreamAudioData().Pyt_P_Search(arg)
+            self.index = -1
+            self.random_pl = False
+            self.sad = pl
+        
+        if not self.sad:return
+        return self
 
 
 class StreamAudioData:
