@@ -202,48 +202,189 @@ class FFmpegOpusAudio(FFmpegAudio):
 
 
 
-class StreamAudioData:
+class AnalysisUrl:
+    def __init__(self) -> None:
+        self.playlist:Optional[bool] = None
 
-    def __init__(self,url):
-        self.Url = url
+
+    async def video_check(self, arg:str):
+        """
+        .p で指定された引数を、再生可能か判別する
+
+        再生可能だった場合
+        return self
+
+        不可
+        return None
+        """
+        ### 動画+playlist
+        if re_result := re_URL_PL_Video.match(arg):
+            arg = f'https://www.youtube.com/watch?v={re_result.group(2)}'
+        
+        ### 文字指定
+        if not re_URL.match(arg):
+            return await SAD().Pyt_V_Search(arg)
+
+        ### youtube 動画オンリー
+        elif re_URL_YT.match(arg):
+            try: return await SAD().Pyt_V(arg)
+            except Exception as e:
+                print(f"Error : Audio only 失敗 {e}")
+                return
+
+        ### それ以外のサイト yt-dlp を使用
+        else:
+            try: return await SAD().Ytdlp_V(arg)
+            except Exception as e:
+                print(f"Error : Audio + Video 失敗 {e}")
+                return
+
+
+
+    async def url_check(self, arg:str) -> Literal['pl', 'video', None]:
+        """
+        指定された引数を、再生可能か判別する
+        
+        Playlist形式
+        return 'pl'
+        
+        単曲
+        return 'video'
+
+        不可
+        return None
+        """
+        ### PlayList 本体のURL ------------------------------------------------------------------------#
+        if re_URL_PL.match(arg): 
+            if pl := await SAD().Pyt_P(arg):
+                self.Index_PL = self.Next_PL['index'] = -1
+                self.status['random_pl'] = True
+                self.PL = pl
+                return 'pl'      
+
+        ### PlayList と 動画が一緒についてきた場合 --------------------------------------------------------------#
+        elif result_re := re_URL_PL_Video.match(arg):
+            watch_id = result_re.group(2)
+            arg = f'https://www.youtube.com/playlist?list={result_re.group(3)}'
+
+            # Load Video in the Playlist 
+            if pl := await SAD().Pyt_P(arg):
+
+                # Playlist Index 特定
+                index = 0
+                for index, temp in enumerate(pl):
+                    if watch_id in temp:
+                        break
+                
+                self.Index_PL = self.Next_PL['index'] = index - 1
+                self.status['random_pl'] = False
+                self.PL = pl
+                return 'pl'
+            
+
+        ### youtube 動画オンリー -----------------------------------------------------------------------#
+        elif re_URL_YT.match(arg):
+            try: 
+                await SAD().Pyt_V(arg)
+                return 'pl'
+            except Exception as e:
+                print(f"Error : Audio only 失敗 {e}")
+                return
+
+        ### それ以外のサイト yt-dlp を使用 -----------------------------------------------------------------------#
+        elif re_URL.match(arg):
+            try: 
+                await SAD().Ytdlp_V(arg)
+                return 'video'
+            except Exception as e:
+                print(f"Error : Audio + Video 失敗 {e}")
+                return
+
+        ### URLじゃなかった場合 -----------------------------------------------------------------------#
+        else:
+            pl = await SAD().Pyt_P_Search(arg)
+            self.Index_PL = self.Next_PL['index'] = -1
+            self.status['random_pl'] = False
+            self.PL = pl
+            return 'pl'
+
+
+class StreamAudioData:
+    def __init__(self):
+        self.url:Optional[str] = None
         self.loop = asyncio.get_event_loop()
-        self.Web_Url = None
-        self.St_Vol = None
-        self.St_Sec = None
-        self.St_Url = None
+        self.web_url = None
+        self.st_vol = None
+        self.st_sec = None
+        self.st_url = None
         self.music = None
         self.YT = None
-        self.CH_Icon = None
+        self.ch_icon = None
         self.index = None
         
+        
     # YT Video Load
-    async def Pyt_V(self):
-        self.Vid = re_URL_Video.match(self.Url).group(4)
+    async def Pyt_V(self, arg):
+        self.url = arg
+        self.Vid = re_URL_Video.match(arg).group(4)
         self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,self.Vid)
         if not self.Vdic.get('streamingData'):
             with YoutubeDL({'format': 'bestaudio','quiet':True}) as ydl:
-                self.Vdic = await self.loop.run_in_executor(None,ydl.extract_info,self.Url,False)
+                self.Vdic = await self.loop.run_in_executor(None,ydl.extract_info,arg,False)
 
         await self._format()
         self.music = True
         self.YT = True
         return self
+    
+
+    # Video Search
+    async def Pyt_V_Search(self, arg):
+        pyt = pytube.Search(arg)
+        Vdic = await self.loop.run_in_executor(None,pyt.fetch_and_parse)
+
+        self.url = Vdic[0][0].watch_url
+        res = await self.Pyt_V()
+
+        self.music = True
+        self.YT = True
+        return res
+    
+
+    # Playlist Search
+    async def Pyt_P_Search(self, arg):
+        self.url = arg
+        pyt = pytube.Search(arg)
+        Vdic = await self.loop.run_in_executor(None,pyt.fetch_and_parse)
+        return [temp.watch_url for temp in Vdic[0]]
+    
+
+    # Playlist 全体 Load
+    async def Pyt_P(self, arg):
+        self.url = arg
+        yt_pl = pytube.Playlist(arg)
+        try: return await self.loop.run_in_executor(None,DeferredGeneratorList,yt_pl.url_generator())
+        except Exception as e:
+            print(f'Error : Playlist All-List {e}')
 
 
     # 汎用人型決戦兵器
-    async def Ytdlp_V(self):
+    async def Ytdlp_V(self, arg):
         with YoutubeDL({'format': 'best','quiet':True,'noplaylist':True}) as ydl:
-            info = await self.loop.run_in_executor(None,ydl.extract_info,self.Url,False)
-            self.St_Url = info['url']
-            self.Web_Url = self.Url
-            self.St_Sec = int(info.get('duration',None))
+            info = await self.loop.run_in_executor(None,ydl.extract_info, arg, False)
+            self.st_url = info['url']
+            self.web_url = arg
+            self.url = arg
+            self.st_sec = int(info.get('duration',None))
             self.formats = info.get('formats')
             self.music = True
             self.YT = False
         return self
 
-    def Url_Only(self):
-        self.St_Url = self.Url
+
+    def Url_Only(self, arg):
+        self.st_url = arg
+        self.url = arg
         self.music = False
         self.YT = False
         return self
@@ -259,30 +400,31 @@ class StreamAudioData:
             for fm in self.formats:
                 if 249 <= fm['itag'] <= 251 or 139 <= fm['itag'] <= 141:
                     res.append(fm)
-            self.St_Url = res[-1]['url']
+            self.st_url = res[-1]['url']
             self.Title = self.Vdic["videoDetails"]["title"]
             self.CH = self.Vdic["videoDetails"]["author"]
             self.CH_Url = f'https://www.youtube.com/channel/{self.Vdic["videoDetails"]["channelId"]}'
             self.VideoID = self.Vdic["videoDetails"]["videoId"]
-            self.St_Vol = self.Vdic['playerConfig']['audioConfig'].get('loudnessDb')
-            self.St_Sec = int(self.Vdic['videoDetails']['lengthSeconds'])
+            self.st_vol = self.Vdic['playerConfig']['audioConfig'].get('loudnessDb')
+            self.st_sec = int(self.Vdic['videoDetails']['lengthSeconds'])
 
         else:
             self.formats = self.Vdic['formats']
-            self.St_Url = self.Vdic['url']
+            self.st_url = self.Vdic['url']
             self.Title = self.Vdic["title"]
             self.CH = self.Vdic["channel"]
             self.CH_Url = self.Vdic["channel_url"]
             self.VideoID = self.Vdic["id"]
-            self.St_Vol = 5.0
-            self.St_Sec = int(self.Vdic["duration"])
+            self.st_vol = 5.0
+            self.st_sec = int(self.Vdic["duration"])
 
-        self.Web_Url = f"https://youtu.be/{self.VideoID}"
+        self.web_url = f"https://youtu.be/{self.VideoID}"
         async with aiohttp.ClientSession() as session:
             async with session.get(self.CH_Url) as resp:
                 text = await resp.read()
-        CH_Icon = BeautifulSoup(text.decode('utf-8'), 'html.parser')
-        self.CH_Icon = CH_Icon.find('link',rel="image_src").get('href')
+        ch_icon = BeautifulSoup(text.decode('utf-8'), 'html.parser')
+        self.ch_icon = ch_icon.find('link',rel="image_src").get('href')
+
 
 
     async def AudioSource(self, opus:bool, sec:int=0, speed:float=1.0, pitch:int=0):
@@ -308,7 +450,7 @@ class StreamAudioData:
 
         if self.music:
             volume = -15.0
-            if Vol := self.St_Vol:
+            if Vol := self.st_vol:
                 volume -= Vol
             before_options.extend(('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-analyzeduration', '2147483647', '-probesize', '2147483647'))
             af.append(f'volume={volume}dB')
@@ -319,129 +461,8 @@ class StreamAudioData:
 
         if opus:
             options.extend(('-c:a', 'libopus', '-ar', '48000'))
-            return FFmpegOpusAudio(self.St_Url, before_options=before_options, options=options)
+            return FFmpegOpusAudio(self.st_url, before_options=before_options, options=options)
 
         else:
             options.extend(('-c:a', 'pcm_s16le', '-ar', '48000'))
-            return FFmpegPCMAudio(self.St_Url, before_options=before_options, options=options)
-
-
-    async def Check(self):
-        """
-        指定された引数を、再生可能か判別する
-        
-        Playlist形式
-        return (Index, Random:bool, [urls])
-        
-        単曲
-        return self
-        
-        不可
-        return None
-        """
-        ### PlayList 本体のURL ------------------------------------------------------------------------#
-        if re_URL_PL.match(self.Url): 
-            if Pl := await self.Pyt_P(self.Url):
-                return (0, 1, Pl)
-
-        ### PlayList と 動画が一緒についてきた場合 --------------------------------------------------------------#
-        elif result_re := re_URL_PL_Video.match(self.Url):
-            watch_id = result_re.group(2)
-            self.Url = f'https://www.youtube.com/playlist?list={result_re.group(3)}'
-
-            # Load Video in the Playlist 
-            if Pl := await self.Pyt_P(self.Url):
-
-                # Playlist Index 特定
-                index = 0
-                for index, temp in enumerate(Pl):
-                    if watch_id in temp:
-                        break
-            
-                return (index, 0, Pl)
-            
-
-        ### youtube 動画オンリー -----------------------------------------------------------------------#
-        elif re_URL_YT.match(self.Url):
-            try: return await self.Pyt_V()
-            except Exception as e:
-                print(f"Error : Audio only 失敗 {e}")
-                return
-
-        ### それ以外のサイト yt-dlp を使用 -----------------------------------------------------------------------#
-        elif re_URL.match(self.Url):
-            try: return await self.Ytdlp_V()
-            except Exception as e:
-                print(f"Error : Audio + Video 失敗 {e}")
-                return
-
-        ### URLじゃなかった場合 -----------------------------------------------------------------------#
-        else:
-            Pl = await self.Pyt_P_Search(self.Url)
-            return (0, 0, Pl)
-
-
-
-
-    async def Check_V(self):
-        """
-        .p で指定された引数を、再生可能か判別する
-
-        再生可能だった場合
-        return self
-
-        不可
-        return None
-        """
-        ### 動画+playlist
-        if re_result := re_URL_PL_Video.match(self.Url):
-            self.Url = f'https://www.youtube.com/watch?v={re_result.group(2)}'
-        
-        ### 文字指定
-        if not re_URL.match(self.Url):
-            return await self.Pyt_V_Search()
-
-        ### youtube 動画オンリー
-        elif re_URL_YT.match(self.Url):
-            try: return await self.Pyt_V()
-            except Exception as e:
-                print(f"Error : Audio only 失敗 {e}")
-                return
-
-        ### それ以外のサイト yt-dlp を使用
-        else:
-            try: return await self.Ytdlp_V()
-            except Exception as e:
-                print(f"Error : Audio + Video 失敗 {e}")
-                return
-
-
-
-
-
-    # Video Search
-    async def Pyt_V_Search(self):
-        pyt = pytube.Search(self.Url)
-        Vdic = await self.loop.run_in_executor(None,pyt.fetch_and_parse)
-
-        self.Url = Vdic[0][0].watch_url
-        res = await self.Pyt_V()
-
-        self.music = True
-        self.YT = True
-        return res
-
-    # Playlist Search
-    async def Pyt_P_Search(self,Url):
-        loop = asyncio.get_event_loop()
-        pyt = pytube.Search(Url)
-        Vdic = await loop.run_in_executor(None,pyt.fetch_and_parse)
-        return [temp.watch_url for temp in Vdic[0]]
-
-    # Playlist 全体 Load
-    async def Pyt_P(self,Url):
-        loop = asyncio.get_event_loop()
-        yt_pl = pytube.Playlist(Url)
-        try: return await loop.run_in_executor(None,DeferredGeneratorList,yt_pl.url_generator())
-        except Exception as e:
-            print(f'Error : Playlist All-List {e}')
+            return FFmpegPCMAudio(self.st_url, before_options=before_options, options=options)

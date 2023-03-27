@@ -3,7 +3,7 @@ import random
 import time
 import tabulate
 import asyncio
-
+from typing import Optional, Literal
 from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
 from discord.ext.commands import Context
 
@@ -18,6 +18,12 @@ re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
 re_skip = re.compile(r'^((-|)\d+)([hms])$')
 re_skip_set_h = re.compile(r'^(\d+)[:;,](\d+)[:;,](\d+)$')
 re_skip_set_m = re.compile(r'^(\d+)[:;,](\d+)$')
+re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
+re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
+re_URL_PL_Video = re.compile(r'https://(www.|)youtube.com/watch\?v=(.+)&list=(.+)')
+re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
+re_URL = re.compile(r'http')
+
 
 re_video = re.compile(r'video/(.+);')
 re_audio = re.compile(r'audio/(.+);')
@@ -99,6 +105,8 @@ class MusicController():
 
 
 
+
+
     async def play(self, ctx:Context, args):
         self._update_action(ctx.channel)
         # 一時停止していた場合再生 開始
@@ -110,24 +118,18 @@ class MusicController():
 
 
         # 君は本当に動画なのかい　どっちなんだい！
-        res = await SAD(arg).Check()
+        res = await self.url_check(arg)
         if not res: return
 
-        if type(res) == tuple:
-            self.Index_PL = self.Next_PL['index'] = res[0] - 1
-            self.status['random_pl'] = res[1]
-            self.PL = res[2]
+        if res == 'pl':
             self.Next_PL['PL'] = []
 
             self.status['loop'] = False
             self.Queue = []
             self.last_status = self.status.copy()
 
-            # 再生
-            await self.play_loop(None,0)
-            self.Mvc.resume()
 
-        else:
+        elif res == 'video':
             # playlist 再生中のお客様はお断り
             self._reset_pl()
 
@@ -137,9 +139,9 @@ class MusicController():
             else:
                 self.Queue[0] = res
 
-            # 再生されるまでループ
-            await self.play_loop(None,0)
-            self.Mvc.resume()
+        # 再生されるまでループ
+        await self.play_loop(None,0)
+        self.Mvc.resume()
 
 
 
@@ -297,14 +299,14 @@ class MusicController():
              embed=Embed(title='N/A', colour=EmBase.player_color())
 
         elif _SAD.YT:
-            embed=Embed(title=_SAD.Title, url=_SAD.Web_Url, colour=EmBase.player_color())
+            embed=Embed(title=_SAD.Title, url=_SAD.web_url, colour=EmBase.player_color())
             embed.set_thumbnail(url=f'https://img.youtube.com/vi/{_SAD.VideoID}/mqdefault.jpg')
-            embed.set_author(name=_SAD.CH, url=_SAD.CH_Url, icon_url=_SAD.CH_Icon)
+            embed.set_author(name=_SAD.CH, url=_SAD.CH_Url, icon_url=_SAD.ch_icon)
             
 
             def get_progress(II):
                 NTime = int(self.Mvc.Timer) // 50
-                Duration = _SAD.St_Sec / II
+                Duration = _SAD.st_sec / II
                 Progress = ''
                 for I in range(II):
                     I = I * Duration
@@ -315,10 +317,10 @@ class MusicController():
                 return Progress
             Progress = get_progress(40)
             NTime = self._Calc_Time(int(self.Mvc.Timer) // 50)
-            Duration = self._Calc_Time(_SAD.St_Sec)
+            Duration = self._Calc_Time(_SAD.st_sec)
             embed.set_footer(text=f'{NTime} {Progress} {Duration}')
         else:
-            embed=Embed(title=_SAD.Web_Url, url=_SAD.Web_Url, colour=EmBase.player_color())
+            embed=Embed(title=_SAD.web_url, url=_SAD.web_url, colour=EmBase.player_color())
 
         
 
@@ -346,15 +348,15 @@ class MusicController():
         if not AudioData: return
 
         if AudioData.YT:
-            embed=Embed(title=AudioData.Title, url=AudioData.Web_Url, colour=EmBase.main_color())
+            embed=Embed(title=AudioData.Title, url=AudioData.web_url, colour=EmBase.main_color())
             embed.set_thumbnail(url=f'https://img.youtube.com/vi/{AudioData.VideoID}/mqdefault.jpg')
-            embed.set_author(name=AudioData.CH, url=AudioData.CH_Url, icon_url=AudioData.CH_Icon)
+            embed.set_author(name=AudioData.CH, url=AudioData.CH_Url, icon_url=AudioData.ch_icon)
             
         else:
-            embed=Embed(title=AudioData.Web_Url, url=AudioData.Web_Url, colour=EmBase.main_color())
+            embed=Embed(title=AudioData.web_url, url=AudioData.web_url, colour=EmBase.main_color())
 
-        if AudioData.St_Sec:
-            Duration = self._Calc_Time(AudioData.St_Sec)
+        if AudioData.st_sec:
+            Duration = self._Calc_Time(AudioData.st_sec)
             embed.add_field(name="Length", value=Duration, inline=True)
 
             
@@ -429,9 +431,9 @@ class MusicController():
 
 
         else:
-            embed=Embed(title=AudioData.Web_Url, url=AudioData.Web_Url, colour=EmBase.main_color())
+            embed=Embed(title=AudioData.web_url, url=AudioData.web_url, colour=EmBase.main_color())
             embed_list = [embed]
-            embed=Embed(title='Download', url=AudioData.St_Url, colour=EmBase.main_color())
+            embed=Embed(title='Download', url=AudioData.st_url, colour=EmBase.main_color())
             embed_list.append(embed)
 
         return embed_list
@@ -480,7 +482,7 @@ class MusicController():
 
         # Queue削除
         if self.Queue:
-            if self.status['loop'] == False and self.Queue[0].St_Url == played or (time.time() - did_time) <= 0.5:
+            if self.status['loop'] == False and self.Queue[0].st_url == played or (time.time() - did_time) <= 0.5:
                 self.Rewind.append(self.Queue[0])
                 del self.Queue[0]
                 
@@ -507,7 +509,7 @@ class MusicController():
             played_time = time.time()
             print(f"{self.gn} : Play  [Now len: {str(len(self.Queue))}]")
                 
-            await self.Mvc.play(AudioData,after=lambda : self.CLoop.create_task(self.play_loop(AudioData.St_Url,played_time)))
+            await self.Mvc.play(AudioData,after=lambda : self.CLoop.create_task(self.play_loop(AudioData.st_url,played_time)))
 
 
     async def _loop_5(self):

@@ -173,7 +173,7 @@ class _AudioTrack:
 
     async def play(self,_SAD:StreamAudioData,after):
         self._SAD = _SAD
-        self.Duration = _SAD.St_Sec
+        self.Duration = _SAD.st_sec
         AudioSource = await _SAD.AudioSource(self.opus, speed=self.speed.get, pitch=self.pitch.get)
         # 最初のロードは少し時間かかるから先にロード
         self.QBytes.clear()
@@ -218,7 +218,7 @@ class _AudioTrack:
             if len(self.QBytes) < stime:
                 target_time = int(self.Timer) + stime
                 target_sec = target_time // 50
-                if target_sec > self._SAD.St_Sec:
+                if target_sec > self._SAD.st_sec:
                     self._finish()
                     return
                 self.Parent.CLoop.create_task(self._new_asouce_sec(target_sec))
