@@ -17,12 +17,15 @@ class CreateButton(ui.View):
             self.Parent:MusicController
         except Exception: pass
         self.Parent = Parent
+        self.select_opt:list[SelectOption] = None
         self.add_item(CreateSelect(self, (self.Parent.Queue + self.Parent.Next_PL['PL'])))
-        self.add_item(CreateStatusButton(self, '🔁', 'loop'))
+        self.add_item(CreateStatusButton(self, '単曲ループ', 'loop'))
         if self.Parent.PL:
-            self.add_item(CreateStatusButton(self, '♻', 'loop_pl'))
-            self.add_item(CreateStatusButton(self, '🔀', 'random_pl'))
-        self.add_item(CreateSettingButton(self))
+            self.add_item(CreateStatusButton(self, 'Playlistループ', 'loop_pl'))
+            self.add_item(CreateStatusButton(self, 'シャッフル', 'random_pl'))
+        else:
+            self.add_item(CreateStatusButton(self, 'Playlistループ', 'loop_pl', True))
+            self.add_item(CreateStatusButton(self, 'シャッフル', 'random_pl', True))
 
 
     @ui.button(label="<",row=1)
@@ -78,30 +81,33 @@ class CreateButton(ui.View):
         Parent.CLoop.create_task(interaction.response.defer())
         await Parent.skip(None)
 
-
-
-class CreateSettingButton(ui.Button):
-    def __init__(self, parent:'CreateButton'):
-        self.parent = parent.Parent
-        super().__init__(label="⚙️", row=2)
-
-    async def callback(self, interaction: Interaction):
-        self.parent._update_action()
+    @ui.button(label="⚙️", row=2)
+    async def def_button5(self, interaction:Interaction, button):
+        self.Parent._update_action()
         await interaction.response.send_message(
-            embed= PlayConfigEmbed(self.parent.Mvc),
-            view= PlayConfigView(self.parent),
+            embed= PlayConfigEmbed(self.Parent.Mvc),
+            view= PlayConfigView(self.Parent),
             ephemeral= False
             )
+        
+    @ui.button(label="切断", row=2, style=ButtonStyle.red)
+    async def def_button6(self, interaction:Interaction, button):
+        await interaction.response.defer()
+        await self.Parent.Info._bye()
+
 
 
 class CreateStatusButton(ui.Button):
-    def __init__(self, parent:'CreateButton', label:str, status_name:str):
+    def __init__(self, parent:'CreateButton', label:str, status_name:str, disable:bool=False):
         self.parent = parent
         self.name = status_name
-        super().__init__(label=label, row=2, style=self.style_check())
+        self.disable = disable
+        super().__init__(label=label, row=3, style=self.style_check(), disabled=disable)
 
     def style_check(self):
-        if self.parent.Parent.status[self.name]:
+        if self.disable:
+            return ButtonStyle.gray
+        elif self.parent.Parent.status[self.name]:
             return ButtonStyle.green
         else:
             return ButtonStyle.red

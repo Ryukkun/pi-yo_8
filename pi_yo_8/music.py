@@ -4,7 +4,7 @@ import time
 import tabulate
 import asyncio
 
-from discord import Embed, NotFound, TextChannel, Reaction, Message, SelectMenu
+from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
 from discord.ext.commands import Context
 
 from .audio_source import StreamAudioData as SAD
@@ -55,7 +55,7 @@ class MusicController():
         self.Embed_Message = None
         self.def_doing = {'playing':False,'_load_next_pl':False}
         self.last_action:float = 0.0
-
+        
 
     def _update_action(self, channel= None):
         self.last_action = time.time()
@@ -193,59 +193,26 @@ class MusicController():
         if self.def_doing['playing']: return
         self.def_doing['playing'] = True
 
-        if self.Mvc.is_playing():
-            
-            # Get Embed
-            if embed := await self.generate_embed():
+        try:
+            if self.Mvc.is_playing():
+                
+                # Get Embed
+                if embed := await self.generate_embed():
 
-                # 古いEmbedを削除
-                if late_E := self.Embed_Message:
-                    try: await late_E.delete()
-                    except NotFound: pass
+                    # 古いEmbedを削除
+                    if late_E := self.Embed_Message:
+                        try: await late_E.delete()
+                        except NotFound: pass
 
-                # 新しいEmbed
-                Sended_Mes = await self.Latest_CH.send(embed=embed,view=CreateButton(self))
-                self.Embed_Message = Sended_Mes 
-                self.CLoop.create_task(Sended_Mes.add_reaction("🔁"))
-                if self.PL:
-                    self.CLoop.create_task(Sended_Mes.add_reaction("♻"))
-                    self.CLoop.create_task(Sended_Mes.add_reaction("🔀"))
+                    # 新しいEmbed
+                    Sended_Mes = await self.Latest_CH.send(embed=embed,view=CreateButton(self))
+                    self.Embed_Message = Sended_Mes
 
-                #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
-
+                    #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
+        except Exception as e:
+            print(e)
         self.def_doing['playing'] = False
 
-
-    async def on_reaction_add(self, Reac:Reaction, User):
-        if User.bot or Reac.message.author.id != self.Info.client.user.id: return
-        if em := Reac.message.embeds:
-            if em[0].colour.value != EmBase.player_color().value: return
-        self.CLoop.create_task(Reac.remove(User))
-        if self.vc:
-
-            self.last_action = time.time()
-
-            #### Setting
-            # 単曲ループ
-            if Reac.emoji =='🔁':
-                if not self.status['loop']:
-                    self.status['loop'] = True
-                else:
-                    self.status['loop'] = False
-
-            # Playlistループ
-            if Reac.emoji =='♻':
-                if self.status['loop_pl']:        #True => False
-                    self.status['loop_pl'] = False
-                else:                   #False => True
-                    self.status['loop_pl'] = True
-
-            # Random
-            if Reac.emoji =='🔀':
-                if self.status['random_pl']:      #True => False
-                    self.status['random_pl'] = False
-                else:                   #False => True
-                    self.status['random_pl'] = True
 
 
 
@@ -285,27 +252,23 @@ class MusicController():
             if type(v) == SelectMenu:
                 if [temp.label for temp in view.select_opt] == [temp.label for temp in v.options]:
                     menu_change = False
-                break
+                    break
+            if type(v) == Button:
+                if v.label == "単曲ループ" and v.disabled == bool(self.PL):
+                    menu_change = False
+                    print('False')
+                    break
+                
 
         try:
             if menu_change:
                 await late_E.edit(embed= embed,view=view)
             else:
                 await late_E.edit(embed= embed)
+            return True
         except NotFound:
             # メッセージが見つからなかったら 新しく作成
             print('見つかりませんでした！')
-        else:
-            try:
-                # Reaction 修正
-                if self.PL:
-                    await late_E.add_reaction('♻')
-                    await late_E.add_reaction('🔀')
-                else:
-                    await late_E.clear_reaction('♻')
-                    await late_E.clear_reaction('🔀')
-            except Exception: pass
-            return True
 
 
 
@@ -328,12 +291,6 @@ class MusicController():
 
     async def generate_embed(self):
         _SAD = self.Mvc._SAD
-
-        # emoji
-        loop_text = ':green_circle:' if self.status['loop'] else ':red_circle:'
-        if self.PL:
-            loop_pl_text = ':green_circle:' if self.status['loop_pl'] else ':red_circle:'
-            random_pl_text = ':green_circle:' if self.status['random_pl'] else ':red_circle:'
 
         # Embed
         if not _SAD:
@@ -363,13 +320,8 @@ class MusicController():
         else:
             embed=Embed(title=_SAD.Web_Url, url=_SAD.Web_Url, colour=EmBase.player_color())
 
-        if self.PL:
-            embed.add_field(name="単曲ループ", value=f'🔁 : {loop_text}', inline=True)
-            embed.add_field(name="Playlistループ", value=f'♻ : {loop_pl_text}', inline=True)
-            embed.add_field(name="シャッフル", value=f'🔀 : {random_pl_text}', inline=True)
-        else:
-            embed.add_field(name="ループ", value=f'🔁 : {loop_text}', inline=True)
         
+
         return embed
 
 
@@ -576,13 +528,13 @@ class MusicController():
             now = time.time()
             delay = now - self.last_action
             if delay < 30:
-                self.CLoop.create_task(self.update_embed())
+                await self.update_embed()
             elif delay < 300:
                 if 0 <= (now % 10) < 5:
-                    self.CLoop.create_task(self.update_embed())
+                    await self.update_embed()
             else:
                 if 0 <= (now % 20) < 5:
-                    self.CLoop.create_task(self.update_embed())
+                    await self.update_embed()
 
         except Exception as e:
             print(e)

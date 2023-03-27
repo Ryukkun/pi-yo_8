@@ -90,26 +90,8 @@ async def bye(ctx:commands.Context):
     vc = guild.voice_client
     if vc:
         print(f'{guild.name} : #切断')
-        await _bye(guild)
+        await g_opts[gid]._bye()
 
-
-async def _bye(guild:discord.Guild):
-    gid = guild.id
-    vc = guild.voice_client
-
-    _ = g_opts[gid].Music
-    g_opts[gid].loop_5.stop()
-    g_opts[gid].MA.kill()
-    del g_opts[gid]
-    
-    await asyncio.sleep(0.1)
-    try: await vc.disconnect()
-    except Exception: pass
-
-    await asyncio.sleep(5)
-    if late_E := _.Embed_Message:
-        await late_E.delete()
-    
     
 
 @client.command()
@@ -210,6 +192,20 @@ class DataInfo():
         self.loop_5.start()
 
 
+    async def _bye(self):
+        self.loop_5.stop()
+        self.MA.kill()
+        del g_opts[self.gid]
+        
+        await asyncio.sleep(0.1)
+        try: await self.vc.disconnect()
+        except Exception: pass
+
+        await asyncio.sleep(5)
+        if late_E := self.Music.Embed_Message:
+            await late_E.delete()
+
+
     @tasks.loop(seconds=5.0)
     async def loop_5(self):
         # Music Embed
@@ -221,14 +217,14 @@ class DataInfo():
             self.count_loop += 1
             if 2 <= self.count_loop:
                 print(f'{self.gn} : #強制切断')
-                await _bye(self.guild)
+                await self._bye()
 
         # voice channelに誰もいなくなったことを確認
         elif not False in [_.bot for _ in mems]:
             self.count_loop += 1
             if 2 <= self.count_loop:
                 print(f'{self.gn} : #誰もいなくなったため 切断')
-                await _bye(self.guild)
+                await self._bye()
 
         # Reset Count
         else:
