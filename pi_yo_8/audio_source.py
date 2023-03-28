@@ -14,6 +14,8 @@ from discord import FFmpegAudio
 from discord.oggparse import OggStream
 from discord.opus import Encoder as OpusEncoder
 
+import config
+
 re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
 re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
 re_URL_PL_Video = re.compile(r'https://(www.|)youtube.com/watch\?v=(.+)&list=(.+)')
@@ -322,6 +324,10 @@ class StreamAudioData:
     def __init__(self):
         self.url:Optional[str] = None
         self.loop = asyncio.get_event_loop()
+        self.view_count = None
+        self.like_count = None
+        self.upload_date:Optional[str] = None
+        self.VideoID = None
         self.web_url = None
         self.st_vol = None
         self.st_sec = None
@@ -330,13 +336,27 @@ class StreamAudioData:
         self.YT = None
         self.ch_icon = None
         self.index = None
-        
+    
+
+    async def youtube_api(self):
+        params = {'key':config.youtube_key, 'part':'statistics,snippet', 'id':self.VideoID}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url='https://www.googleapis.com/youtube/v3/videos', params=params) as resp:
+                text = await resp.json()
+        text = text.get('items',[{}])[0]
+        sta = text.get('statistics',{})
+        self.upload_date = text.get('snippet',{}).get('publishedAt')
+        if self.upload_date:
+            self.upload_date = self.upload_date[:10].replace('-','/')
+        self.view_count = sta.get('viewCount')
+        self.like_count = sta.get('likeCount')
+
         
     # YT Video Load
     async def Pyt_V(self, arg):
         self.url = arg
-        self.Vid = re_URL_Video.match(arg).group(4)
-        self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,self.Vid)
+        self.VideoID = re_URL_Video.match(arg).group(4)
+        self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,self.VideoID)
         if not self.Vdic.get('streamingData'):
             with YoutubeDL({'format': 'bestaudio','quiet':True}) as ydl:
                 self.Vdic = await self.loop.run_in_executor(None,ydl.extract_info,arg,False)
@@ -416,6 +436,7 @@ class StreamAudioData:
             self.VideoID = self.Vdic["videoDetails"]["videoId"]
             self.st_vol = self.Vdic['playerConfig']['audioConfig'].get('loudnessDb')
             self.st_sec = int(self.Vdic['videoDetails']['lengthSeconds'])
+            await self.youtube_api()
 
         else:
             self.formats = self.Vdic['formats']
@@ -426,6 +447,11 @@ class StreamAudioData:
             self.VideoID = self.Vdic["id"]
             self.st_vol = 5.0
             self.st_sec = int(self.Vdic["duration"])
+            self.view_count = self.Vdic['view_count']
+            self.like_count = self.Vdic['like_count']
+            ud = self.Vdic['upload_date']
+            self.upload_date = f'{ud[:4]}/{ud[4:6]}/{ud[6:]}'
+
 
         self.web_url = f"https://youtu.be/{self.VideoID}"
         async with aiohttp.ClientSession() as session:

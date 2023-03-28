@@ -201,7 +201,6 @@ class DataInfo():
         try: await self.vc.disconnect()
         except Exception: pass
 
-        await asyncio.sleep(5)
         if late_E := self.Music.Embed_Message:
             await late_E.delete()
 

@@ -19,16 +19,16 @@ class CreateButton(ui.View):
         self.Parent = Parent
         self.select_opt:list[SelectOption] = None
         self.add_item(CreateSelect(self, (self.Parent.Queue + self.Parent.Next_PL['PL'])))
-        self.add_item(CreateStatusButton(self, '単曲ループ', 'loop'))
+        self.add_item(CreateStatusButton(self, '単曲 ループ', 'loop'))
         if self.Parent.PL:
-            self.add_item(CreateStatusButton(self, 'Playlistループ', 'loop_pl'))
+            self.add_item(CreateStatusButton(self, 'Playlist ループ', 'loop_pl'))
             self.add_item(CreateStatusButton(self, 'シャッフル', 'random_pl'))
         else:
-            self.add_item(CreateStatusButton(self, 'Playlistループ', 'loop_pl', True))
+            self.add_item(CreateStatusButton(self, 'Playlist ループ', 'loop_pl', True))
             self.add_item(CreateStatusButton(self, 'シャッフル', 'random_pl', True))
 
 
-    @ui.button(label="<",row=1)
+    @ui.button(label="<",row=2)
     async def def_button0(self, interaction:Interaction, button):
         Parent = self.Parent
         Parent._update_action()
@@ -46,14 +46,14 @@ class CreateButton(ui.View):
         if Parent.Mvc.is_paused():
             Parent.Mvc.resume()
 
-    @ui.button(label="10↩︎",row=1)
+    @ui.button(label="10↩︎",row=2)
     async def def_button1(self, interaction:Interaction, button):
         Parent = self.Parent
         Parent._update_action()
         Parent.CLoop.create_task(interaction.response.defer())
         Parent.Mvc.skip_time(-10*50)
 
-    @ui.button(label="⏯",style=ButtonStyle.blurple,row=1)
+    @ui.button(label="⏯",style=ButtonStyle.blurple,row=2)
     async def def_button2(self, interaction:Interaction, button):
         Parent = self.Parent
         Parent._update_action()
@@ -67,21 +67,21 @@ class CreateButton(ui.View):
             Parent.Mvc.pause()
             await Parent.update_embed()
 
-    @ui.button(label="↪︎10",row=1)
+    @ui.button(label="↪︎10",row=2)
     async def def_button3(self, interaction:Interaction, button):
         Parent = self.Parent
         Parent._update_action()
         Parent.CLoop.create_task(interaction.response.defer())
         Parent.Mvc.skip_time(10*50)
 
-    @ui.button(label=">",row=1)
+    @ui.button(label=">",row=2)
     async def def_button4(self, interaction:Interaction, button):
         Parent = self.Parent
         Parent._update_action()
         Parent.CLoop.create_task(interaction.response.defer())
         await Parent.skip(None)
 
-    @ui.button(label="⚙️", row=2)
+    @ui.button(label="⚙️", row=3)
     async def def_button5(self, interaction:Interaction, button):
         self.Parent._update_action()
         await interaction.response.send_message(
@@ -90,7 +90,7 @@ class CreateButton(ui.View):
             ephemeral= False
             )
         
-    @ui.button(label="切断", row=2, style=ButtonStyle.red)
+    @ui.button(label="切断", row=3, style=ButtonStyle.red)
     async def def_button6(self, interaction:Interaction, button):
         await interaction.response.defer()
         await self.Parent.Info._bye()
@@ -102,7 +102,7 @@ class CreateStatusButton(ui.Button):
         self.parent = parent
         self.name = status_name
         self.disable = disable
-        super().__init__(label=label, row=3, style=self.style_check(), disabled=disable)
+        super().__init__(label=label, row=1, style=self.style_check(), disabled=disable)
 
     def style_check(self):
         if self.disable:

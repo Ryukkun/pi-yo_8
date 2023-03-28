@@ -7,6 +7,7 @@ from typing import Optional, Literal
 from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
 from discord.ext.commands import Context
 
+from .data_analysis import int_analysis, date_difference
 from .audio_source import AnalysisUrl
 from .audio_source import StreamAudioData as SAD
 from .view import CreateButton
@@ -55,7 +56,7 @@ class MusicController():
         self.last_status = self.status.copy()
         self.Rewind = []
         self.CLoop = Info.loop
-        self.Embed_Message = None
+        self.Embed_Message:Optional[Message] = None
         self.def_doing = {'playing':False,'_load_next_pl':False}
         self.last_action:float = 0.0
         
@@ -302,7 +303,16 @@ class MusicController():
             embed=Embed(title=_SAD.Title, url=_SAD.web_url, colour=EmBase.player_color())
             embed.set_thumbnail(url=f'https://img.youtube.com/vi/{_SAD.VideoID}/mqdefault.jpg')
             embed.set_author(name=_SAD.CH, url=_SAD.CH_Url, icon_url=_SAD.ch_icon)
-            
+            des = []
+            if _SAD.view_count:
+                des.append(f'{int_analysis(_SAD.view_count)} 回再生')
+            if _SAD.upload_date:
+                des.append(date_difference(_SAD.upload_date))
+                des.append(_SAD.upload_date)
+            if _SAD.like_count:
+                des.append(f'\n👍{int_analysis(_SAD.like_count)}')
+                
+            embed.description = '　'.join(des)
 
             def get_progress(II):
                 NTime = int(self.Mvc.Timer) // 50
