@@ -131,7 +131,7 @@ class CreateSelect(ui.Select):
         _audio: SAD
         #print(args)
         for i, _audio in enumerate(args):
-            title = _audio.Title
+            title = _audio.title
             if i >= 25:
                 break
             if len(title) >= 100:
@@ -148,7 +148,7 @@ class CreateSelect(ui.Select):
         #await interaction.response.send_message(f'{interaction.user.name}は{self.values[0]}を選択しました')
         self.loop.create_task(interaction.response.defer())
         if self.values[0] == 'None': return
-        
+
         music = self.parent2
         music._update_action()
         for i in range(int(self.values[0])):

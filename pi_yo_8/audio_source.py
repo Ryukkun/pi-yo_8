@@ -8,9 +8,7 @@ import urllib.parse
 
 from typing import Union, Optional, IO, Literal
 from yt_dlp import YoutubeDL
-from bs4 import BeautifulSoup
 from pytube.innertube import InnerTube
-from pytube.helpers import DeferredGeneratorList
 from discord import FFmpegAudio
 from discord.oggparse import OggStream
 from discord.opus import Encoder as OpusEncoder
@@ -324,25 +322,30 @@ class AnalysisUrl:
 
 class StreamAudioData:
     def __init__(self):
-        self.url:Optional[str] = None
         self.loop = asyncio.get_event_loop()
+        
+        # video id, url
+        self.video_id = None
+        self.web_url = None
+
+        # video detail
         self.view_count = None
         self.like_count = None
         self.upload_date:Optional[str] = None
-        self.VideoID = None
-        self.web_url = None
+        
+        # video stream date
         self.st_vol = None
         self.st_sec = None
         self.st_url = None
+
+        # 振り分け
         self.music = None
         self.YT = None
-        self.ch_id = None
-        self.ch_icon = None
         self.index = None
     
 
     async def api_get_viewcounts(self):
-        params = {'key':config.youtube_key, 'part':'statistics,snippet', 'id':self.VideoID}
+        params = {'key':config.youtube_key, 'part':'statistics,snippet', 'id':self.video_id}
         url = youtube_api + '/videos'
         async with aiohttp.ClientSession() as session:
             async with session.get(url=url, params=params) as resp:
@@ -363,7 +366,7 @@ class StreamAudioData:
             async with session.get(url=url, params=params) as resp:
                 text = await resp.json()
 
-        self.VideoID = text['items'][0]['id']['videoId']
+        self.video_id = text['items'][0]['id']['videoId']
         self.music = True
         self.YT = True
         return await self.Pyt_V()
@@ -401,16 +404,16 @@ class StreamAudioData:
         
     # YT Video Load
     async def Pyt_V(self, arg=None):
-        if not self.VideoID:
+        if not self.video_id:
             if not arg: 
                 return
             if res := re_URL_Video.match(arg):
-                self.VideoID = res.group(4)
+                self.video_id = res.group(4)
             else:
-                self.VideoID = arg
-        url = f'https://www.youtube.com/watch?v={self.VideoID}'
+                self.video_id = arg
+        url = f'https://www.youtube.com/watch?v={self.video_id}'
 
-        self.Vdic = await self.loop.run_in_executor(None, InnerTube().player, self.VideoID)
+        self.Vdic = await self.loop.run_in_executor(None, InnerTube().player, self.video_id)
         if not self.Vdic.get('streamingData'):
             with YoutubeDL({'format': 'bestaudio','quiet':True}) as ydl:
                 self.Vdic = await self.loop.run_in_executor(None, ydl.extract_info, url, False)
@@ -421,43 +424,14 @@ class StreamAudioData:
         return self
     
 
-    # Video Search
-    async def Pyt_V_Search(self, arg):
-        pyt = pytube.Search(arg)
-        Vdic = await self.loop.run_in_executor(None,pyt.fetch_and_parse)
 
-        self.url = Vdic[0][0].watch_url
-        res = await self.Pyt_V()
-
-        self.music = True
-        self.YT = True
-        return res
-    
-
-    # Playlist Search
-    async def Pyt_P_Search(self, arg):
-        self.url = arg
-        pyt = pytube.Search(arg)
-        Vdic = await self.loop.run_in_executor(None,pyt.fetch_and_parse)
-        return [temp.watch_url for temp in Vdic[0]]
-    
-
-    # Playlist 全体 Load
-    async def pyt_p(self, arg):
-        arg = f'https://www.youtube.com/playlist?list={arg}'
-        yt_pl = pytube.Playlist(arg)
-        try: return await self.loop.run_in_executor(None,DeferredGeneratorList,yt_pl.url_generator())
-        except Exception as e:
-            print(f'Error : Playlist All-List {e}')
-
-
-    # 汎用人型決戦兵器
+    # 汎用人型決戦兵器 (Youtube 以外)
     async def Ytdlp_V(self, arg):
         with YoutubeDL({'format': 'best','quiet':True,'noplaylist':True}) as ydl:
             info = await self.loop.run_in_executor(None,ydl.extract_info, arg, False)
             self.st_url = info['url']
             self.web_url = arg
-            self.url = arg
+            self.title = arg
             self.st_sec = int(info.get('duration',None))
             self.formats = info.get('formats')
             self.music = True
@@ -467,7 +441,6 @@ class StreamAudioData:
 
     def Url_Only(self, arg):
         self.st_url = arg
-        self.url = arg
         self.music = False
         self.YT = False
         return self
@@ -484,11 +457,11 @@ class StreamAudioData:
                 if 249 <= fm['itag'] <= 251 or 139 <= fm['itag'] <= 141:
                     res.append(fm)
             self.st_url = res[-1]['url']
-            self.Title = self.Vdic["videoDetails"]["title"]
-            self.CH = self.Vdic["videoDetails"]["author"]
-            self.CH_Url = f'https://www.youtube.com/channel/{self.Vdic["videoDetails"]["channelId"]}'
+            self.title = self.Vdic["videoDetails"]["title"]
+            self.ch_name = self.Vdic["videoDetails"]["author"]
+            self.ch_url = f'https://www.youtube.com/channel/{self.Vdic["videoDetails"]["channelId"]}'
             self.ch_id = self.Vdic["videoDetails"]["channelId"]
-            self.VideoID = self.Vdic["videoDetails"]["videoId"]
+            self.video_id = self.Vdic["videoDetails"]["videoId"]
             self.st_vol = self.Vdic['playerConfig']['audioConfig'].get('loudnessDb')
             self.st_sec = int(self.Vdic['videoDetails']['lengthSeconds'])
             await self.api_get_viewcounts()
@@ -496,11 +469,11 @@ class StreamAudioData:
         else:
             self.formats = self.Vdic['formats']
             self.st_url = self.Vdic['url']
-            self.Title = self.Vdic["title"]
-            self.CH = self.Vdic["channel"]
-            self.CH_Url = self.Vdic["channel_url"]
+            self.title = self.Vdic["title"]
+            self.ch_name = self.Vdic["channel"]
+            self.ch_url = self.Vdic["channel_url"]
             self.ch_id = self.Vdic["channel_id"]
-            self.VideoID = self.Vdic["id"]
+            self.video_id = self.Vdic["id"]
             self.st_vol = 5.0
             self.st_sec = int(self.Vdic["duration"])
             self.view_count = self.Vdic['view_count']
@@ -509,7 +482,7 @@ class StreamAudioData:
             self.upload_date = f'{ud[:4]}/{ud[4:6]}/{ud[6:]}'
 
 
-        self.web_url = f"https://youtu.be/{self.VideoID}"
+        self.web_url = f"https://youtu.be/{self.video_id}"
         params = {'key':config.youtube_key, 'part':'snippet', 'id':self.ch_id}
         url = youtube_api + '/channels'
         async with aiohttp.ClientSession() as session:

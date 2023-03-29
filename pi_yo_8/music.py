@@ -300,9 +300,9 @@ class MusicController():
              embed=Embed(title='N/A', colour=EmBase.player_color())
 
         elif _SAD.YT:
-            embed=Embed(title=_SAD.Title, url=_SAD.web_url, colour=EmBase.player_color())
-            embed.set_thumbnail(url=f'https://img.youtube.com/vi/{_SAD.VideoID}/mqdefault.jpg')
-            embed.set_author(name=_SAD.CH, url=_SAD.CH_Url, icon_url=_SAD.ch_icon)
+            embed=Embed(title=_SAD.title, url=_SAD.web_url, colour=EmBase.player_color())
+            embed.set_thumbnail(url=f'https://img.youtube.com/vi/{_SAD.video_id}/mqdefault.jpg')
+            embed.set_author(name=_SAD.ch_name, url=_SAD.ch_url, icon_url=_SAD.ch_icon)
             des = []
             if _SAD.view_count:
                 des.append(f'{int_analysis(_SAD.view_count)} 回再生')
@@ -359,9 +359,9 @@ class MusicController():
 
         AudioData = AudioData.sad
         if AudioData.YT:
-            embed=Embed(title=AudioData.Title, url=AudioData.web_url, colour=EmBase.main_color())
-            embed.set_thumbnail(url=f'https://img.youtube.com/vi/{AudioData.VideoID}/mqdefault.jpg')
-            embed.set_author(name=AudioData.CH, url=AudioData.CH_Url, icon_url=AudioData.ch_icon)
+            embed=Embed(title=AudioData.title, url=AudioData.web_url, colour=EmBase.main_color())
+            embed.set_thumbnail(url=f'https://img.youtube.com/vi/{AudioData.video_id}/mqdefault.jpg')
+            embed.set_author(name=AudioData.ch_name, url=AudioData.ch_url, icon_url=AudioData.ch_icon)
             
         else:
             embed=Embed(title=AudioData.web_url, url=AudioData.web_url, colour=EmBase.main_color())
