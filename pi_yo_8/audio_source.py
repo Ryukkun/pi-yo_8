@@ -4,6 +4,7 @@ import re
 import pytube
 import io
 import subprocess
+import urllib.parse
 
 from typing import Union, Optional, IO, Literal
 from yt_dlp import YoutubeDL
@@ -19,8 +20,9 @@ import config
 re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
 re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
 re_URL_PL_Video = re.compile(r'https://(www.|)youtube.com/watch\?v=(.+)&list=(.+)')
-re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
+re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=(.+)')
 re_URL = re.compile(r'http')
+youtube_api = 'https://www.googleapis.com/youtube/v3'
 
 """
 The MIT License (MIT)
@@ -230,7 +232,7 @@ class AnalysisUrl:
         
         ### 文字指定
         if not re_URL.match(arg):
-            self.sad = await StreamAudioData().Pyt_V_Search(arg)
+            self.sad = await StreamAudioData().api_v_search(arg)
 
         ### youtube 動画オンリー
         elif re_URL_YT.match(arg):
@@ -266,8 +268,8 @@ class AnalysisUrl:
         """
         self.arg = arg
         ### PlayList 本体のURL ------------------------------------------------------------------------#
-        if re_URL_PL.match(arg): 
-            if pl := await StreamAudioData().Pyt_P(arg):
+        if result_re := re_URL_PL.match(arg): 
+            if pl := await StreamAudioData().api_p(result_re.group(2)):
                 self.playlist = True
                 self.index = -1
                 self.random_pl = True
@@ -279,7 +281,7 @@ class AnalysisUrl:
             arg = f'https://www.youtube.com/playlist?list={result_re.group(3)}'
 
             # Load Video in the Playlist 
-            if pl := await StreamAudioData().Pyt_P(arg):
+            if pl := await StreamAudioData().api_p(result_re.group(3)):
 
                 # Playlist Index 特定
                 index = 0
@@ -311,7 +313,7 @@ class AnalysisUrl:
 
         ### URLじゃなかった場合 -----------------------------------------------------------------------#
         else:
-            self.sad = await StreamAudioData().Pyt_P_Search(arg)
+            self.sad = await StreamAudioData().api_p_search(arg)
             self.index = -1
             self.random_pl = False
             self.playlist = True
@@ -334,14 +336,16 @@ class StreamAudioData:
         self.st_url = None
         self.music = None
         self.YT = None
+        self.ch_id = None
         self.ch_icon = None
         self.index = None
     
 
-    async def youtube_api(self):
+    async def api_get_viewcounts(self):
         params = {'key':config.youtube_key, 'part':'statistics,snippet', 'id':self.VideoID}
+        url = youtube_api + '/videos'
         async with aiohttp.ClientSession() as session:
-            async with session.get(url='https://www.googleapis.com/youtube/v3/videos', params=params) as resp:
+            async with session.get(url=url, params=params) as resp:
                 text = await resp.json()
         text = text.get('items',[{}])[0]
         sta = text.get('statistics',{})
@@ -351,15 +355,65 @@ class StreamAudioData:
         self.view_count = sta.get('viewCount')
         self.like_count = sta.get('likeCount')
 
+
+    async def api_v_search(self, arg):
+        params = {'key':config.youtube_key, 'part':'id', 'q':arg, 'maxResults':'1'}
+        url = youtube_api + '/search'
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url=url, params=params) as resp:
+                text = await resp.json()
+
+        self.VideoID = text['items'][0]['id']['videoId']
+        self.music = True
+        self.YT = True
+        return await self.Pyt_V()
+
+
+    async def api_p_search(self, arg):
+        #arg = urllib.parse.quote(arg)
+        params = {'key':config.youtube_key, 'part':'id', 'q':arg, 'maxResults':'20', 'type':'video'}
+        url = youtube_api + '/search'
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url=url, params=params) as resp:
+                text = await resp.json()
+
+        return [_['id']['videoId'] for _ in text['items']]
+
+
+
+    async def api_p(self, arg):
+        arg = urllib.parse.quote(arg)
+        params = {'key':config.youtube_key, 'part':'snippet', 'playlistId':arg, 'maxResults':'50'}
+        url = youtube_api + '/playlistItems'
+        res_urls = []
+        async with aiohttp.ClientSession() as session:
+            while True:
+                async with session.get(url=url, params=params) as resp:
+                    text = await resp.json()
+                    res_urls.extend( [_['snippet']['resourceId']['videoId'] for _ in text['items']] )
+                    if text.get('nextPageToken'):
+                        params['pageToken'] = text['nextPageToken']
+                    else:
+                        break
+        return res_urls
+
+
         
     # YT Video Load
-    async def Pyt_V(self, arg):
-        self.url = arg
-        self.VideoID = re_URL_Video.match(arg).group(4)
-        self.Vdic = await self.loop.run_in_executor(None,InnerTube().player,self.VideoID)
+    async def Pyt_V(self, arg=None):
+        if not self.VideoID:
+            if not arg: 
+                return
+            if res := re_URL_Video.match(arg):
+                self.VideoID = res.group(4)
+            else:
+                self.VideoID = arg
+        url = f'https://www.youtube.com/watch?v={self.VideoID}'
+
+        self.Vdic = await self.loop.run_in_executor(None, InnerTube().player, self.VideoID)
         if not self.Vdic.get('streamingData'):
             with YoutubeDL({'format': 'bestaudio','quiet':True}) as ydl:
-                self.Vdic = await self.loop.run_in_executor(None,ydl.extract_info,arg,False)
+                self.Vdic = await self.loop.run_in_executor(None, ydl.extract_info, url, False)
 
         await self._format()
         self.music = True
@@ -389,8 +443,8 @@ class StreamAudioData:
     
 
     # Playlist 全体 Load
-    async def Pyt_P(self, arg):
-        self.url = arg
+    async def pyt_p(self, arg):
+        arg = f'https://www.youtube.com/playlist?list={arg}'
         yt_pl = pytube.Playlist(arg)
         try: return await self.loop.run_in_executor(None,DeferredGeneratorList,yt_pl.url_generator())
         except Exception as e:
@@ -433,10 +487,11 @@ class StreamAudioData:
             self.Title = self.Vdic["videoDetails"]["title"]
             self.CH = self.Vdic["videoDetails"]["author"]
             self.CH_Url = f'https://www.youtube.com/channel/{self.Vdic["videoDetails"]["channelId"]}'
+            self.ch_id = self.Vdic["videoDetails"]["channelId"]
             self.VideoID = self.Vdic["videoDetails"]["videoId"]
             self.st_vol = self.Vdic['playerConfig']['audioConfig'].get('loudnessDb')
             self.st_sec = int(self.Vdic['videoDetails']['lengthSeconds'])
-            await self.youtube_api()
+            await self.api_get_viewcounts()
 
         else:
             self.formats = self.Vdic['formats']
@@ -444,6 +499,7 @@ class StreamAudioData:
             self.Title = self.Vdic["title"]
             self.CH = self.Vdic["channel"]
             self.CH_Url = self.Vdic["channel_url"]
+            self.ch_id = self.Vdic["channel_id"]
             self.VideoID = self.Vdic["id"]
             self.st_vol = 5.0
             self.st_sec = int(self.Vdic["duration"])
@@ -454,11 +510,12 @@ class StreamAudioData:
 
 
         self.web_url = f"https://youtu.be/{self.VideoID}"
+        params = {'key':config.youtube_key, 'part':'snippet', 'id':self.ch_id}
+        url = youtube_api + '/channels'
         async with aiohttp.ClientSession() as session:
-            async with session.get(self.CH_Url) as resp:
-                text = await resp.read()
-        ch_icon = BeautifulSoup(text.decode('utf-8'), 'html.parser')
-        self.ch_icon = ch_icon.find('link',rel="image_src").get('href')
+            async with session.get(url=url, params=params) as resp:
+                text = await resp.json()
+        self.ch_icon = text['items'][0]['snippet']['thumbnails']['medium']['url']
 
 
 
@@ -474,13 +531,9 @@ class StreamAudioData:
         # Pitch
         if pitch != 0:
             pitch = 2 ** (pitch / 12)
-            #speed = speed / pitch
-            #af.append('aresample=48000')
-            #af.append(f'asetrate={48000*pitch}')
             af.append(f'rubberband=pitch={pitch}')
         
         if float(speed) != 1.0:
-            #af.append(f'atempo={speed}')
             af.append(f'rubberband=tempo={speed}')
 
         if self.music:

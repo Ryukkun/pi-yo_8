@@ -309,8 +309,8 @@ class MusicController():
             if _SAD.upload_date:
                 des.append(date_difference(_SAD.upload_date))
                 des.append(_SAD.upload_date)
-            if _SAD.like_count:
-                des.append(f'\n👍{int_analysis(_SAD.like_count)}')
+            # if _SAD.like_count:
+            #     des.append(f'\n👍{int_analysis(_SAD.like_count)}')
                 
             embed.description = '　'.join(des)
 

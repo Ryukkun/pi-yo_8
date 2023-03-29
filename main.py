@@ -19,6 +19,8 @@ try: import config
 except Exception:
     CLines= [
         "Prefix = ','",
+        "#youtube data api v3",
+        "youtube_key = ''",
         "Token = ''"
     ]
     with open('config.py','w') as f:

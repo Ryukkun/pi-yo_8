@@ -138,6 +138,8 @@ class CreateSelect(ui.Select):
                 title = title[0:100]
             select_opt.append(SelectOption(label=title,value=str(i),default=(select_opt == [])))
 
+        if not select_opt:
+            select_opt.append(SelectOption(label='動画がないよぉ～ん',value='None',default=False))
         parent.select_opt = select_opt
         super().__init__(placeholder='キュー表示', options=select_opt, row=0)
 
@@ -145,6 +147,8 @@ class CreateSelect(ui.Select):
     async def callback(self, interaction: Interaction):
         #await interaction.response.send_message(f'{interaction.user.name}は{self.values[0]}を選択しました')
         self.loop.create_task(interaction.response.defer())
+        if self.values[0] == 'None': return
+        
         music = self.parent2
         music._update_action()
         for i in range(int(self.values[0])):
