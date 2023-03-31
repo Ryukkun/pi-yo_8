@@ -207,9 +207,6 @@ class DataInfo():
         if not g_opts.get(self.gid):
             return
 
-        # Music Embed
-        await self.Music._loop_5()
-
         # 強制切断検知
         mems = self.vc.channel.members
         if not client.user.id in [_.id for _ in mems]:
@@ -226,6 +223,10 @@ class DataInfo():
         # Reset Count
         else:
             self.count_loop = 0
+
+
+        # Music Embed
+        await self.Music._loop_5()
 
 
 client.run(config.Token, log_level=logging.WARNING)

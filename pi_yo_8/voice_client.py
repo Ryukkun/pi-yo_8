@@ -80,6 +80,7 @@ class MultiAudio:
                 self.__speak(SpeakingState.voice)
                 with lock:
                     if not self.doing['run_loop']:
+                        self.doing['run_loop'] = True
                         threading.Thread(target=self.run_loop,daemon=True).start()
         else:
             if temp == 1:
@@ -106,8 +107,6 @@ class MultiAudio:
         send_audio = self.vc.send_audio_packet
         _start = time.perf_counter()
         fin_loop = 0
-        with lock:
-            self.doing['run_loop'] = True
         while self.loop:
             Bytes = None
             if self.PLen == 1:
@@ -146,8 +145,7 @@ class MultiAudio:
                 if 1500 < fin_loop:
                     break
 
-        with lock:
-            self.doing['run_loop'] = False
+        self.doing['run_loop'] = False
             
 
 class _AudioTrack:

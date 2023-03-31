@@ -7,6 +7,7 @@ from typing import Optional, Literal
 from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
 from discord.ext.commands import Context
 
+
 from .data_analysis import int_analysis, date_difference
 from .audio_source import AnalysisUrl
 from .audio_source import StreamAudioData as SAD
@@ -20,7 +21,6 @@ re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
 re_skip = re.compile(r'^((-|)\d+)([hms])$')
 re_skip_set_h = re.compile(r'^(\d+)[:;,](\d+)[:;,](\d+)$')
 re_skip_set_m = re.compile(r'^(\d+)[:;,](\d+)$')
-
 
 
 re_video = re.compile(r'video/(.+);')
@@ -47,9 +47,8 @@ class MusicController():
         self.gid = Info.gid
         self.gn = Info.gn
         self.vc = self.guild.voice_client
-        self.Queue = []
+        self.Queue:list[SAD] = []
         self.Index_PL = None
-        self.Next_PL = {'PL':[],'index':None}
         self.PL = []
         self.Latest_CH:TextChannel = None
         self.status = {'loop':True,'loop_pl':True,'random_pl':True}
@@ -71,9 +70,8 @@ class MusicController():
         ' Playlistのキュー をリセットする '
         if self.PL:
             self.PL = []
+            del self.Queue[1:]
             self.Index_PL = None
-            self.Next_PL['PL'].clear()
-            self.Next_PL['index'] = None
 
 
     async def def_queue(self, ctx:Context, args):
@@ -120,8 +118,7 @@ class MusicController():
         if not res: return
 
         if res.playlist:
-            self.Next_PL['PL'] = []
-            self.Next_PL['index'] = res.index
+            self.Index_PL = res.index
             self.status['random_pl'] = res.random_pl
             self.PL = res.sad
 
@@ -457,16 +454,22 @@ class MusicController():
     async def _load_next_pl(self):
         if self.def_doing['_load_next_pl']: return
         self.def_doing['_load_next_pl'] = True
-        while len(self.Next_PL['PL']) <= 19:
+        while len(self.Queue) <= 19 and self.def_doing['_load_next_pl']:
+            if self.Queue:
+                last_index = self.Queue[-1].index
+            else:
+                last_index = self.Index_PL
+            
             if self.status['random_pl']:
                 for_count = 0
-                new_index = 0
-                while self.Next_PL['index'] == (new_index := random.randint(0,len(self.PL) - 1)):
+                while last_index == (new_index := random.randint(0,len(self.PL) - 1)):
                     for_count += 1
-                    if for_count == 10: break
+                    if for_count == 10:
+                        new_index = last_index
+                        break
 
             else:
-                new_index = self.Next_PL['index'] + 1
+                new_index = last_index + 1
             if new_index >= len(self.PL):
                 new_index = 0
                 if self.status['loop_pl'] == False:
@@ -479,8 +482,7 @@ class MusicController():
                 break
 
             AudioData.index = new_index
-            self.Next_PL['PL'].append(AudioData)
-            self.Next_PL['index'] = new_index
+            self.Queue.append(AudioData)
             #print(new_index)
 
         self.def_doing['_load_next_pl'] = False
@@ -503,16 +505,16 @@ class MusicController():
                 self.CLoop.create_task(self._load_next_pl())
 
                 # 最初が読み込まれるまで wait
-                while not self.Next_PL['PL']:
-                    await asyncio.sleep(0.1)
+                while not self.Queue:
+                    await asyncio.sleep(0.5)
+                
+                if not self.PL: return
 
                 # Queue
-                self.Queue.append(self.Next_PL['PL'][0])
-                self.Index_PL = self.Next_PL['PL'][0].index
-                del self.Next_PL['PL'][0]
+                self.Index_PL = self.Queue[0].index
 
                 # Print
-                print(f"{self.gn} : Paylist add Queue  [Now len: {str(len(self.Queue))},{str(len(self.Next_PL['PL']))}]")
+                print(f"{self.gn} : Paylist add Queue  [Now len: {str(len(self.Queue))}]")
 
         # 再生
         if self.Queue:
@@ -528,13 +530,12 @@ class MusicController():
         try:
             # PlayList再生時に 次の動画を取得する
             if self.PL and self.status['random_pl'] != self.last_status['random_pl']:
-                while self.def_doing['_load_next_pl']:
-                    self.Next_PL['PL'] = [i for i in range(25)]
-                    await asyncio.sleep(1)
+                if self.def_doing['_load_next_pl']:
+                    self.def_doing['_load_next_pl'] = None
+                    while self.def_doing['_load_next_pl'] == None:
+                        await asyncio.sleep(1)
                 self.last_status = self.status.copy()
-                self.Queue = [self.Queue[0]]
-                self.Next_PL['PL'] = []
-                self.Next_PL['index'] = self.Index_PL
+                del self.Queue[1:]
                 self.CLoop.create_task(self._load_next_pl())
 
             # Embed

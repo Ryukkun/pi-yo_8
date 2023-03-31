@@ -1,5 +1,4 @@
 import asyncio
-import time
 from discord import ui, Interaction, SelectOption ,ButtonStyle, Embed
 
 from .audio_source import StreamAudioData as SAD
@@ -18,7 +17,7 @@ class CreateButton(ui.View):
         except Exception: pass
         self.Parent = Parent
         self.select_opt:list[SelectOption] = None
-        self.add_item(CreateSelect(self, (self.Parent.Queue + self.Parent.Next_PL['PL'])))
+        self.add_item(CreateSelect(self, (self.Parent.Queue)))
         self.add_item(CreateStatusButton(self, '単曲 ループ', 'loop'))
         if self.Parent.PL:
             self.add_item(CreateStatusButton(self, 'Playlist ループ', 'loop_pl'))
@@ -153,11 +152,7 @@ class CreateSelect(ui.Select):
         music._update_action()
         for i in range(int(self.values[0])):
             if music.Queue:
-                music.Rewind.append(music.Queue[0])
-                del music.Queue[0]
-            elif music.Next_PL['PL']:
-                music.Rewind.append(music.Next_PL['PL'])
-                del music.Next_PL['PL'][0]
+                music.Rewind.append(music.Queue.pop(0))
         await music.play_loop(None,0)
         #print(f'{interaction.user.name}は{self.values[0]}を選択しました')
 

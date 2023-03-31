@@ -91,10 +91,11 @@ class AnalysisUrl:
         ### PlayList と 動画が一緒についてきた場合 --------------------------------------------------------------#
         elif result_re := re_URL_PL_Video.match(arg):
             watch_id = result_re.group(2)
-            arg = f'https://www.youtube.com/playlist?list={result_re.group(3)}'
+            #arg = f'https://www.youtube.com/playlist?list={result_re.group(3)}'
+            arg = re.sub(r'&index.+','',result_re.group(3))
 
             # Load Video in the Playlist 
-            if pl := await StreamAudioData().api_p(result_re.group(3)):
+            if pl := await StreamAudioData().api_p(arg):
 
                 # Playlist Index 特定
                 index = 0
@@ -136,7 +137,8 @@ class AnalysisUrl:
 
 
 class StreamAudioData:
-    def __init__(self):
+    def __init__(self, _input):
+        self.input = _input
         self.loop = asyncio.get_event_loop()
         
         # video id, url
@@ -157,6 +159,9 @@ class StreamAudioData:
         self.music = None
         self.YT = None
         self.index = None
+        
+        # playlist index
+        self.index:Optional[int] = None
     
 
     async def api_get_viewcounts(self):
@@ -174,8 +179,8 @@ class StreamAudioData:
         self.like_count = sta.get('likeCount')
 
 
-    async def api_v_search(self, arg):
-        params = {'key':config.youtube_key, 'part':'id', 'q':arg, 'maxResults':'1'}
+    async def api_v_search(self):
+        params = {'key':config.youtube_key, 'part':'id', 'q':self.input, 'maxResults':'1'}
         url = youtube_api + '/search'
         async with aiohttp.ClientSession() as session:
             async with session.get(url=url, params=params) as resp:
@@ -198,17 +203,22 @@ class StreamAudioData:
         return [_['id']['videoId'] for _ in text['items']]
 
 
-
+    @classmethod
     async def api_p(self, arg):
         arg = urllib.parse.quote(arg)
-        params = {'key':config.youtube_key, 'part':'snippet', 'playlistId':arg, 'maxResults':'50'}
+        params = {'key':config.youtube_key, 'part':'contentDetails,status', 'playlistId':arg, 'maxResults':'50'}
         url = youtube_api + '/playlistItems'
         res_urls = []
         async with aiohttp.ClientSession() as session:
             while True:
                 async with session.get(url=url, params=params) as resp:
                     text = await resp.json()
-                    res_urls.extend( [_['snippet']['resourceId']['videoId'] for _ in text['items']] )
+                    checked_urls = []
+                    for _ in text['items']:
+                        if _['status']['privacyStatus'].lower() == 'private':
+                            continue
+                        checked_urls.append(_['contentDetails']['videoId'])
+                    res_urls.extend(checked_urls)
                     if text.get('nextPageToken'):
                         params['pageToken'] = text['nextPageToken']
                     else:
@@ -218,18 +228,12 @@ class StreamAudioData:
 
         
     # YT Video Load
-    async def Pyt_V(self, arg=None):
-        if not self.video_id:
-            if not arg: 
-                return
-            if res := re_URL_Video.match(arg):
-                self.video_id = res.group(4)
-            else:
-                self.video_id = arg
-        url = f'https://www.youtube.com/watch?v={self.video_id}'
+    async def Pyt_V(self):
+        self.video_id = self.input
 
         self.Vdic = await InnerTube().player(self.video_id)
         if not self.Vdic.get('streamingData'):
+            url = f'https://www.youtube.com/watch?v={self.video_id}'
             with YoutubeDL({'format': 'bestaudio','quiet':True}) as ydl:
                 self.Vdic = await self.loop.run_in_executor(None, ydl.extract_info, url, False)
 
@@ -241,12 +245,12 @@ class StreamAudioData:
 
 
     # 汎用人型決戦兵器 (Youtube 以外)
-    async def Ytdlp_V(self, arg):
+    async def Ytdlp_V(self):
         with YoutubeDL({'format': 'best','quiet':True,'noplaylist':True}) as ydl:
-            info = await self.loop.run_in_executor(None,ydl.extract_info, arg, False)
+            info = await self.loop.run_in_executor(None,ydl.extract_info, self.input, False)
             self.st_url = info['url']
-            self.web_url = arg
-            self.title = arg
+            self.web_url = self.input
+            self.title = self.input
             self.st_sec = int(info.get('duration',None))
             self.formats = info.get('formats')
             self.music = True
@@ -254,8 +258,8 @@ class StreamAudioData:
         return self
 
 
-    def Url_Only(self, arg):
-        self.st_url = arg
+    def Url_Only(self):
+        self.st_url = self.input
         self.music = False
         self.YT = False
         return self
