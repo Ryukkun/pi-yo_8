@@ -291,8 +291,8 @@ class StreamAudioData:
             self.video_id = self.Vdic["id"]
             self.st_vol = 5.0
             self.st_sec = int(self.Vdic["duration"])
-            self.view_count = self.Vdic['view_count']
-            self.like_count = self.Vdic['like_count']
+            self.view_count = self.Vdic.get('view_count')
+            self.like_count = self.Vdic.get('like_count')
             ud = self.Vdic['upload_date']
             self.upload_date = f'{ud[:4]}/{ud[4:6]}/{ud[6:]}'
 

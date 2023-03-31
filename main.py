@@ -1,7 +1,6 @@
 import discord
 import os
 import asyncio
-import time
 import logging
 from discord.ext import commands, tasks
 from typing import Dict
@@ -76,44 +75,38 @@ async def on_ready():
 
 @client.command()
 async def join(ctx:commands.Context):
-    if vc := ctx.author.voice:
-        gid = ctx.guild.id
-        print(f'{ctx.guild.name} : #join')
-        try: await vc.channel.connect(self_deaf=True)
-        except discord.ClientException: return
-        g_opts[gid] = DataInfo(ctx.guild)
-        return True
+    gid = ctx.guild.id
+    if not g_opts.get(gid):
+        try: 
+            await ctx.author.voice.channel.connect(self_deaf=True)
+            print(f'{ctx.guild.name} : #join')
+            g_opts[gid] = DataInfo(ctx.guild)
+            return True
+        except Exception as e:
+            print(e)
 
 
 @client.command()
 async def bye(ctx:commands.Context):
     guild = ctx.guild
-    gid = guild.id
-    vc = guild.voice_client
-    if vc:
+    if info := g_opts.get(guild.id):
         print(f'{guild.name} : #切断')
-        await g_opts[gid]._bye()
+        await info._bye()
 
     
 
 @client.command()
 async def speed(ctx:commands.Context, arg:float):
-    guild = ctx.guild
-    gid = guild.id
-    vc = guild.voice_client
-    if vc:
-        if data := g_opts.get(gid):
-            await data.Music.Mvc.speed.set(arg)
+    gid = ctx.guild.id
+    if data := g_opts.get(gid):
+        await data.Music.Mvc.speed.set(arg)
 
 
 @client.command()
 async def pitch(ctx:commands.Context, arg:int):
-    guild = ctx.guild
-    gid = guild.id
-    vc = guild.voice_client
-    if vc:
-        if data := g_opts.get(gid):
-            await data.Music.Mvc.pitch.set(arg)
+    gid = ctx.guild.id
+    if data := g_opts.get(gid):
+        await data.Music.Mvc.pitch.set(arg)
 
 
 #--------------------------------------------------
@@ -121,10 +114,9 @@ async def pitch(ctx:commands.Context, arg:int):
 #--------------------------------------------------
 @client.command()
 async def playing(ctx:commands.Context):
-    try:
-        g_opts[ctx.guild.id].Music.Latest_CH = ctx.channel
-        await g_opts[ctx.guild.id].Music.playing()
-    except KeyError:pass
+    if info := g_opts.get(ctx.guild.id):
+        info.Music.Latest_CH = ctx.channel
+        await info.Music.playing()
 
 
 
@@ -159,19 +151,17 @@ async def download(ctx:commands.Context, arg):
 
 @client.command(aliases=['q'])
 async def queue(ctx:commands.Context, *args):
-    if not ctx.guild.voice_client:
-        if not await join(ctx):
-            return
-    await g_opts[ctx.guild.id].Music.def_queue(ctx,args)
+    await join(ctx)
+    if g_opts.get(ctx.guild.id):
+        await g_opts[ctx.guild.id].Music.def_queue(ctx,args)
 
 
 
 @client.command(aliases=['p','pl'])
 async def play(ctx:commands.Context, *args):
-    if not ctx.guild.voice_client:
-        if not await join(ctx):
-            return
-    await g_opts[ctx.guild.id].Music.play(ctx,args)
+    await join(ctx)
+    if g_opts.get(ctx.guild.id):
+        await g_opts[ctx.guild.id].Music.play(ctx,args)
 
 
 
@@ -194,12 +184,15 @@ class DataInfo():
         self.loop_5.start()
 
 
+    async def bye(self):
+        self.loop.create_task(self._bye())
+
+
     async def _bye(self):
         self.loop_5.stop()
         self.MA.kill()
         del g_opts[self.gid]
         
-        await asyncio.sleep(0.1)
         try: await self.vc.disconnect()
         except Exception: pass
 
@@ -211,23 +204,24 @@ class DataInfo():
 
     @tasks.loop(seconds=5.0)
     async def loop_5(self):
+        if not g_opts.get(self.gid):
+            return
+
         # Music Embed
         await self.Music._loop_5()
 
         # 強制切断検知
         mems = self.vc.channel.members
         if not client.user.id in [_.id for _ in mems]:
-            self.count_loop += 1
-            if 2 <= self.count_loop:
-                print(f'{self.gn} : #強制切断')
-                await self._bye()
+            print(f'{self.gn} : #強制切断')
+            await self.bye()
 
         # voice channelに誰もいなくなったことを確認
         elif not False in [_.bot for _ in mems]:
             self.count_loop += 1
             if 2 <= self.count_loop:
                 print(f'{self.gn} : #誰もいなくなったため 切断')
-                await self._bye()
+                await self.bye()
 
         # Reset Count
         else:
