@@ -1,8 +1,9 @@
 import datetime
 
-ketas = ['万', '億', '兆', '京']
+
 def int_analysis(arg):
     arg = str(arg)
+    ketas = ['万', '億', '兆', '京']
     arg_list = []
     while arg:
         if 4 < len(arg):
@@ -22,14 +23,22 @@ def int_analysis(arg):
 
 
 def date_difference(arg:str):
-    now = datetime.datetime.now().strftime('%Y/%m/%d')
-    arg = arg.split('/')
-    now = now.split('/')
-    names = ['年前', 'ヶ月前', '日前']
-    for count, (_now, _arg) in enumerate( zip(now, arg)):
-        if _now == _arg:
-            if count == 2:
-                return '今日'
-            continue
+    up_date = arg.split("/")
+
+    diff = datetime.datetime.now() - datetime.datetime(year=int(up_date[0]), month=int(up_date[1]), day=int(up_date[2]))
+    diff = diff.days 
+    year_days = 365.24219
+    month_days = year_days / 12
+    if _ := diff // year_days:
+        res = f'{int(_)}年前'
+
+    elif _ := diff // month_days:
+        res = f'{int(_)}ヵ月前'
+
+    elif diff:
+        res = f'{diff}日前'
+
+    else:
+        res = '今日'
         
-        return f'{int(_now)-int(_arg)}{names[count]}'
+    return res

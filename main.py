@@ -193,6 +193,7 @@ class DataInfo():
         self.MA.kill()
         del g_opts[self.gid]
         
+        await asyncio.sleep(0.02)
         try: await self.vc.disconnect()
         except Exception: pass
 

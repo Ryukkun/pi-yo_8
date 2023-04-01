@@ -49,7 +49,7 @@ class MusicController():
         self.vc = self.guild.voice_client
         self.Queue:list[SAD] = []
         self.Index_PL = None
-        self.PL = []
+        self.PL:list[SAD] = []
         self.Latest_CH:TextChannel = None
         self.status = {'loop':True,'loop_pl':True,'random_pl':True}
         self.last_status = self.status.copy()
@@ -308,8 +308,8 @@ class MusicController():
                 des.append(_SAD.upload_date)
             # if _SAD.like_count:
             #     des.append(f'\n👍{int_analysis(_SAD.like_count)}')
-                
-            embed.description = '　'.join(des)
+            if des:
+                embed.description = '　'.join( des)
 
             def get_progress(II):
                 NTime = int(self.Mvc.Timer) // 50
@@ -475,14 +475,14 @@ class MusicController():
                 if self.status['loop_pl'] == False:
                     break
 
-            url = self.PL[new_index]
-            try :AudioData = await SAD().Pyt_V(url)
+            sad = self.PL[new_index]
+            try :await sad.Pyt_V()
             except Exception as e:
                 print(f'Error : Playlist Extract {e}')
                 break
 
-            AudioData.index = new_index
-            self.Queue.append(AudioData)
+            sad.index = new_index
+            self.Queue.append(sad)
             #print(new_index)
 
         self.def_doing['_load_next_pl'] = False
@@ -501,8 +501,8 @@ class MusicController():
                 
         # Playlistのお客様Only
         if self.PL:
+            self.CLoop.create_task(self._load_next_pl())
             if self.Queue == []:
-                self.CLoop.create_task(self._load_next_pl())
 
                 # 最初が読み込まれるまで wait
                 while not self.Queue:
