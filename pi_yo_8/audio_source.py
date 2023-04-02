@@ -128,7 +128,7 @@ class AnalysisUrl:
 
         ### URLじゃなかった場合 -----------------------------------------------------------------------#
         else:
-            self.sad = await StreamAudioData(arg).api_p_search()
+            self.sad = await StreamAudioData.api_p_search(arg)
             self.index = -1
             self.random_pl = False
             self.playlist = True
@@ -199,16 +199,16 @@ class StreamAudioData:
         self.YT = True
         return await self.Pyt_V()
 
-
-    async def api_p_search(self):
+    @classmethod
+    async def api_p_search(self, arg):
         #arg = urllib.parse.quote(arg)
-        params = {'key':config.youtube_key, 'part':'id', 'q':self.input, 'maxResults':'20', 'type':'video'}
+        params = {'key':config.youtube_key, 'part':'id', 'q':arg, 'maxResults':'20', 'type':'video'}
         url = youtube_api + '/search'
         async with aiohttp.ClientSession() as session:
             async with session.get(url=url, params=params) as resp:
                 text = await resp.json()
 
-        return [_['id']['videoId'] for _ in text['items']]
+        return [self(_['id']['videoId'], video_id=_['id']['videoId']) for _ in text['items']]
 
 
     @classmethod
