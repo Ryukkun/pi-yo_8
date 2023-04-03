@@ -92,7 +92,7 @@ class CreateButton(ui.View):
     @ui.button(label="切断", row=3, style=ButtonStyle.red)
     async def def_button6(self, interaction:Interaction, button):
         await interaction.response.defer()
-        await self.Parent.Info._bye()
+        await self.Parent.Info.bye()
 
 
 
