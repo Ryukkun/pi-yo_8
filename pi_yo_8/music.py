@@ -438,9 +438,17 @@ class MusicController():
 #   再生 Loop
 #---------------------------------------------------------------------------------------
     async def _load_next_pl(self):
+        '''
+        create_taskによる非同期投げっぱなし動作
+        PlayList有効中に動作
+        load中に PLが無効になる場合も考え 非同期処理が入るたびに PLがTrueか確認しよう！
+        '''
         if self.def_doing['_load_next_pl']: return
+        if not self.PL: return
         self.def_doing['_load_next_pl'] = True
         while len(self.Queue) <= 19 and self.def_doing['_load_next_pl']:
+            if not self.PL: break
+            
             if self.Queue:
                 last_index = self.Queue[-1].index
             else:
@@ -466,7 +474,8 @@ class MusicController():
             except Exception as e:
                 print(f'Error : Playlist Extract {e}')
                 break
-
+            
+            if not self.PL: break
             sad.index = new_index
             self.Queue.append(sad)
             #print(new_index)
@@ -500,7 +509,7 @@ class MusicController():
                 self.Index_PL = self.Queue[0].index
 
                 # Print
-                print(f"{self.gn} : Paylist add Queue  [Now len: {str(len(self.Queue))}]")
+                #print(f"{self.gn} : Paylist add Queue  [Now len: {str(len(self.Queue))}]")
 
         # 再生
         if self.Queue:
