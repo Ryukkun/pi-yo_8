@@ -90,7 +90,6 @@ async def join(ctx:commands.Context):
 async def bye(ctx:commands.Context):
     guild = ctx.guild
     if info := g_opts.get(guild.id):
-        print(f'{guild.name} : #切断')
         await info._bye()
 
     
@@ -173,8 +172,8 @@ async def play(ctx:commands.Context, *args):
 class DataInfo():
     def __init__(self, guild:discord.Guild):
         self.guild = guild
-        self.gn = guild.name
         self.gid = guild.id
+        self.gn = guild.name
         self.vc = guild.voice_client
         self.loop = client.loop
         self.client = client
@@ -184,15 +183,16 @@ class DataInfo():
         self.loop_5.start()
 
 
-    async def bye(self):
-        self.loop.create_task(self._bye())
+    async def bye(self, text:str='切断'):
+        self.loop.create_task(self._bye(text))
 
 
-    async def _bye(self):
+    async def _bye(self, text:str):
         self.loop_5.stop()
         self.MA.kill()
         del g_opts[self.gid]
         
+        print(f'{self.gn} : #{text}')
         await asyncio.sleep(0.02)
         try: await self.vc.disconnect()
         except Exception: pass
@@ -211,15 +211,13 @@ class DataInfo():
         # 強制切断検知
         mems = self.vc.channel.members
         if not client.user.id in [_.id for _ in mems]:
-            print(f'{self.gn} : #強制切断')
-            await self.bye()
+            await self.bye('強制切断')
 
         # voice channelに誰もいなくなったことを確認
         elif not False in [_.bot for _ in mems]:
             self.count_loop += 1
             if 2 <= self.count_loop:
-                print(f'{self.gn} : #誰もいなくなったため 切断')
-                await self.bye()
+                await self.bye('誰もいなくなったため 切断')
 
         # Reset Count
         else:
