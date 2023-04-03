@@ -8,7 +8,7 @@ from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
 from discord.ext.commands import Context
 
 
-from .data_analysis import int_analysis, date_difference
+from .data_analysis import int_analysis, date_difference, calc_time
 from .audio_source import AnalysisUrl
 from .audio_source import StreamAudioData as SAD
 from .view import CreateButton
@@ -272,23 +272,6 @@ class MusicController():
 
 
 
-    @classmethod
-    def _Calc_Time(self, Time):
-        Sec = Time % 60
-        Min = Time // 60 % 60
-        Hour = Time // 3600
-        if Sec <= 9:
-            Sec = f'0{Sec}'
-        if Hour == 0:
-            Hour = ''
-        else:
-            Hour = f'{Hour}:'
-            if Min <= 9:
-                Min = f'0{Min}'
-        
-        return f'{Hour}{Min}:{Sec}'
-
-
     async def generate_embed(self):
         _SAD = self.Mvc._SAD
 
@@ -311,21 +294,24 @@ class MusicController():
             if des:
                 embed.description = '　'.join( des)
 
-            def get_progress(II):
-                NTime = int(self.Mvc.Timer) // 50
-                Duration = _SAD.st_sec / II
-                Progress = ''
-                for I in range(II):
-                    I = I * Duration
-                    if I <= NTime < (I + Duration):
-                        Progress += '||' if self.Mvc.Pausing else '>'
-                    else:
-                        Progress += '-'
-                return Progress
-            Progress = get_progress(40)
-            NTime = self._Calc_Time(int(self.Mvc.Timer) // 50)
-            Duration = self._Calc_Time(_SAD.st_sec)
-            embed.set_footer(text=f'{NTime} {Progress} {Duration}')
+            # Progress Bar
+            i_length = 16
+            NTime = int(self.Mvc.Timer) // 50
+            unit_time = _SAD.st_sec / i_length
+            Progress = ''
+            text_list = ['　','▏','▎','▍','▌','▋','▋','▊','▉','█']
+            for I in range(i_length):
+                I = I * unit_time
+                if I <= NTime < (I + unit_time):
+                    level = int((NTime - I) / unit_time * 9)
+                    Progress += text_list[level]
+                elif I <= NTime:
+                    Progress += '█'
+                else:
+                    Progress += '　'
+            NTime = calc_time(int(self.Mvc.Timer) // 50)
+            Duration = calc_time(_SAD.st_sec)
+            embed.set_footer(text=f'{NTime} | {Progress} | {Duration}')
         else:
             embed=Embed(title=_SAD.web_url, url=_SAD.web_url, colour=EmBase.player_color())
 
@@ -364,7 +350,7 @@ class MusicController():
             embed=Embed(title=AudioData.web_url, url=AudioData.web_url, colour=EmBase.main_color())
 
         if AudioData.st_sec:
-            Duration = self._Calc_Time(AudioData.st_sec)
+            Duration = calc_time(AudioData.st_sec)
             embed.add_field(name="Length", value=Duration, inline=True)
 
             

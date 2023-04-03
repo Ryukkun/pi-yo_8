@@ -42,3 +42,20 @@ def date_difference(arg:str):
         res = '今日'
         
     return res
+
+
+
+def calc_time(Time):
+    Sec = Time % 60
+    Min = Time // 60 % 60
+    Hour = Time // 3600
+    if Sec <= 9:
+        Sec = f'0{Sec}'
+    if Hour == 0:
+        Hour = ''
+    else:
+        Hour = f'{Hour}:'
+        if Min <= 9:
+            Min = f'0{Min}'
+    
+    return f'{Hour}{Min}:{Sec}'
