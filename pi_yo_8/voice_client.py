@@ -71,19 +71,19 @@ class MultiAudio:
         return player
 
     def _speaking(self,status: bool):
-        temp = 0
+        playing = 0
         for P in self.Players:
-            if P.Loop:
-                temp += 1
+            if not P.is_paused():
+                playing += 1
         if status:
-            if temp == 0:
+            if playing == 1:
                 self.__speak(SpeakingState.voice)
                 with lock:
                     if not self.doing['run_loop']:
                         self.doing['run_loop'] = True
                         threading.Thread(target=self.run_loop,daemon=True).start()
         else:
-            if temp == 1:
+            if playing == 0:
                 self.__speak(SpeakingState.none)
 
 
@@ -165,7 +165,6 @@ class _AudioTrack:
         self.QBytes = []
         self.RBytes = []
         self.Duration = None
-        self.Loop = False
         self.first_delay = False
     
 
@@ -185,14 +184,13 @@ class _AudioTrack:
 
     def stop(self):
         if self.AudioSource:
-            self._speaking(False)
+            self.pause()
         self.AudioSource = None
         self._SAD = None
 
     def resume(self):
-        if self.Pausing:
-            self.Pausing = False
-            self._speaking(True)
+        self.Pausing = False
+        self._speaking(True)
 
     def pause(self):
         self.Pausing = True
@@ -208,7 +206,6 @@ class _AudioTrack:
 
     def _speaking(self,status: bool):
         self.Parent._speaking(status=status)
-        self.Loop = status
 
     def skip_time(self, stime:int):
         # n秒 進む
