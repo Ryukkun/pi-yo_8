@@ -3,6 +3,7 @@ import asyncio
 import time
 import numpy as np
 
+from math import sqrt
 from discord import SpeakingState, opus, Guild
 from discord.ext import commands
 
@@ -107,20 +108,33 @@ class MultiAudio:
         send_audio = self.vc.send_audio_packet
         _start = time.perf_counter()
         fin_loop = 0
+        self.doing['run_loop'] = True
         while self.loop:
             Bytes = None
             if self.PLen == 1:
                 Bytes = self.P1_read_bytes()
 
             elif self.PLen >= 2:
+                byte_numpy = None
+                active_track = 0
+                old_vol = 1
                 for P in self.Players:
-                    _Byte = P.read_bytes(numpy=True)
+                    _Byte = P.read_bytes()
                     if _Byte != None:
-                        if Bytes == None:
-                            Bytes = _Byte
+                        active_track += 1
+                        _byte_numpy = np.frombuffer(_Byte, dtype=np.int16)
+                        if active_track == 1:
+                            byte_numpy:np.ndarray = _byte_numpy.copy()
                             continue
-                        Bytes += _Byte
-                Bytes = Bytes.astype(np.int16).tobytes()
+
+                        # 音量調節
+                        target_vol = sqrt(active_track*2)
+                        _byte_numpy = _byte_numpy * (target_vol/active_track)
+                        byte_numpy = byte_numpy * (target_vol/active_track*(active_track-1) / old_vol) + _byte_numpy
+                        old_vol = target_vol
+                        
+                if 1 <= active_track:
+                    Bytes = byte_numpy.astype(np.int16).tobytes()
 
             # Loop Delay
             _start += 0.02
@@ -142,7 +156,7 @@ class MultiAudio:
             # thread fin
             else:
                 fin_loop += 1
-                if 1500 < fin_loop:
+                if (50 * 20) < fin_loop:
                     break
 
         self.doing['run_loop'] = False
@@ -165,7 +179,6 @@ class _AudioTrack:
         self.QBytes = []
         self.RBytes = []
         self.Duration = None
-        self.first_delay = False
     
 
     async def play(self,_SAD:StreamAudioData,after):
@@ -179,7 +192,6 @@ class _AudioTrack:
         self.Timer = 0.0
         self.read_fin = False
         self.After = after
-        self.first_delay = False
         self.resume()
 
     def stop(self):
@@ -249,15 +261,6 @@ class _AudioTrack:
             # Read Bytes
             if len(self.QBytes) <= (45 * 50):
                 self._read_bytes(True)
-            
-            if not self.QBytes:
-                self.first_delay = True
-                return
-            if self.first_delay:
-                if (3 * 50) < len(self.QBytes):
-                    self.first_delay = False
-                else:
-                    return
 
             if self.Pausing == False:
                 #print(len(self.QBytes))
@@ -286,7 +289,6 @@ class _AudioTrack:
         self.QBytes.clear()
         self.RBytes.clear()
         self.read_fin = False
-        self.first_delay = False
 
 
     async def update_asouce_sec(self):
