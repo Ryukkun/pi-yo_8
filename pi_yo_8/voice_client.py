@@ -21,12 +21,10 @@ class _Attribute:
         self.max = max
     
     async def set(self, num):
-        res = await self._check(num)
-        return res
+        return await self._check(num)
 
     async def add(self, num):
-        res = await self._check(self.get + num)
-        return res
+        return await self._check(self.get + num)
 
     async def _check(self, num):
         if self.min <= num <= self.max:

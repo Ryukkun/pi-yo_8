@@ -202,7 +202,7 @@ class StreamAudioData:
     @classmethod
     async def api_p_search(self, arg):
         #arg = urllib.parse.quote(arg)
-        params = {'key':config.youtube_key, 'part':'id', 'q':arg, 'maxResults':'20', 'type':'video'}
+        params = {'key':config.youtube_key, 'part':'id', 'q':arg, 'maxResults':'50', 'type':'video'}
         url = youtube_api + '/search'
         async with aiohttp.ClientSession() as session:
             async with session.get(url=url, params=params) as resp:

@@ -1,10 +1,11 @@
 import asyncio
 from discord import ui, Interaction, SelectOption ,ButtonStyle, Embed
+from typing import List
 
 from .audio_source import StreamAudioData as SAD
 from .embeds import EmBase
 from .voice_client import _AudioTrack
-
+from .lyricsgenius.lyrics import GeniusLyric
 
 
 # Button
@@ -88,9 +89,31 @@ class CreateButton(ui.View):
             view= PlayConfigView(self.Parent),
             ephemeral= False
             )
+
+    # @ui.button(label="歌詞", row=3)
+    # async def def_button6(self, interaction:Interaction, button):
+    #     self.Parent._update_action()
+
+    #     if title := self.Parent.Mvc._SAD.title:
+    #         songs = await GeniusLyric.from_q(title)
+    #         if songs:
+    #             text = await songs[0].get_lyric()
+    #             await interaction.response.send_message(
+    #                 embed= LyricEmbed(text),
+    #                 view= LyricView(songs),
+    #                 ephemeral= False
+    #                 )
+    #             return
+    #     await interaction.response.send_message(
+    #         embed= LyricEmbed('歌詞の取得に失敗しました'),
+    #         ephemeral= False,
+    #         delete_after=10,
+    #         )
         
+
+
     @ui.button(label="切断", row=3, style=ButtonStyle.red)
-    async def def_button6(self, interaction:Interaction, button):
+    async def def_button7(self, interaction:Interaction, button):
         await interaction.response.defer()
         await self.Parent.Info.bye()
 
@@ -266,3 +289,44 @@ class PlayConfigView(ui.View):
         self.parent._update_action()
         await interaction.response.defer()
         await interaction.message.delete()
+
+
+
+class LyricView(ui.View):
+    def __init__(self, songs:List[GeniusLyric]):
+        self.songs = songs
+        super().__init__(timeout=None)
+        self.add_item(LyricSelect(self))
+
+    @ui.button(label='Delete', style=ButtonStyle.red, row=1)
+    async def def_button0(self, interaction:Interaction, button):
+        await interaction.response.defer()
+        await interaction.message.delete()
+
+class LyricSelect(ui.Select):
+    def __init__(self, parent:'LyricView'):
+        self.parent = parent
+        if 25 < len(parent.songs):
+            self.songs = parent.songs[:25]
+        else:
+            self.songs = parent.songs
+        self.my_options = [SelectOption(label=_.title, value=i) for i,_ in enumerate(self.songs)]
+        options = self.my_options
+        options[0].default = True
+        super().__init__(placeholder='曲リスト', options=options)
+
+    async def callback(self, interaction: Interaction):
+        res = int(self.values[0])
+        lyric = await self.songs[res].get_lyric()
+        self.options = self.my_options
+        self.options[res].default = True
+        await interaction.response.edit_message(
+            embed= LyricEmbed(lyric),
+            view= self.parent
+        )
+
+
+def LyricEmbed(description):
+    if not description:
+        description = 'None'
+    return Embed(description=description, color=EmBase.dont_replace_color())
