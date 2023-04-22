@@ -29,16 +29,16 @@ from https://github.com/pytube/pytube/blob/master/LICENSE
 
 import aiohttp
 import json
+import random
 
 from urllib import parse
-from pytube.innertube import InnerTube as old_InnerTube
+from pytube.innertube import InnerTube as old_InnerTube, _api_keys
 
 
 class InnerTube(old_InnerTube):
     async def _call_api(self, endpoint, query, data):
         """Make a request to a given endpoint with the provided query parameters and data."""
         # Remove the API key if oauth is being used.
-
         endpoint_url = f'{endpoint}?{parse.urlencode(query)}'
         headers = {
             'Content-Type': 'application/json',
@@ -80,10 +80,7 @@ async def _execute_request(
         # encode data for request
         if not isinstance(data, bytes):
             data = bytes(json.dumps(data), encoding="utf-8")
-    if url.lower().startswith("http"):
-        async with aiohttp.ClientSession(headers=base_headers) as session:
-            async with session.post(url=url, data=data) as resp:
-                return await resp.json()
-            
-    else:
-        raise ValueError("Invalid URL")
+
+    async with aiohttp.ClientSession(headers=base_headers) as session:
+        async with session.post(url=url, data=data) as resp:
+            return await resp.json()

@@ -3,7 +3,7 @@ import random
 import time
 import tabulate
 import asyncio
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
 from discord.ext.commands import Context
 
@@ -47,9 +47,9 @@ class MusicController():
         self.gid = Info.gid
         self.gn = Info.gn
         self.vc = self.guild.voice_client
-        self.Queue:list[SAD] = []
+        self.Queue:List[SAD] = []
         self.Index_PL = None
-        self.PL:list[SAD] = []
+        self.PL:List[SAD] = []
         self.Latest_CH:TextChannel = None
         self.status = {'loop':True,'loop_pl':True,'random_pl':True}
         self.last_status = self.status.copy()
@@ -437,18 +437,13 @@ class MusicController():
 #---------------------------------------------------------------------------------------
 #   再生 Loop
 #---------------------------------------------------------------------------------------
-    async def _load_next_pl(self):
+    def _load_next_pl(self):
         '''
-        create_taskによる非同期投げっぱなし動作
         PlayList有効中に動作
         load中に PLが無効になる場合も考え 非同期処理が入るたびに PLがTrueか確認しよう！
         '''
-        if self.def_doing['_load_next_pl']: return
         if not self.PL: return
-        self.def_doing['_load_next_pl'] = True
-        while len(self.Queue) <= 19 and self.def_doing['_load_next_pl']:
-            if not self.PL: break
-            
+        while len(self.Queue) <= 25:            
             if self.Queue:
                 last_index = self.Queue[-1].index
             else:
@@ -469,47 +464,45 @@ class MusicController():
                 if self.status['loop_pl'] == False:
                     break
 
-            sad = self.PL[new_index]
-            try :await sad.Pyt_V()
-            except Exception as e:
-                print(f'Error : Playlist Extract {e}')
-                break
+            sad:SAD = self.PL[new_index]
+            # try :await sad.Pyt_V()
+            # except Exception as e:
+            #     print(f'Error : Playlist Extract {e}')
+            #     sad.index = new_index
+            #     break
             
-            if not self.PL: break
             sad.index = new_index
             self.Queue.append(sad)
             #print(new_index)
 
-        self.def_doing['_load_next_pl'] = False
 
 
 
-    async def play_loop(self, played, did_time):
+    async def play_loop(self, played=None, did_time=0):
         # あなたは用済みよ
         if not self.vc: return
 
         # Queue削除
         if self.Queue:
-            if self.status['loop'] == False and self.Queue[0].st_url == played or (time.time() - did_time) <= 0.5:
+            if self.status['loop'] == False and played and self.Queue[0].st_url == played or (time.time() - did_time) <= 0.5:
                 self.Rewind.append(self.Queue[0])
                 del self.Queue[0]
                 
         # Playlistのお客様Only
         if self.PL:
-            self.CLoop.create_task(self._load_next_pl())
+            self._load_next_pl()
             if self.Queue == []:
-
-                # 最初が読み込まれるまで wait
-                while not self.Queue:
-                    await asyncio.sleep(0.5)
-                
-                if not self.PL: return
-
                 # Queue
                 self.Index_PL = self.Queue[0].index
 
                 # Print
                 #print(f"{self.gn} : Paylist add Queue  [Now len: {str(len(self.Queue))}]")
+            
+            if self.Queue:
+                res = await self.Queue[0].check_st_url()
+                if not res:
+                    del self.Queue[0]
+                    self.CLoop.create_task(self.play_loop())
 
         # 再生
         if self.Queue:
@@ -531,7 +524,7 @@ class MusicController():
                         await asyncio.sleep(1)
                 self.last_status = self.status.copy()
                 del self.Queue[1:]
-                self.CLoop.create_task(self._load_next_pl())
+                self._load_next_pl()
 
             # Embed
             now = time.time()
