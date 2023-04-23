@@ -296,7 +296,8 @@ class LyricView(ui.View):
     def __init__(self, songs:List[GeniusLyric]):
         self.songs = songs
         super().__init__(timeout=None)
-        self.add_item(LyricSelect(self))
+        self.select = LyricSelect(self)
+        self.add_item(self.select)
 
     @ui.button(label='Delete', style=ButtonStyle.red, row=1)
     async def def_button0(self, interaction:Interaction, button):
@@ -304,22 +305,26 @@ class LyricView(ui.View):
         await interaction.message.delete()
 
 class LyricSelect(ui.Select):
-    def __init__(self, parent:'LyricView'):
+    def __init__(self, parent:'LyricView', i=0):
         self.parent = parent
         if 25 < len(parent.songs):
             self.songs = parent.songs[:25]
         else:
             self.songs = parent.songs
         self.my_options = [SelectOption(label=_.title, value=i) for i,_ in enumerate(self.songs)]
-        options = self.my_options
-        options[0].default = True
+        options = self.my_options.copy()
+        options[i].default = True
         super().__init__(placeholder='曲リスト', options=options)
 
     async def callback(self, interaction: Interaction):
         res = int(self.values[0])
         lyric = await self.songs[res].get_lyric()
-        self.options = self.my_options
-        self.options[res].default = True
+        self.options = self.my_options.copy()
+        self.parent.remove_item(self.parent.select)
+        select = LyricSelect(self.parent, i=res)
+        self.parent.select = select
+        self.parent.add_item(select)
+        #super().__init__(placeholder='曲リスト', options=options)
         await interaction.response.edit_message(
             embed= LyricEmbed(lyric),
             view= self.parent

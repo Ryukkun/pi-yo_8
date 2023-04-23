@@ -1,5 +1,4 @@
 import aiohttp
-import urllib.parse
 import re
 
 from typing import List
@@ -94,18 +93,20 @@ class GeniusLyric:
                     "Song URL: {}".format(self.web_url))
             return
 
-        lyrics = div.get_text()
+        self.lyric = div.get_text()
 
         # Remove [Verse], [Bridge], etc.
-        lyrics = re.sub(r'(\[.*?\])*', '', lyrics)
-        self.lyric = re.sub('\n{2}', '\n', lyrics)  # Gaps between verses
+        self.lyric = re.sub(r'(\[.*?\])*', '', self.lyric)
+        self.lyric = re.sub(r'^.+?\n', '', self.lyric)
+        self.lyric = re.sub(r'(\d+|)Embed$', '', self.lyric)
+        #self.lyric = re.sub('\n{2}', '\n', lyrics)  # Gaps between verses
         #self.lyrics = lyrics.strip("\n")
         return self.lyric
     
 
 if __name__ == '__main__':
     async def test():
-        res = await GeniusLyric.from_q('cool for the summer')
-        print(res)
+        res = await GeniusLyric.from_q('轍 japanese')
+        print(await res[0].get_lyric())
     import asyncio
     asyncio.run(test())
