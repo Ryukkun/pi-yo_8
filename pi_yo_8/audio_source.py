@@ -1,6 +1,5 @@
 import asyncio
 import aiohttp
-import re
 import urllib.parse
 
 from typing import Optional
@@ -12,25 +11,44 @@ from .pytube.innertube import InnerTube
 
 import config
 
-re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
-re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|youtu.be/)(.+)')
-re_URL_PL_Video = re.compile(r'https://(www.|)youtube.com/watch\?v=(.+)&list=(.+)')
-re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=(.+)')
-re_URL = re.compile(r'http')
 youtube_api = 'https://www.googleapis.com/youtube/v3'
 
 
 
 class AnalysisUrl:
-    def __init__(self) -> None:
-        self.arg:Optional[str] = None
+    def __init__(self, arg:str) -> None:
+        self.arg = arg
         self.playlist:Optional[bool] = False
         self.index:Optional[int] = None
         self.random_pl:Optional[bool] = None
         self.sad:Optional[StreamAudioData] = None
+        self.url_parse = urllib.parse.urlparse(arg)
+        self.url_query:dict = {}
+
+        if self.url_parse.query:
+            self.url_query = urllib.parse.parse_qs(self.url_parse.query)
 
 
-    async def video_check(self, arg:str) -> 'AnalysisUrl':
+    def is_url(self):
+        return bool(self.url_parse.hostname)
+
+    def is_yt(self):
+        return ( self.url_parse.hostname in ('www.youtube.com', 'youtube.com', 'youtu.be'))
+
+    def get_list_id(self):
+        return self.url_query.get('list', [None])[0]
+    
+    def get_video_id(self):
+        if res := self.url_query.get('v', [None])[0]:
+            pass
+        elif self.url_parse.hostname == 'youtu.be':
+            res = self.url_parse.path[1:]
+        
+        return res
+        
+
+
+    async def video_check(self) -> 'AnalysisUrl':
         """
         .p で指定された引数を、再生可能か判別する
 
@@ -40,19 +58,18 @@ class AnalysisUrl:
         不可
         return None
         """
-        self.arg = arg
-        ### 動画+playlist
-        if re_result := re_URL_PL_Video.match(arg):
-            arg = f'https://www.youtube.com/watch?v={re_result.group(2)}'
-        
+        arg = self.arg
+        watch_id = self.get_video_id()
+        yt = self.is_yt()
+
         ### 文字指定
-        if not re_URL.match(arg):
+        if not self.is_url():
             self.sad = await StreamAudioData(arg).api_v_search()
 
-        ### youtube 動画オンリー
-        elif re_result := re_URL_Video.match(arg):
+        ### youtube 動画
+        elif watch_id and yt:
             try: 
-                self.sad = await StreamAudioData(re_result.group(3)).Pyt_V()
+                self.sad = await StreamAudioData(watch_id).Pyt_V()
             except Exception as e:
                 print(f"Error : Audio only 失敗 {e}")
 
@@ -68,7 +85,7 @@ class AnalysisUrl:
 
 
 
-    async def url_check(self, arg:str) -> 'AnalysisUrl':
+    async def url_check(self) -> 'AnalysisUrl':
         """
         指定された引数を、再生可能か判別する
         
@@ -81,23 +98,23 @@ class AnalysisUrl:
         不可
         return None
         """
-        self.arg = arg
-        ### PlayList 本体のURL ------------------------------------------------------------------------#
-        if result_re := re_URL_PL.match(arg): 
-            if pl := await StreamAudioData.load_p(url=arg, _id=result_re.group(2)):
-                self.playlist = True
-                self.index = -1
-                self.random_pl = True
-                self.sad = pl 
-
+        arg = self.arg
+        watch_id = self.get_video_id()
+        pl_id = self.get_list_id()
+        yt = self.is_yt()
+        
+        ### URLじゃなかった場合 -----------------------------------------------------------------------#
+        if not self.is_url():
+            self.sad = await StreamAudioData.api_p_search(arg)
+            self.index = -1
+            self.random_pl = False
+            self.playlist = True
+    
+        
         ### PlayList と 動画が一緒についてきた場合 --------------------------------------------------------------#
-        elif result_re := re_URL_PL_Video.match(arg):
-            watch_id = result_re.group(2)
-            #arg = f'https://www.youtube.com/playlist?list={result_re.group(3)}'
-            _id = re.sub(r'&index.+','',result_re.group(3))
-
+        elif pl_id and watch_id and yt:
             # Load Video in the Playlist 
-            if pl := await StreamAudioData.load_p(url=arg, _id=_id):
+            if pl := await StreamAudioData.load_p(url=arg, _id=pl_id):
                 # Playlist Index 特定
                 index = 0
                 for index, temp in enumerate(pl):
@@ -110,31 +127,34 @@ class AnalysisUrl:
                 self.sad = pl
 
 
+        ### PlayList 本体のURL ------------------------------------------------------------------------#
+        elif pl_id and yt: 
+            if pl := await StreamAudioData.load_p(url=arg, _id=pl_id):
+                self.playlist = True
+                self.index = -1
+                self.random_pl = True
+                self.sad = pl 
+
+
         ### youtube 動画オンリー -----------------------------------------------------------------------#
-        elif result_re := re_URL_Video.match(arg):
+        elif watch_id and yt:
             try: 
-                self.sad = await StreamAudioData(result_re.group(3)).Pyt_V()
+                self.sad = await StreamAudioData(watch_id).Pyt_V()
             except Exception as e:
                 print(f"Error : Audio only 失敗 {e}")
 
 
         ### それ以外のサイト yt-dlp を使用 -----------------------------------------------------------------------#
-        elif re_URL.match(arg):
+        else:
             try: 
                 self.sad = await StreamAudioData(arg).Ytdlp_V()
             except Exception as e:
                 print(f"Error : Audio + Video 失敗 {e}")
 
 
-        ### URLじゃなかった場合 -----------------------------------------------------------------------#
-        else:
-            self.sad = await StreamAudioData.api_p_search(arg)
-            self.index = -1
-            self.random_pl = False
-            self.playlist = True
-        
         if not self.sad:return
         return self
+
 
 
 class StreamAudioData:
@@ -228,23 +248,30 @@ class StreamAudioData:
 
     @classmethod
     async def api_p(cls, arg):
-        arg = urllib.parse.quote(arg)
         params = {'key':config.youtube_key, 'part':'contentDetails,status,snippet', 'playlistId':arg, 'maxResults':'50'}
         url = youtube_api + '/playlistItems'
         res_urls = []
+        i = 0
+        loop = True
         async with aiohttp.ClientSession() as session:
-            while True:
+            while loop:
                 async with session.get(url=url, params=params) as resp:
                     text = await resp.json()
                     if not text['items']:
                         raise Exception('解析不可能なplaylist')
+                    total = text['pageInfo']['totalResults']
                     for _ in text['items']:
+                        i += 1
+                        if total < i:
+                            loop = False
+                            break
                         if _['status']['privacyStatus'].lower() == 'private':
                             continue
                         upload_date = _['contentDetails']['videoPublishedAt'][:10].replace('-','/')
                         video_id = _['contentDetails']['videoId']
                         title = _['snippet']['title']
                         res_urls.append(cls(video_id, upload_date=upload_date, video_id=video_id, title=title))
+
                     if text.get('nextPageToken'):
                         params['pageToken'] = text['nextPageToken']
                     else:

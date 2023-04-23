@@ -85,7 +85,7 @@ class MusicController():
 
 
         # 君は本当に動画なのかい　どっちなんだい！
-        res = await AnalysisUrl().video_check(arg)
+        res = await AnalysisUrl(arg).video_check()
         if not res: return
 
         # playlist 再生中のお客様はお断り
@@ -114,7 +114,7 @@ class MusicController():
 
 
         # 君は本当に動画なのかい　どっちなんだい！
-        res = await AnalysisUrl().url_check(arg)
+        res = await AnalysisUrl(arg).url_check()
         if not res: return
 
         if res.playlist:
@@ -135,6 +135,7 @@ class MusicController():
             if self.Queue == []:
                 self.Queue.append(res.sad)
             else:
+                self.Rewind.append(self.Queue[0])
                 self.Queue[0] = res.sad
 
         # 再生されるまでループ
@@ -337,7 +338,7 @@ class MusicController():
             return
 
         # 君は本当に動画なのかい　どっちなんだい！
-        AudioData = await AnalysisUrl().video_check(arg)
+        AudioData = await AnalysisUrl(arg).video_check()
         if not AudioData: return
 
         AudioData = AudioData.sad
