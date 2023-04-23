@@ -90,7 +90,7 @@ async def join(ctx:commands.Context):
 async def bye(ctx:commands.Context):
     guild = ctx.guild
     if info := g_opts.get(guild.id):
-        await info._bye()
+        await info.bye()
 
     
 
