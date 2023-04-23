@@ -85,14 +85,14 @@ class MusicController():
 
 
         # 君は本当に動画なのかい　どっちなんだい！
-        res = await AnalysisUrl().video_check()
+        res = await AnalysisUrl().video_check(arg)
         if not res: return
 
         # playlist 再生中のお客様はお断り
         self._reset_pl()
 
         #Queueに登録
-        self.Queue.append(res)
+        self.Queue.append(res.sad)
 
         # 再生されるまでループ
         if not self.Mvc.is_playing():

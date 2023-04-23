@@ -211,8 +211,7 @@ class StreamAudioData:
         return [
             self(_['id']['videoId'],
                  video_id=_['id']['videoId'],
-                 title=_['snippet']['title'],
-                 upload_data = _['snippet']['publishTime'][:10].replace('-','/')
+                 title=_['snippet']['title']
                  )
             for _ in text['items']
                 ]
@@ -286,24 +285,25 @@ class StreamAudioData:
         
     # YT Video Load
     async def Pyt_V(self):
-        self.video_id = self.input
+        if not self.video_id:
+            self.video_id = self.input
         
         used = 'pytube'
-        self.Vdic = await InnerTube().player(self.video_id)
+        vdic = await InnerTube().player(self.video_id)
 
-        if not self.Vdic.get('streamingData'):
+        if not vdic.get('streamingData'):
             used = 'pytube embed'
-            self.Vdic = await InnerTube(client='ANDROID_EMBED').player(self.video_id)
+            vdic = await InnerTube(client='ANDROID_EMBED').player(self.video_id)
 
-            if not self.Vdic.get('streamingData'):
+            if not vdic.get('streamingData'):
                 used = 'yt-dlp'
                 url = f'https://www.youtube.com/watch?v={self.video_id}'
                 with YoutubeDL({'format': 'bestaudio','quiet':True}) as ydl:
-                    self.Vdic = await self.loop.run_in_executor(None, ydl.extract_info, url, False)
+                    vdic = await self.loop.run_in_executor(None, ydl.extract_info, url, False)
 
         #print(f'used {used}')
 
-        await self._format()
+        await self._format(vdic)
         self.music = True
         self.YT = True
         return self
@@ -331,40 +331,40 @@ class StreamAudioData:
         return self
 
 
-    async def _format(self):
+    async def _format(self, vdic):
 
         # pytube
-        if self.Vdic.get('streamingData'):
-            self.formats = self.Vdic['streamingData'].get('formats',[])
-            self.formats.extend(self.Vdic['streamingData'].get('adaptiveFormats',[]))
+        if vdic.get('streamingData'):
+            self.formats = vdic['streamingData'].get('formats',[])
+            self.formats.extend(vdic['streamingData'].get('adaptiveFormats',[]))
             res = []
             for fm in self.formats:
                 if 249 <= fm['itag'] <= 251 or 139 <= fm['itag'] <= 141:
                     res.append(fm)
             self.st_url = res[-1]['url']
-            self.title = self.Vdic["videoDetails"]["title"]
-            self.ch_name = self.Vdic["videoDetails"]["author"]
-            self.ch_url = f'https://www.youtube.com/channel/{self.Vdic["videoDetails"]["channelId"]}'
-            self.ch_id = self.Vdic["videoDetails"]["channelId"]
-            self.video_id = self.Vdic["videoDetails"]["videoId"]
-            self.st_vol = self.Vdic['playerConfig']['audioConfig'].get('loudnessDb')
-            self.st_sec = int(self.Vdic['videoDetails']['lengthSeconds'])
-            self.view_count = self.Vdic['videoDetails']['viewCount']
+            self.title = vdic["videoDetails"]["title"]
+            self.ch_name = vdic["videoDetails"]["author"]
+            self.ch_url = f'https://www.youtube.com/channel/{vdic["videoDetails"]["channelId"]}'
+            self.ch_id = vdic["videoDetails"]["channelId"]
+            self.video_id = vdic["videoDetails"]["videoId"]
+            self.st_vol = vdic['playerConfig']['audioConfig'].get('loudnessDb')
+            self.st_sec = int(vdic['videoDetails']['lengthSeconds'])
+            self.view_count = vdic['videoDetails']['viewCount']
             await self.api_get_viewcounts()
 
         else:
-            self.formats = self.Vdic['formats']
-            self.st_url = self.Vdic['url']
-            self.title = self.Vdic["title"]
-            self.ch_name = self.Vdic["channel"]
-            self.ch_url = self.Vdic["channel_url"]
-            self.ch_id = self.Vdic["channel_id"]
-            self.video_id = self.Vdic["id"]
+            self.formats = vdic['formats']
+            self.st_url = vdic['url']
+            self.title = vdic["title"]
+            self.ch_name = vdic["channel"]
+            self.ch_url = vdic["channel_url"]
+            self.ch_id = vdic["channel_id"]
+            self.video_id = vdic["id"]
             self.st_vol = 5.0
-            self.st_sec = int(self.Vdic["duration"])
-            self.view_count = self.Vdic.get('view_count')
-            self.like_count = self.Vdic.get('like_count')
-            ud = self.Vdic['upload_date']
+            self.st_sec = int(vdic["duration"])
+            self.view_count = vdic.get('view_count')
+            self.like_count = vdic.get('like_count')
+            ud = vdic['upload_date']
             self.upload_date = f'{ud[:4]}/{ud[4:6]}/{ud[6:]}'
 
 
