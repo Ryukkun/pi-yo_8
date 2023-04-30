@@ -226,7 +226,7 @@ class _AudioTrack:
                 if target_sec > self._SAD.st_sec:
                     self._finish()
                     return
-                self.Parent.CLoop.create_task(self._new_asouce_sec(target_sec))
+                self.Parent.CLoop.create_task(self.update_asouce_sec(sec=target_sec))
 
             else:
                 with lock:
@@ -244,7 +244,7 @@ class _AudioTrack:
             if len(self.RBytes) < stime:
                 target_sec = target_time // 50
                 if target_sec < 0: target_sec = 0
-                self.Parent.CLoop.create_task(self._new_asouce_sec(target_sec))
+                self.Parent.CLoop.create_task(self.update_asouce_sec(sec=target_sec))
 
             else:
                 with lock:
@@ -254,7 +254,7 @@ class _AudioTrack:
 
 
 
-    def read_bytes(self, numpy=False):
+    def read_bytes(self):
         if self.AudioSource:            
             # Read Bytes
             if len(self.QBytes) <= (45 * 50):
@@ -276,21 +276,21 @@ class _AudioTrack:
                             if len(self.RBytes) > self.RNum:
                                 del self.RBytes[:len(self.RBytes) - self.RNum]
 
-                    if numpy:
-                        return np.frombuffer(_byte,np.int16)
                     return _byte
 
 
-    async def _new_asouce_sec(self, sec):
+    async def update_asouce_sec(self, time=None, sec=None):
+        if time == None and sec == None:
+            time = self.Timer
+        if time != None:
+            sec = time // 50
+
         self.AudioSource = await self._SAD.AudioSource(self.opus, sec, speed=self.speed.get, pitch=self.pitch.get)
         self.Timer = float(sec * 50)
         self.QBytes.clear()
         self.RBytes.clear()
         self.read_fin = False
 
-
-    async def update_asouce_sec(self):
-        await self._new_asouce_sec(self.Timer // 50)
 
 
     def _finish(self):
