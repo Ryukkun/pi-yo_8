@@ -112,45 +112,39 @@ class MultiAudio:
             if self.PLen == 1:
                 Bytes = self.P1_read_bytes()
 
-            elif self.PLen >= 2:
-                byte_numpy = None
-                active_track = 0
-                old_vol = 1
-                for P in self.Players:
-                    _Byte = P.read_bytes()
-                    if _Byte != None:
-                        active_track += 1
-                        _byte_numpy = np.frombuffer(_Byte, dtype=np.int16)
-                        if active_track == 1:
-                            byte_numpy:np.ndarray = _byte_numpy.copy()
-                            continue
-
-                        # 音量調節
-                        target_vol = sqrt(active_track*2)
-                        _byte_numpy = _byte_numpy * (target_vol/active_track)
-                        byte_numpy = byte_numpy * (target_vol/active_track*(active_track-1) / old_vol) + _byte_numpy
-                        old_vol = target_vol
-                        
+            elif 2 <= self.PLen:
+                byte_list = []
+                byte_append = byte_list.append
+                for _ in self.Players:
+                    if _byte := _.read_bytes():
+                        byte_append(_byte)
+                
+                active_track = len(byte_list)
                 if 1 <= active_track:
+                    
+                    if active_track == 1:
+                        byte_numpy:np.ndarray = np.frombuffer(byte_list[0], dtype=np.int16)
+
+                    else:
+                        target_vol = sqrt(active_track * 2) / active_track
+                        byte_numpy = np.frombuffer(byte_list.pop(0), dtype=np.int16) * target_vol
+                        for _ in byte_list:
+                            byte_numpy = byte_numpy + np.frombuffer(_, dtype=np.int16) * target_vol
+
                     Bytes = byte_numpy.astype(np.int16).tobytes()
 
             # Loop Delay
             _start += 0.02
             delay = max(0, _start - time.perf_counter())
-            if delay == 0:
-                #print(-(_start - time.perf_counter()))
-                if (_start - time.perf_counter()) <= -0.5:
-                    _start = time.perf_counter() + 0.02
-                    delay = 0.02
             time.sleep(delay)
  
             # Send Bytes
             if Bytes:
                 fin_loop = 0
-                try:send_audio(Bytes, encode=self.Enc_bool)
+                try: send_audio(Bytes, encode=self.Enc_bool)
                 except Exception as e:
                     print(f'Error send_audio_packet : {e}')
-                    time.sleep(10)
+                    break
             # thread fin
             else:
                 fin_loop += 1
