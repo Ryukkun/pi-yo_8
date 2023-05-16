@@ -5,12 +5,6 @@ import logging
 from discord.ext import commands, tasks
 from typing import Dict
 
-from pi_yo_8.voice_client import MultiAudio
-from pi_yo_8.music import MusicController
-
-
-
-
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 ####  Config
@@ -24,9 +18,12 @@ except Exception:
     ]
     with open('config.py','w') as f:
         f.write('\n'.join(CLines))
-    import config
+    
+    raise Exception('Config ファイルを生成しました')
 
 
+from pi_yo_8.voice_client import MultiAudio
+from pi_yo_8.music import MusicController
 
 
 ####  起動準備 And 初期設定

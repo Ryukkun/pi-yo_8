@@ -442,7 +442,7 @@ class StreamAudioData:
             af.append(f'rubberband=tempo={speed}')
 
         if self.music:
-            volume = -15.0
+            volume = -17.0
             if Vol := self.st_vol:
                 volume -= Vol
             before_options.extend(('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-analyzeduration', '2147483647', '-probesize', '2147483647'))
