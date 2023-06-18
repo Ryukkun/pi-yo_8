@@ -3,12 +3,14 @@ import random
 import time
 import tabulate
 import asyncio
+import logging
 from typing import Optional, Literal, List
 from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
 from discord.ext.commands import Context
 
 
-from .data_analysis import int_analysis, date_difference, calc_time
+from .decorator import detect_run
+from .utils import int_analysis, date_difference, calc_time
 from .audio_source import AnalysisUrl
 from .audio_source import StreamAudioData as SAD
 from .view import CreateButton
@@ -31,12 +33,14 @@ re_space2 = re.compile(r'(( |-)\|$|^\|( |-))')
 re_space3 = re.compile(r'^\|( |-)+?\|')
 
 
+_log = logging.getLogger(__name__)
+
 
 
 class MusicController():
     def __init__(self, _Info):
         try:
-            from ..main import DataInfo
+            from .main import DataInfo
             Info:DataInfo
         except Exception: pass
         Info = _Info
@@ -47,6 +51,7 @@ class MusicController():
         self.gid = Info.gid
         self.gn = Info.gn
         self.vc = self.guild.voice_client
+        self.loop = Info.loop
         self.Queue:List[SAD] = []
         self.Index_PL = None
         self.PL:List[SAD] = []
@@ -54,9 +59,7 @@ class MusicController():
         self.status = {'loop':True,'loop_pl':True,'random_pl':True}
         self.last_status = self.status.copy()
         self.Rewind = []
-        self.CLoop = Info.loop
         self.Embed_Message:Optional[Message] = None
-        self.def_doing = {'playing':False,'_load_next_pl':False}
         self.last_action:float = 0.0
         
 
@@ -179,7 +182,7 @@ class MusicController():
                 if self.Queue:
                     self.Rewind.append(self.Queue[0])
                     del self.Queue[0]
-                    print(f'{self.gn} : #次の曲へ skip')
+                    _log.info(f'{self.gn} : #次の曲へ skip')
                     self.Mvc.stop()
                     await self.play_loop(None,0)
 
@@ -190,10 +193,8 @@ class MusicController():
     #--------------------------------------------------
     # GUI操作
     #--------------------------------------------------
+    @detect_run()
     async def playing(self):
-        if self.def_doing['playing']: return
-        self.def_doing['playing'] = True
-
         try:
             if self.Mvc.is_playing():
                 
@@ -212,14 +213,13 @@ class MusicController():
                     #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
         except Exception as e:
             print(e)
-        self.def_doing['playing'] = False
 
 
 
 
 
     async def update_embed(self):
-        if self.def_doing['playing']: return
+        if self.playing.is_running: return
         if not self.Latest_CH: return
 
         if late_E := self.Latest_CH.last_message:
@@ -503,26 +503,25 @@ class MusicController():
                 res = await self.Queue[0].check_st_url()
                 if not res:
                     del self.Queue[0]
-                    self.CLoop.create_task(self.play_loop())
+                    self.loop.create_task(self.play_loop())
 
         # 再生
         if self.Queue:
             AudioData = self.Queue[0]
             played_time = time.time()
-            print(f"{self.gn} : Play  [Now len: {str(len(self.Queue))}]")
+            _log.info(f"{self.gn} : Play  [Now len: {str(len(self.Queue))}]")
                 
-            await self.Mvc.play(AudioData,after=lambda : self.CLoop.create_task(self.play_loop(AudioData.st_url,played_time)))
+            await self.Mvc.play(AudioData,after=lambda : self.loop.create_task(self.play_loop(AudioData.st_url,played_time)))
 
 
-    async def _loop_5(self):
-        
+    async def task_loop(self):
+        '''
+        Infoより 5秒おきに実行
+        '''
+
         try:
             # PlayList再生時に 次の動画を取得する
             if self.PL and self.status['random_pl'] != self.last_status['random_pl']:
-                if self.def_doing['_load_next_pl']:
-                    self.def_doing['_load_next_pl'] = None
-                    while self.def_doing['_load_next_pl'] == None:
-                        await asyncio.sleep(1)
                 self.last_status = self.status.copy()
                 del self.Queue[1:]
                 self._load_next_pl()

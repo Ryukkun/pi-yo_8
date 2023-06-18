@@ -1,5 +1,6 @@
 import datetime
-
+import logging
+from discord.utils import _ColourFormatter
 
 def int_analysis(arg):
     arg = str(arg)
@@ -59,3 +60,13 @@ def calc_time(Time):
             Min = f'0{Min}'
     
     return f'{Hour}{Min}:{Sec}'
+
+
+
+def set_logger():
+    library, _, _ = __name__.partition('.')
+    logger = logging.getLogger(library)
+    handler = logging.StreamHandler()
+    handler.setFormatter(_ColourFormatter())
+    logger.setLevel(logging.INFO)
+    logger.addHandler(handler)

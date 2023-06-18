@@ -7,6 +7,7 @@ from math import sqrt
 from discord import SpeakingState, opus, Guild
 from discord.ext import commands
 
+from .decorator import detect_run
 from .audio_source import StreamAudioData
 
 
@@ -45,14 +46,13 @@ class MultiAudio:
         self.guild = guild
         self.gid = guild.id
         self.vc = guild.voice_client
-        self.CLoop = client.loop
+        self.loop = client.loop
         self.Parent = parent
         self.Players:list['_AudioTrack'] = []
         self.PLen = 0
         self.vc.encoder = opus.Encoder()
-        self.vc.encoder.set_expected_packet_loss_percent(0.0)
+        #self.vc.encoder.set_expected_packet_loss_percent(0.01)
         self.Enc_bool = False
-        self.doing = {'run_loop':False}
 
 
     def kill(self):
@@ -78,8 +78,7 @@ class MultiAudio:
             if playing == 1:
                 self.__speak(SpeakingState.voice)
                 with lock:
-                    if not self.doing['run_loop']:
-                        self.doing['run_loop'] = True
+                    if not self.run_loop.is_running:
                         threading.Thread(target=self.run_loop,daemon=True).start()
         else:
             if playing == 0:
@@ -96,7 +95,7 @@ class MultiAudio:
         except Exception:
             pass
 
-
+    @detect_run()
     def run_loop(self):
         """
         音声データをを送る　別スレッドで動作する 
@@ -106,7 +105,6 @@ class MultiAudio:
         send_audio = self.vc.send_audio_packet
         _start = time.perf_counter()
         fin_loop = 0
-        self.doing['run_loop'] = True
         while self.loop:
             Bytes = None
             if self.PLen == 1:
@@ -151,7 +149,6 @@ class MultiAudio:
                 if (50 * 20) < fin_loop:
                     break
 
-        self.doing['run_loop'] = False
             
 
 class _AudioTrack:
@@ -163,7 +160,7 @@ class _AudioTrack:
         self.RNum = RNum*50
         self.Timer:float = 0.0
         self.pitch = _Attribute(init=0, min=-60, max=60, update_asource=self.update_asouce_sec)
-        self.speed = _Attribute(init=1.0, min=-0.1, max=3.0, update_asource=self.update_asouce_sec)
+        self.speed = _Attribute(init=1.0, min=0.1, max=3.0, update_asource=self.update_asouce_sec)
         self.read_fin = False
         self.read_loop = False
         self.After = None
@@ -193,12 +190,14 @@ class _AudioTrack:
         self._SAD = None
 
     def resume(self):
-        self.Pausing = False
-        self._speaking(True)
+        if self.Pausing:
+            self.Pausing = False
+            self._speaking(True)
 
     def pause(self):
-        self.Pausing = True
-        self._speaking(False)
+        if not self.Pausing:
+            self.Pausing = True
+            self._speaking(False)
 
     def is_playing(self):
         if self._SAD:
@@ -220,7 +219,7 @@ class _AudioTrack:
                 if target_sec > self._SAD.st_sec:
                     self._finish()
                     return
-                self.Parent.CLoop.create_task(self.update_asouce_sec(sec=target_sec))
+                self.Parent.loop.create_task(self.update_asouce_sec(sec=target_sec))
 
             else:
                 with lock:
@@ -238,7 +237,7 @@ class _AudioTrack:
             if len(self.RBytes) < stime:
                 target_sec = target_time // 50
                 if target_sec < 0: target_sec = 0
-                self.Parent.CLoop.create_task(self.update_asouce_sec(sec=target_sec))
+                self.Parent.loop.create_task(self.update_asouce_sec(sec=target_sec))
 
             else:
                 with lock:

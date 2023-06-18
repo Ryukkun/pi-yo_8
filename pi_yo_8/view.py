@@ -32,7 +32,7 @@ class CreateButton(ui.View):
     async def def_button0(self, interaction:Interaction, button):
         Parent = self.Parent
         Parent._update_action()
-        Parent.CLoop.create_task(interaction.response.defer())
+        Parent.loop.create_task(interaction.response.defer())
 
         if not Parent.Rewind: return
         AudioData = Parent.Rewind[-1]
@@ -50,14 +50,14 @@ class CreateButton(ui.View):
     async def def_button1(self, interaction:Interaction, button):
         Parent = self.Parent
         Parent._update_action()
-        Parent.CLoop.create_task(interaction.response.defer())
+        Parent.loop.create_task(interaction.response.defer())
         Parent.Mvc.skip_time(-10*50)
 
     @ui.button(label="⏯",style=ButtonStyle.blurple,row=2)
     async def def_button2(self, interaction:Interaction, button):
         Parent = self.Parent
         Parent._update_action()
-        Parent.CLoop.create_task(interaction.response.defer())
+        Parent.loop.create_task(interaction.response.defer())
 
         if Parent.Mvc.is_paused():
             print(f'{Parent.gn} : #resume')
@@ -71,14 +71,14 @@ class CreateButton(ui.View):
     async def def_button3(self, interaction:Interaction, button):
         Parent = self.Parent
         Parent._update_action()
-        Parent.CLoop.create_task(interaction.response.defer())
+        Parent.loop.create_task(interaction.response.defer())
         Parent.Mvc.skip_time(10*50)
 
     @ui.button(label=">",row=2)
     async def def_button4(self, interaction:Interaction, button):
         Parent = self.Parent
         Parent._update_action()
-        Parent.CLoop.create_task(interaction.response.defer())
+        Parent.loop.create_task(interaction.response.defer())
         await Parent.skip(None)
 
     @ui.button(label="⚙️", row=3)
@@ -197,7 +197,7 @@ class PlayConfigView(ui.View):
 
         super().__init__(timeout=None)
         self.parent = parent
-        self.loop = self.parent.CLoop
+        self.loop = self.parent.loop
         self.Mvc = self.parent.Mvc
         self.speed = self.Mvc.speed
         self.pitch = self.Mvc.pitch
