@@ -18,7 +18,7 @@ class CreateButton(ui.View):
         except Exception: pass
         self.Parent = Parent
         self.select_opt:list[SelectOption] = None
-        self.add_item(CreateSelect(self, (self.Parent.Queue)))
+        self.add_item(CreateSelect(self, (self.Parent.queue)))
         self.add_item(CreateStatusButton(self, '単曲 ループ', 'loop'))
         if self.Parent.PL:
             self.add_item(CreateStatusButton(self, 'Playlist ループ', 'loop_pl'))
@@ -33,18 +33,7 @@ class CreateButton(ui.View):
         Parent = self.Parent
         Parent._update_action()
         Parent.loop.create_task(interaction.response.defer())
-
-        if not Parent.Rewind: return
-        AudioData = Parent.Rewind[-1]
-        Parent.Queue.insert(0,AudioData)
-        del Parent.Rewind[-1]
-        if Parent.PL:
-            if type(AudioData.index) == int:
-                Parent.Index_PL = AudioData.index
-
-        await Parent.play_loop(None,0)
-        if Parent.Mvc.is_paused():
-            Parent.Mvc.resume()
+        await Parent.skip_music(-1)
 
     @ui.button(label="10↩︎",row=2)
     async def def_button1(self, interaction:Interaction, button):
@@ -173,10 +162,7 @@ class CreateSelect(ui.Select):
 
         music = self.parent2
         music._update_action()
-        for i in range(int(self.values[0])):
-            if music.Queue:
-                music.Rewind.append(music.Queue.pop(0))
-        await music.play_loop(None,0)
+        music.skip_music(int(self.values[0]))
         #print(f'{interaction.user.name}は{self.values[0]}を選択しました')
 
 

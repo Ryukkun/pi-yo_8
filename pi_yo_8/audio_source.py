@@ -157,6 +157,35 @@ class AnalysisUrl:
 
 
 
+class _CheckStUrl:
+    def __init__(self, sad:'StreamAudioData') -> None:
+        self.sad = sad
+        self.task = None
+
+
+    def create_task(self):
+        if self.task != None:
+            return
+
+        self.task = self.sad.loop.create_task(self.sad.Pyt_V())
+
+
+    async def get_url(self) -> Optional[str]:
+        try:
+            if not self.sad.st_url:
+                if self.task == None:
+                    self.create_task()
+
+                await self.task
+        except:
+            pass
+
+        return self.sad.st_url
+
+
+
+
+
 class StreamAudioData:
     def __init__(self,
                 _input,
@@ -185,8 +214,9 @@ class StreamAudioData:
         self.music = kget('music')
         self.YT = kget('None')
         
-        # playlist index
+        # その他
         self.index:Optional[int] = None
+        self.check_st_url = _CheckStUrl(self)
     
 
     async def api_get_viewcounts(self):
@@ -402,24 +432,6 @@ class StreamAudioData:
             async with session.get(url=url, params=params) as resp:
                 text = await resp.json()
         self.ch_icon = text['items'][0]['snippet']['thumbnails']['medium']['url']
-
-
-    async def check_st_url(self):
-        '''
-        Playlistのお客様限りとさせていただきます!
-
-        '''
-        if self.st_url:
-            return True
-
-        try:
-            await self.Pyt_V()
-            if self.st_url:
-                return True
-        except Exception:
-            pass
-
-        return False
         
         
 

@@ -4,7 +4,7 @@ import time
 import tabulate
 import asyncio
 import logging
-from typing import Optional, Literal, List
+from typing import Optional, List, Union
 from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
 from discord.ext.commands import Context
 
@@ -37,6 +37,40 @@ _log = logging.getLogger(__name__)
 
 
 
+class MusicQueue(list):
+    def __init__(self) -> List[SAD]:
+        self.prev_queue:List[SAD] = []
+
+
+    def next(self, count:int=1) -> bool:
+        if 1 <= count:
+            if not self:
+                return False
+
+            self.prev_queue += self[:count]
+            del self[:count]
+
+        elif count <= -1:
+            if not self.prev_queue:
+                return False
+
+            self[0:0] = self.prev_queue[count:]
+            del self.prev_queue[count:]
+
+        else:
+            return False
+        
+        return True
+
+
+    def get(self) -> Optional[SAD]:
+        if self:
+            return self[0]
+        return
+
+
+
+
 class MusicController():
     def __init__(self, _Info):
         try:
@@ -52,13 +86,12 @@ class MusicController():
         self.gn = Info.gn
         self.vc = self.guild.voice_client
         self.loop = Info.loop
-        self.Queue:List[SAD] = []
+        self.queue:Union[MusicQueue, List[SAD]] = MusicQueue()
         self.Index_PL = None
         self.PL:List[SAD] = []
         self.Latest_CH:TextChannel = None
         self.status = {'loop':True,'loop_pl':True,'random_pl':True}
         self.last_status = self.status.copy()
-        self.Rewind = []
         self.Embed_Message:Optional[Message] = None
         self.last_action:float = 0.0
         
@@ -73,7 +106,7 @@ class MusicController():
         ' Playlistのキュー をリセットする '
         if self.PL:
             self.PL = []
-            del self.Queue[1:]
+            del self.queue[1:]
             self.Index_PL = None
 
 
@@ -95,7 +128,7 @@ class MusicController():
         self._reset_pl()
 
         #Queueに登録
-        self.Queue.append(res.sad)
+        self.queue.append(res.sad)
 
         # 再生されるまでループ
         if not self.Mvc.is_playing():
@@ -126,7 +159,7 @@ class MusicController():
             self.PL = res.sad
 
             self.status['loop'] = False
-            self.Queue = []
+            self.queue.clear()
             self.last_status = self.status.copy()
 
 
@@ -135,11 +168,11 @@ class MusicController():
             self._reset_pl()
 
             #Queueに登録
-            if self.Queue == []:
-                self.Queue.append(res.sad)
+            if not self.queue:
+                self.queue.append(res.sad)
             else:
-                self.Rewind.append(self.Queue[0])
-                self.Queue[0] = res.sad
+                self.queue.next()
+                self.queue.insert(0,res.sad)
 
         # 再生されるまでループ
         await self.play_loop(None,0)
@@ -179,12 +212,19 @@ class MusicController():
                 self.Mvc.skip_time(int(sec) * 50)
 
             else:
-                if self.Queue:
-                    self.Rewind.append(self.Queue[0])
-                    del self.Queue[0]
-                    _log.info(f'{self.gn} : #次の曲へ skip')
-                    self.Mvc.stop()
-                    await self.play_loop(None,0)
+                await self.skip_music()
+
+
+    async def skip_music(self, count:int=1):
+        if count == 0: return
+
+        res:bool = self.queue.next(count)
+        if not res: return
+        _log.info(f'{self.gn} : #{abs(count)}曲{"前へ prev" if count < 0 else "次へ skip"}')
+
+        await self.play_loop()
+        if self.Mvc.is_paused():
+            self.Mvc.resume()
 
 
 
@@ -254,11 +294,7 @@ class MusicController():
                 if [temp.label for temp in view.select_opt] == [temp.label for temp in v.options]:
                     menu_change = False
                     break
-            if type(v) == Button:
-                if v.label == "単曲ループ" and v.disabled == bool(self.PL):
-                    menu_change = False
-                    print('False')
-                    break
+
                 
 
         try:
@@ -444,9 +480,9 @@ class MusicController():
         load中に PLが無効になる場合も考え 非同期処理が入るたびに PLがTrueか確認しよう！
         '''
         if not self.PL: return
-        while len(self.Queue) <= 25:            
-            if self.Queue:
-                last_index = self.Queue[-1].index
+        while len(self.queue) <= 25:            
+            if self.queue:
+                last_index = self.queue[-1].index
             else:
                 last_index = self.Index_PL
             
@@ -473,7 +509,7 @@ class MusicController():
             #     break
             
             sad.index = new_index
-            self.Queue.append(sad)
+            self.queue.append(sad)
             #print(new_index)
 
 
@@ -484,32 +520,32 @@ class MusicController():
         if not self.vc: return
 
         # Queue削除
-        if self.Queue:
-            if self.status['loop'] == False and played and self.Queue[0].st_url == played or (time.time() - did_time) <= 0.5:
-                self.Rewind.append(self.Queue[0])
-                del self.Queue[0]
+        if self.queue:
+            if self.status['loop'] == False and played and self.queue[0].st_url == played or (time.time() - did_time) <= 0.2:
+                self.queue.next()
                 
         # Playlistのお客様Only
         if self.PL:
             self._load_next_pl()
-            if self.Queue == []:
+            if not self.queue:
                 # Queue
-                self.Index_PL = self.Queue[0].index
+                self.Index_PL = self.queue[0].index
 
                 # Print
-                #print(f"{self.gn} : Paylist add Queue  [Now len: {str(len(self.Queue))}]")
+                #print(f"{self.gn} : Paylist add Queue  [Now len: {str(len(self.queue))}]")
             
-            if self.Queue:
-                res = await self.Queue[0].check_st_url()
-                if not res:
-                    del self.Queue[0]
+            if self.queue:
+                self.queue[1].check_st_url.create_task()
+                url = await self.queue[0].check_st_url.get_url()
+                if not url:
+                    del self.queue[0]
                     self.loop.create_task(self.play_loop())
 
         # 再生
-        if self.Queue:
-            AudioData = self.Queue[0]
+        if self.queue:
+            AudioData = self.queue[0]
             played_time = time.time()
-            _log.info(f"{self.gn} : Play  [Now len: {str(len(self.Queue))}]")
+            _log.info(f"{self.gn} : Play  [Now len: {str(len(self.queue))}]")
                 
             await self.Mvc.play(AudioData,after=lambda : self.loop.create_task(self.play_loop(AudioData.st_url,played_time)))
 
@@ -523,7 +559,7 @@ class MusicController():
             # PlayList再生時に 次の動画を取得する
             if self.PL and self.status['random_pl'] != self.last_status['random_pl']:
                 self.last_status = self.status.copy()
-                del self.Queue[1:]
+                del self.queue[1:]
                 self._load_next_pl()
 
             # Embed
