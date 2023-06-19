@@ -3,6 +3,10 @@ import logging
 from discord.utils import _ColourFormatter
 
 def int_analysis(arg):
+    '''
+    数字を見やすく変換
+    12345 -> 1万
+    '''
     arg = str(arg)
     ketas = ['万', '億', '兆', '京']
     arg_list = []
@@ -23,7 +27,19 @@ def int_analysis(arg):
     return f'{num}{ketas[ len(arg_list)-2 ]}'
 
 
-def date_difference(arg:str):
+def date_difference(arg:str) -> str:
+    """何日前の日付か計算
+
+    Parameters
+    ----------
+    arg : str
+        YYYY/MM/DD
+
+    Returns
+    -------
+    str
+        
+    """
     up_date = arg.split("/")
 
     diff = datetime.datetime.now() - datetime.datetime(year=int(up_date[0]), month=int(up_date[1]), day=int(up_date[2]))
@@ -46,7 +62,19 @@ def date_difference(arg:str):
 
 
 
-def calc_time(Time):
+def calc_time(Time:int) -> str:
+    """秒から分と時間を計算
+
+    Parameters
+    ----------
+    Time : int
+        sec
+
+    Returns
+    -------
+    str
+        HH:MM:SS
+    """
     Sec = Time % 60
     Min = Time // 60 % 60
     Hour = Time // 3600

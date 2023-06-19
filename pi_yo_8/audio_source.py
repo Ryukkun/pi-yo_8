@@ -322,8 +322,7 @@ class StreamAudioData:
             ie_result = ie.extract(arg)
             _ = PlaylistEntries(ytd, ie_result)
             entries = orderedSet(_.get_requested_items(), lazy=True)
-            entries = _ = list(entries)
-            _, entries = tuple(zip(*_)) or ([], [])
+            _, entries = tuple(zip(*list(entries))) or ([], [])
             return entries
 
         loop = asyncio.get_event_loop()

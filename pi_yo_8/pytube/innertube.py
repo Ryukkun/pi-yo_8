@@ -29,10 +29,9 @@ from https://github.com/pytube/pytube/blob/master/LICENSE
 
 import aiohttp
 import json
-import random
 
 from urllib import parse
-from pytube.innertube import InnerTube as old_InnerTube, _api_keys
+from pytube.innertube import InnerTube as old_InnerTube
 
 
 class InnerTube(old_InnerTube):
