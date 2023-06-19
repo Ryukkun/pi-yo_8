@@ -4,14 +4,67 @@ import time
 import numpy as np
 
 from math import sqrt
-from discord import SpeakingState, opus, Guild
+from discord import SpeakingState, opus, Guild, FFmpegOpusAudio, FFmpegPCMAudio
 from discord.ext import commands
 
-from .decorator import detect_run
+from .utils import detect_run
 from .audio_source import StreamAudioData
 
 
 lock = threading.Lock()
+
+
+
+class _StreamAudioData:
+    def __init__(self) -> None:
+        self.st_sec:int = 0
+        self.st_url:str = ''
+        self.local:bool = False
+        self.volume:int = 0
+    
+
+    def _audiosource(self, opus:bool, before_options:list, options:list):
+        if opus:
+            options.extend(('-c:a', 'libopus', '-ar', '48000'))
+            return FFmpegOpusAudio(self.st_url, before_options=before_options, options=options)
+
+        else:
+            options.extend(('-c:a', 'pcm_s16le', '-ar', '48000'))
+            return FFmpegPCMAudio(self.st_url, before_options=before_options, options=options)
+
+
+
+    async def AudioSource(self, opus:bool, sec:int=0, speed:float=1.0, pitch:int=0):
+        before_options = []
+        options = ['-vn', '-application', 'lowdelay', '-loglevel', 'quiet']
+        af = []
+
+        # Sec
+        if int(sec):
+            before_options.extend(('-ss' ,str(sec)))
+        
+        # Pitch
+        if pitch != 0:
+            pitch = 2 ** (pitch / 12)
+            af.append(f'rubberband=pitch={pitch}')
+        
+        if float(speed) != 1.0:
+            af.append(f'rubberband=tempo={speed}')
+
+        if self.volume:
+            volume = -17.0
+            if Vol := self.st_vol:
+                volume -= Vol
+            
+            af.append(f'volume={volume}dB')
+        
+        if not self.local:
+            before_options.extend(('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-analyzeduration', '2147483647', '-probesize', '2147483647'))
+        # af -> str
+        if af:
+            options.extend(('-af', ','.join(af) ))
+
+        return self._audiosource(opus, before_options, options)
 
 
 class _Attribute:
@@ -170,7 +223,7 @@ class _AudioTrack:
         self.Duration = None
     
 
-    async def play(self,_SAD:StreamAudioData,after):
+    async def play(self,_SAD:_StreamAudioData,after):
         self._SAD = _SAD
         self.Duration = _SAD.st_sec
         AudioSource = await _SAD.AudioSource(self.opus, speed=self.speed.get, pitch=self.pitch.get)

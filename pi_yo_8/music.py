@@ -9,7 +9,7 @@ from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
 from discord.ext.commands import Context
 
 
-from .decorator import detect_run
+from .utils import detect_run
 from .utils import int_analysis, date_difference, calc_time
 from .audio_source import AnalysisUrl
 from .audio_source import StreamAudioData as SAD
