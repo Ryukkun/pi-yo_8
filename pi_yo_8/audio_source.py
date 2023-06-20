@@ -6,8 +6,8 @@ from typing import Optional
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import PlaylistEntries
 from yt_dlp.extractor.youtube import orderedSet
-from .discord.player import FFmpegPCMAudio, FFmpegOpusAudio
 from .pytube.innertube import InnerTube
+from .voice_client import _StreamAudioData
 
 import config
 
@@ -186,11 +186,12 @@ class _CheckStUrl:
 
 
 
-class StreamAudioData:
+class StreamAudioData(_StreamAudioData):
     def __init__(self,
                 _input,
                 **kwargs
                 ):
+        super().__init__()
         kget = kwargs.get
         self.input = _input
         self.loop = asyncio.get_event_loop()
@@ -360,6 +361,8 @@ class StreamAudioData:
         #print(f'used {used}')
 
         await self._format(vdic)
+        self.volume = -17.0 - self.st_vol
+        self.local = False
         self.music = True
         self.YT = True
         return self
@@ -375,6 +378,7 @@ class StreamAudioData:
             self.title = self.input
             self.st_sec = int(info.get('duration',None))
             self.formats = info.get('formats')
+            self.local = False
             self.music = True
             self.YT = False
         return self
@@ -431,42 +435,3 @@ class StreamAudioData:
             async with session.get(url=url, params=params) as resp:
                 text = await resp.json()
         self.ch_icon = text['items'][0]['snippet']['thumbnails']['medium']['url']
-        
-        
-
-
-    async def AudioSource(self, opus:bool, sec:int=0, speed:float=1.0, pitch:int=0):
-        before_options = []
-        options = ['-vn', '-application', 'lowdelay', '-loglevel', 'quiet']
-        af = []
-
-        # Sec
-        if int(sec):
-            before_options.extend(('-ss' ,str(sec)))
-        
-        # Pitch
-        if pitch != 0:
-            pitch = 2 ** (pitch / 12)
-            af.append(f'rubberband=pitch={pitch}')
-        
-        if float(speed) != 1.0:
-            af.append(f'rubberband=tempo={speed}')
-
-        if self.music:
-            volume = -17.0
-            if Vol := self.st_vol:
-                volume -= Vol
-            before_options.extend(('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-analyzeduration', '2147483647', '-probesize', '2147483647'))
-            af.append(f'volume={volume}dB')
-        
-        # af -> str
-        if af:
-            options.extend(('-af', ','.join(af) ))
-
-        if opus:
-            options.extend(('-c:a', 'libopus', '-ar', '48000'))
-            return FFmpegOpusAudio(self.st_url, before_options=before_options, options=options)
-
-        else:
-            options.extend(('-c:a', 'pcm_s16le', '-ar', '48000'))
-            return FFmpegPCMAudio(self.st_url, before_options=before_options, options=options)

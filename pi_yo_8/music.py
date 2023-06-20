@@ -111,6 +111,7 @@ class MusicController():
 
 
     async def def_queue(self, ctx:Context, args):
+        _log.info(f"{self.gn} : Command:queue {args}")
         self._update_action(ctx.channel)
         # 一時停止していた場合再生 開始
         if args == ():
@@ -140,6 +141,7 @@ class MusicController():
 
 
     async def play(self, ctx:Context, args):
+        _log.info(f"{self.gn} : Command:play {' '.join(args)}")
         self._update_action(ctx.channel)
         # 一時停止していた場合再生 開始
         if args == ():
@@ -227,7 +229,13 @@ class MusicController():
             self.Mvc.resume()
 
 
+    def resume(self):
+        _log.info(f"{self.gn} : #resume")
+        self.Mvc.resume()
 
+    def pause(self):
+        _log.info(f"{self.gn} : #stop")
+        self.Mvc.pause()
 
 
     #--------------------------------------------------
@@ -545,7 +553,7 @@ class MusicController():
         if self.queue:
             AudioData = self.queue[0]
             played_time = time.time()
-            _log.info(f"{self.gn} : Play  [Now len: {str(len(self.queue))}]")
+            _log.info(f"{self.gn} : Play {AudioData.web_url}  [Now len: {str(len(self.queue))}]")
                 
             await self.Mvc.play(AudioData,after=lambda : self.loop.create_task(self.play_loop(AudioData.st_url,played_time)))
 

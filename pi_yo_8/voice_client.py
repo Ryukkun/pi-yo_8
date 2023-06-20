@@ -1,14 +1,15 @@
 import threading
 import asyncio
 import time
+import logging
 import numpy as np
 
 from math import sqrt
-from discord import SpeakingState, opus, Guild, FFmpegOpusAudio, FFmpegPCMAudio
+from discord import SpeakingState, opus, Guild, FFmpegPCMAudio, FFmpegOpusAudio
 from discord.ext import commands
+from typing import Union, Optional
 
 from .utils import detect_run
-from .audio_source import StreamAudioData
 
 
 lock = threading.Lock()
@@ -17,26 +18,30 @@ lock = threading.Lock()
 
 class _StreamAudioData:
     def __init__(self) -> None:
-        self.st_sec:int = 0
-        self.st_url:str = ''
-        self.local:bool = False
-        self.volume:int = 0
+        self.st_sec :Optional[int]  = None
+        self.st_url :Optional[str]  = None
+        self.local  :bool           = True
+        self.volume :Optional[int]  = None
     
 
-    def _audiosource(self, opus:bool, before_options:list, options:list):
+
+    def _get_ffmpegaudio(self, opus:bool, before_options:list, options:list) -> Union[FFmpegOpusAudio, FFmpegPCMAudio]:
+        options = ' '.join(options)
+        before_options = ' '.join(before_options)
         if opus:
-            options.extend(('-c:a', 'libopus', '-ar', '48000'))
+            #options.extend(('-c:a', 'libopus', '-ar', '48000'))
             return FFmpegOpusAudio(self.st_url, before_options=before_options, options=options)
 
         else:
-            options.extend(('-c:a', 'pcm_s16le', '-ar', '48000'))
+            #options.extend(('-c:a', 'pcm_s16le', '-ar', '48000'))
             return FFmpegPCMAudio(self.st_url, before_options=before_options, options=options)
 
 
 
-    async def AudioSource(self, opus:bool, sec:int=0, speed:float=1.0, pitch:int=0):
+    async def get_ffmpegaudio(self, opus:bool, sec:int=0, speed:float=1.0, pitch:int=0) -> Union[FFmpegOpusAudio, FFmpegPCMAudio]:
         before_options = []
         options = ['-vn', '-application', 'lowdelay', '-loglevel', 'quiet']
+        #options = ['-vn', '-application', 'lowdelay']
         af = []
 
         # Sec
@@ -52,11 +57,7 @@ class _StreamAudioData:
             af.append(f'rubberband=tempo={speed}')
 
         if self.volume:
-            volume = -17.0
-            if Vol := self.st_vol:
-                volume -= Vol
-            
-            af.append(f'volume={volume}dB')
+            af.append(f'volume={self.volume}dB')
         
         if not self.local:
             before_options.extend(('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-analyzeduration', '2147483647', '-probesize', '2147483647'))
@@ -64,7 +65,8 @@ class _StreamAudioData:
         if af:
             options.extend(('-af', ','.join(af) ))
 
-        return self._audiosource(opus, before_options, options)
+        return self._get_ffmpegaudio(opus, before_options, options)
+
 
 
 class _Attribute:
@@ -226,7 +228,7 @@ class _AudioTrack:
     async def play(self,_SAD:_StreamAudioData,after):
         self._SAD = _SAD
         self.Duration = _SAD.st_sec
-        AudioSource = await _SAD.AudioSource(self.opus, speed=self.speed.get, pitch=self.pitch.get)
+        AudioSource = await _SAD.get_ffmpegaudio(self.opus, speed=self.speed.get, pitch=self.pitch.get)
         # 最初のロードは少し時間かかるから先にロード
         self.QBytes.clear()
         self.RBytes.clear()
@@ -331,7 +333,7 @@ class _AudioTrack:
         if time != None:
             sec = time // 50
 
-        self.AudioSource = await self._SAD.AudioSource(self.opus, sec, speed=self.speed.get, pitch=self.pitch.get)
+        self.AudioSource = await self._SAD.get_ffmpegaudio(self.opus, sec, speed=self.speed.get, pitch=self.pitch.get)
         self.Timer = float(sec * 50)
         self.QBytes.clear()
         self.RBytes.clear()

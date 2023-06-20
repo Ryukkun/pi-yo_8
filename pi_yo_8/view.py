@@ -49,12 +49,10 @@ class CreateButton(ui.View):
         Parent.loop.create_task(interaction.response.defer())
 
         if Parent.Mvc.is_paused():
-            print(f'{Parent.gn} : #resume')
-            Parent.Mvc.resume()
+            Parent.resume()
         elif Parent.Mvc.is_playing():
-            print(f'{Parent.gn} : #stop')
-            Parent.Mvc.pause()
-            await Parent.update_embed()
+            Parent.pause()
+            
 
     @ui.button(label="↪︎10",row=2)
     async def def_button3(self, interaction:Interaction, button):
@@ -162,7 +160,7 @@ class CreateSelect(ui.Select):
 
         music = self.parent2
         music._update_action()
-        music.skip_music(int(self.values[0]))
+        await music.skip_music(int(self.values[0]))
         #print(f'{interaction.user.name}は{self.values[0]}を選択しました')
 
 
