@@ -13,7 +13,7 @@ from .utils import detect_run
 from .utils import int_analysis, date_difference, calc_time
 from .audio_source import AnalysisUrl
 from .audio_source import StreamAudioData as SAD
-from .view import CreateButton
+from .view import CreateButton, playoptionmessage
 from .embeds import EmBase
 
 
@@ -92,7 +92,8 @@ class MusicController():
         self.Latest_CH:TextChannel = None
         self.status = {'loop':True,'loop_pl':True,'random_pl':True}
         self.last_status = self.status.copy()
-        self.Embed_Message:Optional[Message] = None
+        self.embed_playing:Optional[Message] = None
+        self.embed_play_options:Optional[Message] = None
         self.last_action:float = 0.0
         
 
@@ -248,15 +249,23 @@ class MusicController():
                 
                 # Get Embed
                 if embed := await self.generate_embed():
-
+                    
+                    play_option = False
                     # 古いEmbedを削除
-                    if late_E := self.Embed_Message:
-                        try: await late_E.delete()
+                    if late_E := self.embed_playing:
+                        try:
+                            await late_E.delete()
+                            if self.embed_play_options:
+                                await self.embed_play_options.delete()
+                                play_option = True
                         except NotFound: pass
 
+                    self.embed_play_options = None
                     # 新しいEmbed
-                    Sended_Mes = await self.Latest_CH.send(embed=embed,view=CreateButton(self))
-                    self.Embed_Message = Sended_Mes
+                    self.embed_playing = await self.Latest_CH.send(embed=embed,view=CreateButton(self))
+
+                    if play_option:
+                        self.embed_play_options = await playoptionmessage(self.Latest_CH, self)
 
                     #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
         except Exception as e:
@@ -275,7 +284,7 @@ class MusicController():
                 if late_E.embeds:
                     em_color = late_E.embeds[0].colour.value
                     if em_color == EmBase.dont_replace_color().value:
-                        if await self._edit_embed(self.Embed_Message):
+                        if await self._edit_embed(self.embed_playing):
                             return
 
                     if em_color == EmBase.player_color().value:

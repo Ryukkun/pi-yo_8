@@ -1,5 +1,5 @@
 import asyncio
-from discord import ui, Interaction, SelectOption ,ButtonStyle, Embed
+import discord
 from typing import List
 
 from .audio_source import StreamAudioData as SAD
@@ -9,7 +9,7 @@ from .voice_client import _AudioTrack
 
 
 # Button
-class CreateButton(ui.View):
+class CreateButton(discord.ui.View):
     def __init__(self, Parent):
         super().__init__(timeout=None)
         try:
@@ -17,7 +17,7 @@ class CreateButton(ui.View):
             self.Parent:MusicController
         except Exception: pass
         self.Parent = Parent
-        self.select_opt:list[SelectOption] = None
+        self.select_opt:list[discord.SelectOption] = None
         self.add_item(CreateSelect(self, (self.Parent.queue)))
         self.add_item(CreateStatusButton(self, '単曲 ループ', 'loop'))
         if self.Parent.PL:
@@ -28,22 +28,22 @@ class CreateButton(ui.View):
             self.add_item(CreateStatusButton(self, 'シャッフル', 'random_pl', True))
 
 
-    @ui.button(label="<",row=2)
-    async def def_button0(self, interaction:Interaction, button):
+    @discord.ui.button(label="<",row=2)
+    async def def_button0(self, interaction:discord.Interaction, button):
         Parent = self.Parent
         Parent._update_action()
         Parent.loop.create_task(interaction.response.defer())
         await Parent.skip_music(-1)
 
-    @ui.button(label="10↩︎",row=2)
-    async def def_button1(self, interaction:Interaction, button):
+    @discord.ui.button(label="10↩︎",row=2)
+    async def def_button1(self, interaction:discord.Interaction, button):
         Parent = self.Parent
         Parent._update_action()
         Parent.loop.create_task(interaction.response.defer())
         Parent.Mvc.skip_time(-10*50)
 
-    @ui.button(label="⏯",style=ButtonStyle.blurple,row=2)
-    async def def_button2(self, interaction:Interaction, button):
+    @discord.ui.button(label="⏯",style=discord.ButtonStyle.blurple,row=2)
+    async def def_button2(self, interaction:discord.Interaction, button):
         Parent = self.Parent
         Parent._update_action()
         Parent.loop.create_task(interaction.response.defer())
@@ -54,31 +54,37 @@ class CreateButton(ui.View):
             Parent.pause()
             
 
-    @ui.button(label="↪︎10",row=2)
-    async def def_button3(self, interaction:Interaction, button):
+    @discord.ui.button(label="↪︎10",row=2)
+    async def def_button3(self, interaction:discord.Interaction, button):
         Parent = self.Parent
         Parent._update_action()
         Parent.loop.create_task(interaction.response.defer())
         Parent.Mvc.skip_time(10*50)
 
-    @ui.button(label=">",row=2)
-    async def def_button4(self, interaction:Interaction, button):
+    @discord.ui.button(label=">",row=2)
+    async def def_button4(self, interaction:discord.Interaction, button):
         Parent = self.Parent
         Parent._update_action()
         Parent.loop.create_task(interaction.response.defer())
         await Parent.skip(None)
 
-    @ui.button(label="⚙️", row=3)
-    async def def_button5(self, interaction:Interaction, button):
+    @discord.ui.button(label="⚙️", row=3)
+    async def def_button5(self, interaction:discord.Interaction, button):
         self.Parent._update_action()
-        await interaction.response.send_message(
-            embed= PlayConfigEmbed(self.Parent.Mvc),
-            view= PlayConfigView(self.Parent),
-            ephemeral= False
-            )
+        self.Parent.loop.create_task(interaction.response.defer())
+        if message := self.Parent.embed_play_options:
+            if message.channel.last_message == message:
+                return
+            else:
+                try:
+                    await message.delete()
+                except discord.NotFound:
+                    pass
+                
+        self.Parent.embed_play_options = await playoptionmessage(interaction.channel, self.Parent)
 
-    # @ui.button(label="歌詞", row=3)
-    # async def def_button6(self, interaction:Interaction, button):
+    # @discord.ui.button(label="歌詞", row=3)
+    # async def def_button6(self, interaction:discord.Interaction, button):
     #     self.Parent._update_action()
 
     #     if title := self.Parent.Mvc._SAD.title:
@@ -99,14 +105,14 @@ class CreateButton(ui.View):
         
 
 
-    @ui.button(label="切断", row=3, style=ButtonStyle.red)
-    async def def_button7(self, interaction:Interaction, button):
+    @discord.ui.button(label="切断", row=3, style=discord.ButtonStyle.red)
+    async def def_button7(self, interaction:discord.Interaction, button):
         await interaction.response.defer()
         await self.Parent.Info.bye()
 
 
 
-class CreateStatusButton(ui.Button):
+class CreateStatusButton(discord.ui.Button):
     def __init__(self, parent:'CreateButton', label:str, status_name:str, disable:bool=False):
         self.parent = parent
         self.name = status_name
@@ -115,13 +121,13 @@ class CreateStatusButton(ui.Button):
 
     def style_check(self):
         if self.disable:
-            return ButtonStyle.gray
+            return discord.ButtonStyle.gray
         elif self.parent.Parent.status[self.name]:
-            return ButtonStyle.green
+            return discord.ButtonStyle.green
         else:
-            return ButtonStyle.red
+            return discord.ButtonStyle.red
     
-    async def callback(self, interaction: Interaction):
+    async def callback(self, interaction: discord.Interaction):
         status = self.parent.Parent.status
         status[self.name] = not status[self.name]
         self.style = self.style_check()
@@ -131,7 +137,7 @@ class CreateStatusButton(ui.Button):
 
 
 
-class CreateSelect(ui.Select):
+class CreateSelect(discord.ui.Select):
     def __init__(self, parent:'CreateButton', args) -> None:
         self.loop = asyncio.get_event_loop()
         self.parent = parent
@@ -145,15 +151,15 @@ class CreateSelect(ui.Select):
                 break
             if len(title) >= 100:
                 title = title[0:100]
-            select_opt.append(SelectOption(label=title,value=str(i),default=(select_opt == [])))
+            select_opt.append(discord.SelectOption(label=title,value=str(i),default=(select_opt == [])))
 
         if not select_opt:
-            select_opt.append(SelectOption(label='動画がないよぉ～ん',value='None',default=False))
+            select_opt.append(discord.SelectOption(label='動画がないよぉ～ん',value='None',default=False))
         parent.select_opt = select_opt
         super().__init__(placeholder='キュー表示', options=select_opt, row=0)
 
 
-    async def callback(self, interaction: Interaction):
+    async def callback(self, interaction: discord.Interaction):
         #await interaction.response.send_message(f'{interaction.user.name}は{self.values[0]}を選択しました')
         self.loop.create_task(interaction.response.defer())
         if self.values[0] == 'None': return
@@ -164,15 +170,22 @@ class CreateSelect(ui.Select):
         #print(f'{interaction.user.name}は{self.values[0]}を選択しました')
 
 
+async def playoptionmessage(channel:discord.TextChannel, music) -> discord.Message:
+    return await channel.send(
+        embed= PlayConfigEmbed(music.Mvc),
+        view= PlayConfigView(music)
+        )
+
+
 def PlayConfigEmbed(Mvc:_AudioTrack):
-    embed = Embed(colour=EmBase.dont_replace_color())
+    embed = discord.Embed(colour=EmBase.dont_replace_color())
     embed.add_field(name='テンポ (x0.1 ~ x3.0)', value=f'x{round(Mvc.speed.get,2)}', inline=True)
     embed.add_field(name='キー', value=f'{Mvc.pitch.get}', inline=True)
     return embed
 
 
 
-class PlayConfigView(ui.View):
+class PlayConfigView(discord.ui.View):
     def __init__(self, parent):
         try:
             from .music import MusicController
@@ -187,10 +200,10 @@ class PlayConfigView(ui.View):
         self.pitch = self.Mvc.pitch
 
 
-    async def edit_message(self, interaction:Interaction):
+    async def edit_message(self, interaction:discord.Interaction):
         await interaction.message.edit(embed=PlayConfigEmbed(self.Mvc))
 
-    async def edit_speed(self, interaction:Interaction, num:float):
+    async def edit_speed(self, interaction:discord.Interaction, num:float):
         self.loop.create_task(interaction.response.defer())
         res = await self.speed.add(num)
         self.parent._update_action()
@@ -198,7 +211,7 @@ class PlayConfigView(ui.View):
             await self.edit_message(interaction)
 
 
-    async def edit_pitch(self, interaction:Interaction, num:int):
+    async def edit_pitch(self, interaction:discord.Interaction, num:int):
         self.loop.create_task(interaction.response.defer())
         res = await self.pitch.add(num)
         self.parent._update_action()
@@ -206,101 +219,102 @@ class PlayConfigView(ui.View):
             await self.edit_message(interaction)
 
 
-    @ui.button(label="- 0.5", row=0)
-    async def speed_m5(self, interaction:Interaction, button):
+    @discord.ui.button(label="- 0.5", row=0)
+    async def speed_m5(self, interaction:discord.Interaction, button):
         await self.edit_speed(interaction, -0.5)
 
 
-    @ui.button(label="- 0.1", row=0)
-    async def speed_m1(self, interaction:Interaction, button):
+    @discord.ui.button(label="- 0.1", row=0)
+    async def speed_m1(self, interaction:discord.Interaction, button):
         await self.edit_speed(interaction, -0.1)
         
 
-    @ui.button(label="テンポリセット", row=0, style=ButtonStyle.blurple)
-    async def speed_reset(self, interaction:Interaction, button):
+    @discord.ui.button(label="テンポリセット", row=0, style=discord.ButtonStyle.blurple)
+    async def speed_reset(self, interaction:discord.Interaction, button):
         self.loop.create_task(interaction.response.defer())
         res = await self.speed.set(1.0)
         if res:
             await self.edit_message(interaction)
 
 
-    @ui.button(label="+ 0.1", row=0)
-    async def speed_p1(self, interaction:Interaction, button):
+    @discord.ui.button(label="+ 0.1", row=0)
+    async def speed_p1(self, interaction:discord.Interaction, button):
         await self.edit_speed(interaction, 0.1)
 
 
-    @ui.button(label="+ 0.5", row=0)
-    async def speed_p5(self, interaction:Interaction, button):
+    @discord.ui.button(label="+ 0.5", row=0)
+    async def speed_p5(self, interaction:discord.Interaction, button):
         await self.edit_speed(interaction, 0.5)
 
 
-    @ui.button(label="- 2", row=1)
-    async def pitch_m2(self, interaction:Interaction, button):
+    @discord.ui.button(label="- 2", row=1)
+    async def pitch_m2(self, interaction:discord.Interaction, button):
         await self.edit_pitch(interaction, -2)
 
 
-    @ui.button(label="- 1", row=1)
-    async def pitch_m1(self, interaction:Interaction, button):
+    @discord.ui.button(label="- 1", row=1)
+    async def pitch_m1(self, interaction:discord.Interaction, button):
         await self.edit_pitch(interaction, -1)
 
 
-    @ui.button(label="キー　リセット", row=1, style=ButtonStyle.blurple)
-    async def pitch_reset(self, interaction:Interaction, button):
+    @discord.ui.button(label="キー　リセット", row=1, style=discord.ButtonStyle.blurple)
+    async def pitch_reset(self, interaction:discord.Interaction, button):
         self.loop.create_task(interaction.response.defer())
         res = await self.pitch.set(0)
         if res:
             await self.edit_message(interaction)
 
 
-    @ui.button(label="+ 1", row=1)
-    async def pitch_p1(self, interaction:Interaction, button):
+    @discord.ui.button(label="+ 1", row=1)
+    async def pitch_p1(self, interaction:discord.Interaction, button):
         await self.edit_pitch(interaction, 1)
 
 
-    @ui.button(label="+ 2", row=1)
-    async def pitch_p2(self, interaction:Interaction, button):
+    @discord.ui.button(label="+ 2", row=1)
+    async def pitch_p2(self, interaction:discord.Interaction, button):
         await self.edit_pitch(interaction, 2)
 
 
-    @ui.button(label="↺", row=2, style=ButtonStyle.red)
-    async def reload(self, interaction:Interaction, button):
+    @discord.ui.button(label="↺", row=2, style=discord.ButtonStyle.red)
+    async def reload(self, interaction:discord.Interaction, button):
         self.parent._update_action()
         await interaction.response.edit_message(embed=PlayConfigEmbed(self.Mvc))
 
 
-    @ui.button(label="delete", row=2, style=ButtonStyle.red)
-    async def delete(self, interaction:Interaction, button):
+    @discord.ui.button(label="delete", row=2, style=discord.ButtonStyle.red)
+    async def delete(self, interaction:discord.Interaction, button):
         self.parent._update_action()
         await interaction.response.defer()
         await interaction.message.delete()
+        self.parent.embed_play_options = None
 
 
 
-# class LyricView(ui.View):
+# class LyricView(discord.ui.View):
 #     def __init__(self, songs:List[GeniusLyric]):
 #         self.songs = songs
 #         super().__init__(timeout=None)
 #         self.select = LyricSelect(self)
 #         self.add_item(self.select)
 
-#     @ui.button(label='Delete', style=ButtonStyle.red, row=1)
-#     async def def_button0(self, interaction:Interaction, button):
+#     @discord.ui.button(label='Delete', style=discord.ButtonStyle.red, row=1)
+#     async def def_button0(self, interaction:discord.Interaction, button):
 #         await interaction.response.defer()
 #         await interaction.message.delete()
 
-# class LyricSelect(ui.Select):
+# class LyricSelect(discord.ui.Select):
 #     def __init__(self, parent:'LyricView', i=0):
 #         self.parent = parent
 #         if 25 < len(parent.songs):
 #             self.songs = parent.songs[:25]
 #         else:
 #             self.songs = parent.songs
-#         self.my_options = [SelectOption(label=_.title, value=i) for i,_ in enumerate(self.songs)]
+#         self.my_options = [discord.SelectOption(label=_.title, value=i) for i,_ in enumerate(self.songs)]
 #         options = self.my_options.copy()
 #         options[i].default = True
 #         super().__init__(placeholder='曲リスト', options=options)
 
-#     async def callback(self, interaction: Interaction):
+#     async def callback(self, interaction: discord.Interaction):
 #         res = int(self.values[0])
 #         lyric = await self.songs[res].get_lyric()
 #         self.options = self.my_options.copy()
@@ -318,4 +332,4 @@ class PlayConfigView(ui.View):
 # def LyricEmbed(description):
 #     if not description:
 #         description = 'None'
-#     return Embed(description=description, color=EmBase.dont_replace_color())
+#     return discord.Embed(description=description, color=EmBase.dont_replace_color())

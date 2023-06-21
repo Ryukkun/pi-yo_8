@@ -203,8 +203,10 @@ class DataInfo():
 
         while self.loop_5.is_running():
             await asyncio.sleep(1)
-        if late_E := self.Music.Embed_Message:
-            await late_E.delete()
+        if message := self.Music.embed_playing:
+            await message.delete()
+        if message := self.Music.embed_play_options:
+            await message.delete()
 
 
     @tasks.loop(seconds=5.0)
