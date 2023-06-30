@@ -453,7 +453,7 @@ class MusicController():
             table = tabulate.tabulate(tabular_data=__list, headers=headers, tablefmt='github')
             table = re_space.sub(')`|',table)
             table = table.split('\n')
-            table[0] = re_space2.sub('',re_space3.sub('[`        `](https://github.com/Ryukkun/pi-yo_8)`|',table[0]))
+            table[0] = re_space2.sub('',re_space3.sub('[`--------`](https://github.com/Ryukkun/pi-yo_8)`|',table[0]))
             table[1] = re_space2.sub('',re_space3.sub('[`--------`](https://github.com/Ryukkun/pi-yo_8)`|',table[1]))
 
             _embeds = [embed]
