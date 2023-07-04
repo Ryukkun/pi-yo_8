@@ -191,9 +191,8 @@ class StreamAudioData(_StreamAudioData):
                 _input,
                 **kwargs
                 ):
-        super().__init__()
+        super().__init__(_input)
         kget = kwargs.get
-        self.input = _input
         self.loop = asyncio.get_event_loop()
         
         # video id, url

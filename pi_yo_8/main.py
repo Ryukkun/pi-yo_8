@@ -189,10 +189,10 @@ class DataInfo():
 
     async def bye(self, text:str='切断'):
         self.loop.create_task(self._bye(text))
+        self.loop_5.stop()
 
 
     async def _bye(self, text:str):
-        self.loop_5.stop()
         self.MA.kill()
         del g_opts[self.gid]
         

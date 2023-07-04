@@ -17,12 +17,18 @@ lock = threading.Lock()
 
 
 class _StreamAudioData:
-    def __init__(self) -> None:
+    def __init__(self, input) -> None:
+        self.input = input
         self.st_sec :Optional[int]  = None
         self.st_url :Optional[str]  = None
         self.local  :bool           = True
         self.volume :Optional[int]  = None
-    
+
+
+    def from_local_path(self):
+        self.st_url = self.input
+        self.local = True
+        return self
 
 
     def _get_ffmpegaudio(self, opus:bool, before_options:list, options:list) -> Union[FFmpegOpusAudio, FFmpegPCMAudio]:
@@ -236,7 +242,9 @@ class _AudioTrack:
         self.Timer = 0.0
         self.read_fin = False
         self.After = after
-        self.resume()
+        self.Pausing = False
+        self._speaking(True)
+
 
     def stop(self):
         if self.AudioSource:

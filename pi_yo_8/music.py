@@ -562,8 +562,8 @@ class MusicController():
         if self.queue:
             AudioData = self.queue[0]
             played_time = time.time()
-            _log.info(f"{self.gn} : Play {AudioData.web_url}  [Now len: {str(len(self.queue))}]")
-                
+            _log.info(f"{self.gn} : Play {AudioData.web_url}  volume:{AudioData.volume}  [Now len: {str(len(self.queue))}]")
+
             await self.Mvc.play(AudioData,after=lambda : self.loop.create_task(self.play_loop(AudioData.st_url,played_time)))
 
 
