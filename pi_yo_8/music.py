@@ -304,14 +304,15 @@ class MusicController():
 
         # viewを変更する必要があるか
         view = CreateButton(self)
-        menu_change = True
-        for v in late_E.components:
-            v = v.children[0]
-            if type(v) == SelectMenu:
-                if [temp.label for temp in view.select_opt] == [temp.label for temp in v.options]:
-                    menu_change = False
-                    break
-
+        menu_change = False
+        coms = late_E.components
+        _view = coms[0].children[0]
+        if [temp.label for temp in view.select_opt] == [temp.label for temp in _view.options]:
+            menu_change = True
+        
+        _view = coms[2].children[2]
+        if view.pause_play.label == _view.label:
+            menu_change = True
                 
 
         try:

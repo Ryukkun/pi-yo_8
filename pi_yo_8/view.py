@@ -1,6 +1,8 @@
 import asyncio
 import discord
-from typing import List
+from typing import Any, List
+
+from discord.interactions import Interaction
 
 from .audio_source import StreamAudioData as SAD
 from .embeds import EmBase
@@ -18,6 +20,12 @@ class CreateButton(discord.ui.View):
         except Exception: pass
         self.Parent = Parent
         self.select_opt:list[discord.SelectOption] = None
+        self.pause_play = Button2(self)
+        self.add_item(self.pause_play)
+        self.add_item(Button3(self))
+        self.add_item(Button4(self))
+        self.add_item(Button5(self))
+        self.add_item(Button7(self))
         self.add_item(CreateSelect(self, (self.Parent.queue)))
         self.add_item(CreateStatusButton(self, '単曲 ループ', 'loop'))
         if self.Parent.PL:
@@ -26,6 +34,7 @@ class CreateButton(discord.ui.View):
         else:
             self.add_item(CreateStatusButton(self, 'Playlist ループ', 'loop_pl', True))
             self.add_item(CreateStatusButton(self, 'シャッフル', 'random_pl', True))
+
 
 
     @discord.ui.button(label="<",row=2)
@@ -41,38 +50,58 @@ class CreateButton(discord.ui.View):
         Parent._update_action()
         Parent.loop.create_task(interaction.response.defer())
         Parent.Mvc.skip_time(-10*50)
-
-    @discord.ui.button(label="⏯",style=discord.ButtonStyle.blurple,row=2)
-    async def def_button2(self, interaction:discord.Interaction, button):
-        Parent = self.Parent
-        Parent._update_action()
-        Parent.loop.create_task(interaction.response.defer())
-
-        if Parent.Mvc.is_paused():
-            Parent.resume()
-        elif Parent.Mvc.is_playing():
-            Parent.pause()
             
 
-    @discord.ui.button(label="↪︎10",row=2)
-    async def def_button3(self, interaction:discord.Interaction, button):
-        Parent = self.Parent
+class Button2(discord.ui.Button):
+    def __init__(self, parent:CreateButton):
+        _label = '▶' if parent.Parent.Mvc.is_paused() else 'II'
+        super().__init__(label=_label,style=discord.ButtonStyle.blurple,row=2)
+        self.parent = parent.Parent
+
+    async def callback(self, interaction: Interaction):
+        parent = self.parent
+        parent._update_action()
+        parent.loop.create_task(interaction.response.defer())
+
+        if parent.Mvc.is_paused():
+            parent.resume()
+        elif parent.Mvc.is_playing():
+            parent.pause()  
+
+
+class Button3(discord.ui.Button):
+    def __init__(self, parent:CreateButton):
+        super().__init__(label="↪︎10",row=2)
+        self.parent = parent
+
+    async def callback(self, interaction: Interaction):
+        Parent = self.parent.Parent
         Parent._update_action()
         Parent.loop.create_task(interaction.response.defer())
         Parent.Mvc.skip_time(10*50)
 
-    @discord.ui.button(label=">",row=2)
-    async def def_button4(self, interaction:discord.Interaction, button):
-        Parent = self.Parent
+class Button4(discord.ui.Button):
+    def __init__(self, parent:CreateButton):
+        super().__init__(label=">",row=2)
+        self.parent = parent
+
+    async def callback(self, interaction: Interaction):
+        Parent = self.parent.Parent
         Parent._update_action()
         Parent.loop.create_task(interaction.response.defer())
         await Parent.skip(None)
 
-    @discord.ui.button(label="⚙️", row=3)
-    async def def_button5(self, interaction:discord.Interaction, button):
-        self.Parent._update_action()
-        self.Parent.loop.create_task(interaction.response.defer())
-        if message := self.Parent.embed_play_options:
+
+class Button5(discord.ui.Button):
+    def __init__(self, parent:CreateButton):
+        super().__init__(label="⚙️",row=3)
+        self.parent = parent
+
+    async def callback(self, interaction: Interaction):
+        parent = self.parent.Parent
+        parent._update_action()
+        parent.loop.create_task(interaction.response.defer())
+        if message := parent.embed_play_options:
             if message.channel.last_message == message:
                 return
             else:
@@ -81,7 +110,7 @@ class CreateButton(discord.ui.View):
                 except discord.NotFound:
                     pass
                 
-        self.Parent.embed_play_options = await playoptionmessage(interaction.channel, self.Parent)
+        parent.embed_play_options = await playoptionmessage(interaction.channel, parent)
 
     # @discord.ui.button(label="歌詞", row=3)
     # async def def_button6(self, interaction:discord.Interaction, button):
@@ -104,12 +133,14 @@ class CreateButton(discord.ui.View):
     #         )
         
 
+class Button7(discord.ui.Button):
+    def __init__(self, parent:CreateButton):
+        super().__init__(label="切断",row=3, style=discord.ButtonStyle.red)
+        self.parent = parent
 
-    @discord.ui.button(label="切断", row=3, style=discord.ButtonStyle.red)
-    async def def_button7(self, interaction:discord.Interaction, button):
+    async def callback(self, interaction: Interaction):
         await interaction.response.defer()
-        await self.Parent.Info.bye()
-
+        await self.parent.Parent.Info.bye()
 
 
 class CreateStatusButton(discord.ui.Button):
