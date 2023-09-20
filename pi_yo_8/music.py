@@ -9,7 +9,7 @@ from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
 from discord.ext.commands import Context
 
 
-from .utils import detect_run
+from .utils import run_check_storage
 from .utils import int_analysis, date_difference, calc_time
 from .audio_source import AnalysisUrl
 from .audio_source import StreamAudioData as SAD
@@ -242,7 +242,7 @@ class MusicController():
     #--------------------------------------------------
     # GUI操作
     #--------------------------------------------------
-    @detect_run()
+    @run_check_storage()
     async def playing(self):
         try:
             if self.Mvc.is_playing():

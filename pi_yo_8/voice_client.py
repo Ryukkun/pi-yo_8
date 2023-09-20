@@ -9,7 +9,7 @@ from discord import SpeakingState, opus, Guild, FFmpegPCMAudio, FFmpegOpusAudio
 from discord.ext import commands
 from typing import Union, Optional
 
-from .utils import detect_run
+from .utils import run_check_storage
 
 
 lock = threading.Lock()
@@ -103,7 +103,7 @@ class MultiAudio:
     self.run は制御方法知らんから、常にループしてる 0.02秒(20ms) 間隔で 
     """
     def __init__(self, guild:Guild, client:commands.Bot, parent) -> None:
-        self.loop = True
+        self.enable_loop = True
         self.guild = guild
         self.gid = guild.id
         self.vc = guild.voice_client
@@ -117,9 +117,7 @@ class MultiAudio:
 
 
     def kill(self):
-        self.loop = False
-        for P in self.Players:
-            P._read_bytes(False)
+        self.enable_loop = False
 
 
     def add_player(self ,RNum=0 ,opus=False) -> '_AudioTrack':
@@ -140,6 +138,7 @@ class MultiAudio:
                 self.__speak(SpeakingState.voice)
                 with lock:
                     if not self.run_loop.is_running:
+                        self.run_loop.set_running(True)
                         threading.Thread(target=self.run_loop,daemon=True).start()
         else:
             if playing == 0:
@@ -152,11 +151,11 @@ class MultiAudio:
         友達が幻聴を聞いてたら怖いよね
         """
         try:
-            asyncio.run_coroutine_threadsafe(self.Parent.vc.ws.speak(speaking), self.Parent.vc.client.loop)
+            asyncio.run_coroutine_threadsafe(self.vc.ws.speak(speaking), self.loop)
         except Exception:
             pass
 
-    @detect_run()
+    @run_check_storage()
     def run_loop(self):
         """
         音声データをを送る　別スレッドで動作する 
@@ -166,7 +165,7 @@ class MultiAudio:
         send_audio = self.vc.send_audio_packet
         _start = time.perf_counter()
         fin_loop = 0
-        while self.loop:
+        while self.enable_loop:
             Bytes = None
             if self.PLen == 1:
                 Bytes = self.P1_read_bytes()
@@ -210,6 +209,7 @@ class MultiAudio:
                 if (50 * 20) < fin_loop:
                     break
 
+
             
 
 class _AudioTrack:
@@ -223,7 +223,6 @@ class _AudioTrack:
         self.pitch = _Attribute(init=0, min=-60, max=60, update_asource=self.update_asouce_sec)
         self.speed = _Attribute(init=1.0, min=0.1, max=3.0, update_asource=self.update_asouce_sec)
         self.read_fin = False
-        self.read_loop = False
         self.After = None
         self.opus = opus
         self.QBytes = []
@@ -314,7 +313,7 @@ class _AudioTrack:
         if self.AudioSource:            
             # Read Bytes
             if len(self.QBytes) <= (45 * 50):
-                self._read_bytes(True)
+                self._read_bytes()
 
             if self.Pausing == False:
                 #print(len(self.QBytes))
@@ -357,26 +356,18 @@ class _AudioTrack:
             self.After()
 
 
-    def _read_bytes(self, status):
-        if status:
-            if self.read_loop or self.read_fin: return
-            self.read_loop = True
-            threading.Thread(target=self.__read_bytes, daemon=True).start()
-        
-        else:
-            self.read_loop = False
+    def _read_bytes(self):
+        if self.read_fin or self.read_bytes_loop.is_running: return
+        self.read_bytes_loop.set_running(True)
+        threading.Thread(target=self.read_bytes_loop, daemon=True).start()
 
 
-    def __read_bytes(self):
-        try:
-            while len(self.QBytes) <= (90 * 50) and self.read_loop:
-                if byte := self.AudioSource.read():
-                    self.QBytes.append(byte)
-                else: 
-                    self.read_fin = True
-                    self.QBytes.append('Fin')
-                    break
-        except Exception:
-            pass
-
-        self.read_loop = False
+    @run_check_storage()
+    def read_bytes_loop(self):
+        while len(self.QBytes) <= (90 * 50) and self.Parent.enable_loop:
+            if byte := self.AudioSource.read():
+                self.QBytes.append(byte)
+            else: 
+                self.read_fin = True
+                self.QBytes.append('Fin')
+                break
