@@ -4,9 +4,9 @@ from typing import Any, List
 
 from discord.interactions import Interaction
 
-from .audio_source import StreamAudioData as SAD
-from .embeds import EmBase
-from .voice_client import _AudioTrack
+from pi_yo_8.audio_data import StreamAudioData as SAD
+from pi_yo_8.embeds import EmBase
+from pi_yo_8.voice_client import AudioTrack
 #from .lyricsgenius.lyrics import GeniusLyric
 
 
@@ -15,7 +15,7 @@ class CreateButton(discord.ui.View):
     def __init__(self, Parent):
         super().__init__(timeout=None)
         try:
-            from .music import MusicController
+            from .music_control._music_controller import MusicController
             self.Parent:MusicController
         except Exception: pass
         self.Parent = Parent
@@ -208,7 +208,7 @@ async def playoptionmessage(channel:discord.TextChannel, music) -> discord.Messa
         )
 
 
-def PlayConfigEmbed(Mvc:_AudioTrack):
+def PlayConfigEmbed(Mvc:AudioTrack):
     embed = discord.Embed(colour=EmBase.dont_replace_color())
     embed.add_field(name='テンポ (x0.1 ~ x3.0)', value=f'x{round(Mvc.speed.get,2)}', inline=True)
     embed.add_field(name='キー', value=f'{Mvc.pitch.get}', inline=True)
@@ -219,7 +219,7 @@ def PlayConfigEmbed(Mvc:_AudioTrack):
 class PlayConfigView(discord.ui.View):
     def __init__(self, parent):
         try:
-            from .music import MusicController
+            from .music_control._music_controller import MusicController
             self.parent:MusicController
         except Exception: pass
 

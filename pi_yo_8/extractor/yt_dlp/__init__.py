@@ -63,7 +63,7 @@ class YTDLPExtractor:
 
 
     @staticmethod
-    async def ytdlp_playlist(_id:str) -> Playlist:
+    async def load_playlist(_id:str) -> Playlist:
         """
         yt-dlp を使用してYoutubeのプレイリストを取得する
 

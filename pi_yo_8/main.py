@@ -10,7 +10,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
 ####  Config
-try: import config
+try: from pi_yo_8 import config
 except Exception:
     CLines= [
         "Prefix = ','",
@@ -24,9 +24,9 @@ except Exception:
     raise Exception('Config ファイルを生成しました')
 
 
-from .voice_client import MultiAudio
-from .music import MusicController
-from .utils import set_logger
+from pi_yo_8.voice_client import MultiAudioVoiceClient
+from pi_yo_8.music_control._music_controller import MusicController
+from pi_yo_8.utils import set_logger
 
 
 set_logger()
@@ -182,7 +182,7 @@ class DataInfo():
         self.loop = client.loop
         self.client = client
         self.config = config
-        self.MA = MultiAudio(guild, client, self)
+        self.MA = MultiAudioVoiceClient(guild, client, self)
         self.Music = MusicController(self)
         self.loop_5.start()
 
