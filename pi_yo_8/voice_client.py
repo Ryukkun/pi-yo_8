@@ -16,19 +16,12 @@ lock = threading.Lock()
 
 
 
-class _StreamAudioData:
-    def __init__(self, input) -> None:
-        self.input = input
-        self.st_sec :Optional[int]  = None
-        self.st_url :Optional[str]  = None
-        self.local  :bool           = True
-        self.volume :Optional[int]  = None
-
-
-    def from_local_path(self):
-        self.st_url = self.input
-        self.local = True
-        return self
+class StreamAudioData:
+    def __init__(self, 
+                 st_url:str,
+                 volume:Optional[int] = None):
+        self.st_url = st_url
+        self.volume = volume
 
 
     def _get_ffmpegaudio(self, opus:bool, before_options:list, options:list) -> Union[FFmpegOpusAudio, FFmpegPCMAudio]:
@@ -53,6 +46,7 @@ class _StreamAudioData:
         # Sec
         if int(sec):
             before_options.extend(('-ss' ,str(sec)))
+        before_options.extend(('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-analyzeduration', '2147483647', '-probesize', '2147483647'))
         
         # Pitch
         if pitch != 0:
@@ -65,8 +59,6 @@ class _StreamAudioData:
         if self.volume:
             af.append(f'volume={self.volume}dB')
         
-        if not self.local:
-            before_options.extend(('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-analyzeduration', '2147483647', '-probesize', '2147483647'))
         # af -> str
         if af:
             options.extend(('-af', ','.join(af) ))
@@ -96,7 +88,7 @@ class _Attribute:
 
 
 
-class MultiAudio:
+class MultiAudioVoiceClient:
     """
     Discord に存在する AudioPlayer は 同時に1つまでの音源の再生にしか対応していないため
     独自で Playerを作成 
@@ -105,33 +97,31 @@ class MultiAudio:
     def __init__(self, guild:Guild, client:commands.Bot, parent) -> None:
         self.enable_loop = True
         self.guild = guild
-        self.gid = guild.id
-        self.vc = guild.voice_client
         self.loop = client.loop
-        self.Parent = parent
-        self.Players:list['_AudioTrack'] = []
-        self.PLen = 0
-        self.vc.encoder = opus.Encoder()
+        self.parent = parent
+        self.players:list['AudioTrack'] = []
+        self.pLen = 0
+        self.guild.voice_client.encoder = opus.Encoder()
         #self.vc.encoder.set_expected_packet_loss_percent(0.01)
-        self.Enc_bool = False
+        self.enc_bool = False
 
 
     def kill(self):
         self.enable_loop = False
 
 
-    def add_player(self ,RNum=0 ,opus=False) -> '_AudioTrack':
-        player = _AudioTrack(RNum ,opus=opus ,parent=self)
-        self.Players.append(player)
+    def add_track(self ,RNum=0 ,opus=False) -> 'AudioTrack':
+        player = AudioTrack(RNum ,opus=opus ,parent=self)
+        self.players.append(player)
         self.P1_read_bytes = player.read_bytes
-        self.PLen = len(self.Players)
-        self.Enc_bool = (self.PLen != 1 or self.PLen == 1 and opus == False)
+        self.pLen = len(self.players)
+        self.enc_bool = (self.pLen != 1 or self.pLen == 1 and opus == False)
         return player
 
     def _speaking(self,status: bool):
         playing = 0
-        for P in self.Players:
-            if not P.is_paused():
+        for p in self.players:
+            if not p.is_paused():
                 playing += 1
         if status:
             if playing == 1:
@@ -162,18 +152,18 @@ class MultiAudio:
         音声データ (Bytes) を取得し、必要があれば Numpy で読み込んで 合成しています
         最後に音声データ送信
         """
-        send_audio = self.vc.send_audio_packet
+        send_audio = self.guild.voice_client.send_audio_packet
         _start = time.perf_counter()
         fin_loop = 0
         while self.enable_loop:
             Bytes = None
-            if self.PLen == 1:
+            if self.pLen == 1:
                 Bytes = self.P1_read_bytes()
 
-            elif 2 <= self.PLen:
+            elif 2 <= self.pLen:
                 byte_list = []
                 byte_append = byte_list.append
-                for _ in self.Players:
+                for _ in self.players:
                     if _byte := _.read_bytes():
                         byte_append(_byte)
                 
@@ -199,7 +189,7 @@ class MultiAudio:
             # Send Bytes
             if Bytes:
                 fin_loop = 0
-                try: send_audio(Bytes, encode=self.Enc_bool)
+                try: send_audio(Bytes, encode=self.enc_bool)
                 except Exception as e:
                     print(f'Error send_audio_packet : {e}')
                     break
@@ -212,8 +202,8 @@ class MultiAudio:
 
             
 
-class _AudioTrack:
-    def __init__(self ,RNum ,opus ,parent:'MultiAudio'):
+class AudioTrack:
+    def __init__(self ,RNum ,opus ,parent:'MultiAudioVoiceClient'):
         self.AudioSource = None
         self._SAD = None
         self.Pausing = True
