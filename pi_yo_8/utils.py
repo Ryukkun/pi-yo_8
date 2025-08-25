@@ -1,9 +1,12 @@
+from concurrent.futures import ThreadPoolExecutor
 import datetime
 import logging
 import asyncio
 import aiohttp
 from discord.utils import _ColourFormatter
 
+
+FREE_THREADS = ThreadPoolExecutor(max_workers=50)
 
 def int_analysis(arg):
     '''

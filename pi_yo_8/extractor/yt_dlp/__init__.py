@@ -1,76 +1,58 @@
 import asyncio
 from yt_dlp import YoutubeDL
-from typing import TYPE_CHECKING, Any, Generator
+from typing import TYPE_CHECKING
 
 from _ie import YoutubeIE
-from pi_yo_8.audio_data import GenericAudioData
-from pi_yo_8.music_control._playlist import Playlist
+from pi_yo_8.music_control._playlist import GeneratorPlaylist, Playlist
+from pi_yo_8.utils import FREE_THREADS
 
 
 if TYPE_CHECKING:
-     from pi_yo_8.audio_data import YoutubeAudioData
+     from pi_yo_8.audio_data import YTDLPAudioData
 
 class YTDLPExtractor:
-    @staticmethod
-    async def load_video(url: str) -> YoutubeAudioData | GenericAudioData | None:
+    YTDLP_PARAMS = {
+        'format':'bestaudio/worst',
+        "default_search":"ytsearch30",
+        'extract_flat':"in_playlist",
+        'quiet':True,
+        'skip_download': True
+    }
+    def __init__(self, opts:dict={}) -> None:
+        """
+        Parameters
+        ----------
+        opts : dict
+            yt-dlp に渡すオプション ログイン情報の想定
+        """
+        self.opts: dict = opts
+        self.opts.update(self.YTDLP_PARAMS)
+
+
+    def _get_ytdlp(self) -> YoutubeDL:
+        ydl = YoutubeDL(self.opts)
+        ydl.add_info_extractor(YoutubeIE())
+        return ydl
+
+
+    async def extract_info(self, url: str) -> YTDLPAudioData| Playlist | None:
         """
         yt-dlpで動画を解析。Youtube以外も想定
         """
-        def io() -> dict | None:
-            try:
-                with YoutubeDL({'format':'bestaudio/worst', 'quiet':True, 'noplaylist':True, 'skip_download': True}) as ydl:
-                    ydl.add_info_extractor(YoutubeIE())
-                    return ydl.extract_info(url, download=False)
-            except:
-                return None
+        info = await self._extract_info(url)
 
-        video_info = await asyncio.get_event_loop().run_in_executor(None, io)
-        if video_info is None:
-            return None
-        elif "youtu" in video_info["extractor_key"].lower():
-            return YTDLPExtractor._yt_format(video_info)
-        else:
-            return YTDLPExtractor._generic_format(video_info)
-
-    @classmethod
-    def _yt_format(video_info) -> YoutubeAudioData:
-            from pi_yo_8.audio_data import YoutubeAudioData
-            if (upload_date := video_info.get('upload_date', None)) is not None:
-                upload_date=f'{upload_date[:4]}/{upload_date[4:6]}/{upload_date[6:]}'
-            if (volume := video_info.get('volume_data', {}).get('perceptualLoudnessDb', None)) is not None:
-                volume = -14 - volume
-            return YoutubeAudioData(video_id=video_info["id"],
-                             title=video_info["title"],
-                             st_url=video_info['url'],
-                             st_sec=int(video_info["duration"]),
-                             volume=volume,
-                             view_count=video_info.get('view_count', None),
-                             like_count=video_info.get('like_count', None),
-                             upload_date=upload_date,
-                             ch_id=video_info.get("channel_id", None),
-                             ch_name=video_info.get("channel", None))
+        if info:
+            if 'entries' in info:
+                return Playlist([YTDLPAudioData(entry) for entry in info['entries']])
+            elif "formats" in info and 'url' in info:
+                return YTDLPAudioData(info)
+            
+        return None
 
 
-    @classmethod
-    def _generic_format(video_info:dict) -> GenericAudioData:
-        web_url = video_info.get('webpage_url', None)
-        if web_url is None:
-            web_url = video_info.get('original_url', "None")
-        return GenericAudioData(st_url=video_info['url'],
-                                web_url=web_url,
-                                title=video_info['title'])
-
-
-
-    @staticmethod
-    async def load_playlist(_id:str) -> Playlist:
+    async def extract_yt_playlist_info(self, _id:str) -> GeneratorPlaylist | None:
         """
         yt-dlp を使用してYoutubeのプレイリストを取得する
-
-        Parameters
-        ----------
-        _id : str
-            YoutubeのプレイリストID
 
         Returns
         -------
@@ -78,25 +60,29 @@ class YTDLPExtractor:
             取得したプレイリストの動画情報 失敗した場合は None
         """
         url = f'https://www.youtube.com/playlist?list={_id}'
-        def main() -> Generator[dict[str, Any] | Any, Any, None] | None:
-            # yt-dlp load playlist
+        # yt-dlp load playlist
+        info = await self._extract_info(url, process=False)
+
+        if info and 'entries' in info:
+            return GeneratorPlaylist(info)
+        return None
+        # to cls
+        # res = []
+        # for _ in entries:
+        #     if _['title'] == '[Private video]' and not _['duration']:
+        #         continue
+        #     res.append(YTDLPAudioData(_['id'], video_id=_['id'], title=_['title']))
+        # return res
+    
+
+    async def _extract_info(self, url: str, process: bool = True) -> dict | None:
+        """
+        yt-dlp対応サイトの解析情報を出力
+        youtubeのplaylistを解析するときはprocess=False かつ URLが...youtube.com/playlist?list...であるとジェネレーターになる。
+        """
+        def main():
             try:
-                with YoutubeDL({'quiet':True, 'skip_download': True}) as ydl:
-                    info = ydl.extract_info(url, download=True, process=False, ie_key="YoutubeTab")
-                    return info["entries"]
+                return self._get_ytdlp().extract_info(url, download=False, process=process)
             except:
                 return None
-
-        loop = asyncio.get_event_loop()
-        entries = await loop.run_in_executor(None, main)
-
-        if entries is None:
-            return None
-        
-        # to cls
-        res = []
-        for _ in entries:
-            if _['title'] == '[Private video]' and not _['duration']:
-                continue
-            res.append(YoutubeAudioData(_['id'], video_id=_['id'], title=_['title']))
-        return res
+        return await asyncio.get_event_loop().run_in_executor(FREE_THREADS, main)

@@ -1,12 +1,16 @@
 import aiohttp
 from pi_yo_8 import config
-from pi_yo_8.audio_data import YoutubeAudioData
+from pi_yo_8.audio_data import YTDLPAudioData
 from pi_yo_8.utils import YoutubeUtil
 from pi_yo_8.voice_client import StreamAudioData
 from pi_yo_8.extractor.yt_dlp import YTDLPExtractor
 
 
 class YoutubeAPIExtractor:
+    """
+    Youtube Data v3 APIを使用して情報を取得する
+    API制限があるので、使わない方針で改良していく
+    """
     BASE_URL = 'https://www.googleapis.com/youtube/v3'
 
     @staticmethod
@@ -23,7 +27,7 @@ class YoutubeAPIExtractor:
     async def api_playlist(_id:str) -> list['StreamAudioData']:
         """
         YoutubeAPIを使用しプレイリストの情報を取得する
-        yt_dlpより早い
+        yt_dlpと速度変わらんし、API制限もあるので使わない
         """
         params = {'key':config.youtube_key, 'part':'contentDetails,status,snippet', 'playlistId':_id, 'maxResults':'0'}
         url = YoutubeAPIExtractor.BASE_URL + '/playlistItems'
@@ -49,7 +53,7 @@ class YoutubeAPIExtractor:
                         upload_date = item['contentDetails']['videoPublishedAt'][:10].replace('-','/')
                         video_id = item['contentDetails']['videoId']
                         title = item['snippet']['title']
-                        res.append(YoutubeAudioData(video_id, YoutubeUtil.get_web_url(video_id), title, upload_date=upload_date, video_id=video_id, title=title))
+                        res.append(YTDLPAudioData(video_id, YoutubeUtil.get_web_url(video_id), title, upload_date=upload_date, video_id=video_id, title=title))
                         if total == i:
                             break
 
@@ -59,7 +63,7 @@ class YoutubeAPIExtractor:
                         break
         return res
 
-    @classmethod
+    @staticmethod
     async def api_get_viewcounts(video_id:str) -> tuple[str, int, int]:        
         params = {'key':config.youtube_key, 'part':'statistics,snippet', 'id':video_id}
         url = YoutubeAPIExtractor.BASE_URL + '/videos'
@@ -84,7 +88,7 @@ class YoutubeAPIExtractor:
                 text = await resp.json()
 
         video_id = text['items'][0]['id']['videoId']
-        return await YTDLPExtractor.load_video(video_id)
+        return await YTDLPExtractor.extract_info(video_id)
 
 
     @staticmethod
@@ -97,7 +101,7 @@ class YoutubeAPIExtractor:
                 text = await resp.json()
 
         return [
-            YoutubeAudioData(_['id']['videoId'],
+            YTDLPAudioData(_['id']['videoId'],
                  video_id=_['id']['videoId'],
                  title=_['snippet']['title']
                  )
