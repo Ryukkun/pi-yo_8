@@ -100,16 +100,35 @@ def main():
     # _, entries = tuple(zip(*list(entries))) or ([], [])
     #print(entries)
 
+from yt_dlp.extractor import gen_extractor_classes
+def supported_url(ydl:yt_dlp.YoutubeDL, url: str) -> None:
+    for ie in gen_extractor_classes():
+        if ie.suitable(url):
+            print(ie.__class__.__name__)
+            return
+
+
 
 def extract():
+    # lazy_playlist なんか動かんくて残念
     arg = "https://www.youtube.com/watch?v=cQKGUgOfD8U&list=PLB02wINShjkBKnLfufaEPnCupGO-SK6e4&index=4"
+    #arg = "https://www.youtube.com/playlist?&list=PLB02wINShjkBKnLfufaEPnCupGO-SK6e4&index=4"
+    #arg = "https://www.nicovideo.jp/mylist/21130988"
+    arg = "https://youtu.be/x06wB8UDxMI?si=yEw3s0RAISEH4Iu4"
+    #arg = "https://www.nicovideo.jp/watch/sm36999938"
+    #arg = "ytsearch50:ディぺっしゅモード"
+    arg = "ytsearch50:ジブリBGM playlist"
+    arg = "じぶりBGM playlist"
     now = time.perf_counter()
-    _ = yt_dlp.YoutubeDL({"flat_extract": True, 'skip_download': True})
+
+    _ = yt_dlp.YoutubeDL({"default_search":"ytsearch30", 'format':'bestaudio/worst', 'extract_flat': "in_playlist", 'skip_download': True})
+    supported_url(_, arg)
     print(time.perf_counter() - now)
-    __ = _.extract_info(arg, download=False)
+    __ = _.extract_info(arg, download=False, process=True)
     print(time.perf_counter() - now)
-    with open("./video_info.json", "w", encoding="utf-8") as f:
-        json.dump(__, f, ensure_ascii=False, indent=2)
+    print(__)
+    # with open("./video_info.json", "w", encoding="utf-8") as f:
+    #     json.dump(__, f, ensure_ascii=False, indent=2)
 
 
 

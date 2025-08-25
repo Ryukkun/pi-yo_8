@@ -2,36 +2,36 @@ from discord import Embed, Colour
 
 
 class EmBase:
-    @classmethod
-    def no_perm(self):
+    @staticmethod
+    def no_perm():
         '''
         権限がない時のEmbed
         '''
         return Embed(title=f'権限がありません 🥲', colour=Colour.red())
-    
-    @classmethod
-    def failed(self):
+
+    @staticmethod
+    def failed():
         '''
         失敗した時のEmbed
         '''
         return Embed(title=f'失敗 🤯', colour=Colour.red())
-    
-    @classmethod
-    def main_color(self):
+
+    @staticmethod
+    def main_color():
         '''
         bot ベースカラー
         '''
         return Colour.from_str('#e1bd5c')
 
-    @classmethod
-    def player_color(self):
+    @staticmethod
+    def player_color():
         '''
         自作Player の カラー
         '''
         return Colour.from_str('#e1bd5b')
-    
-    @classmethod
-    def dont_replace_color(self):
+
+    @staticmethod
+    def dont_replace_color():
         '''
         playingに上書きされないカラー
         '''

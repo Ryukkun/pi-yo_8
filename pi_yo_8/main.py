@@ -102,14 +102,14 @@ async def bye(ctx:commands.Context):
 async def speed(ctx:commands.Context, arg:float):
     gid = ctx.guild.id
     if data := g_opts.get(gid):
-        await data.Music.Mvc.speed.set(arg)
+        await data.Music.player_track.speed.set(arg)
 
 
 @client.command()
 async def pitch(ctx:commands.Context, arg:int):
     gid = ctx.guild.id
     if data := g_opts.get(gid):
-        await data.Music.Mvc.pitch.set(arg)
+        await data.Music.player_track.pitch.set(arg)
 
 
 #--------------------------------------------------

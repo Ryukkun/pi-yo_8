@@ -49,12 +49,12 @@ class CreateButton(discord.ui.View):
         Parent = self.Parent
         Parent._update_action()
         Parent.loop.create_task(interaction.response.defer())
-        Parent.Mvc.skip_time(-10*50)
+        Parent.player_track.skip_time(-10*50)
             
 
 class Button2(discord.ui.Button):
     def __init__(self, parent:CreateButton):
-        _label = '▶' if parent.Parent.Mvc.is_paused() else 'II'
+        _label = '▶' if parent.Parent.player_track.is_paused() else 'II'
         super().__init__(label=_label,style=discord.ButtonStyle.blurple,row=2)
         self.parent = parent.Parent
 

@@ -20,7 +20,7 @@ class StreamAudioData:
     def __init__(self, 
                  st_url:str,
                  volume:Optional[int] = None):
-        self.st_url = st_url
+        self.stream_url = st_url
         self.volume = volume
 
 
@@ -29,11 +29,11 @@ class StreamAudioData:
         before_options = ' '.join(before_options)
         if opus:
             #options.extend(('-c:a', 'libopus', '-ar', '48000'))
-            return FFmpegOpusAudio(self.st_url, before_options=before_options, options=options)
+            return FFmpegOpusAudio(self.stream_url, before_options=before_options, options=options)
 
         else:
             #options.extend(('-c:a', 'pcm_s16le', '-ar', '48000'))
-            return FFmpegPCMAudio(self.st_url, before_options=before_options, options=options)
+            return FFmpegPCMAudio(self.stream_url, before_options=before_options, options=options)
 
 
 
