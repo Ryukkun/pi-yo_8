@@ -4,20 +4,23 @@ import time
 import tabulate
 import asyncio
 import logging
-from typing import Optional, List, Union
+from typing import Optional, List, Union, TYPE_CHECKING
 from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
 from discord.ext.commands import Context
+import urllib.parse
 
 
-from ..utils import run_check_storage
-from ..utils import int_analysis, date_difference, calc_time
-from ..audio_data import AnalysisUrl
-from ..audio_data import StreamAudioData as SAD
-from ..view import CreateButton, playoptionmessage
-from ..embeds import EmBase
+from pi_yo_8.extractor.yt_dlp import YTDLPExtractor
+from pi_yo_8.music_control._playlist import Playlist
+from pi_yo_8.utils import run_check_storage
+from pi_yo_8.utils import int_analysis, date_difference, calc_time
+from pi_yo_8.audio_data import AnalysisUrl, YTDLPAudioData
+from pi_yo_8.audio_data import StreamAudioData as SAD
+from pi_yo_8.view import CreateButton, playoptionmessage
+from pi_yo_8.embeds import EmBase
 
-if __name__ == "__main__":
-    from ..main import DataInfo
+if TYPE_CHECKING:
+    from pi_yo_8.main import DataInfo
 
 
 re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
@@ -40,52 +43,42 @@ _log = logging.getLogger(__name__)
 
 
 
-class MusicQueue(list):
-    def __init__(self) -> List[SAD]:
-        self.prev_queue:List[SAD] = []
+class MusicQueue:
+    def __init__(self):
+        self.play_history:List[YTDLPAudioData | Playlist] = []
+        self.queue:List[YTDLPAudioData | Playlist] = []
 
 
     def next(self, count:int=1) -> bool:
-        if 1 <= count:
-            if not self:
-                return False
+        if 0 < count and self.queue:
+            count = min(count, len(self.queue))
+            self.play_history += self.queue[:count]
+            del self.queue[:count]
+            return True
 
-            self.prev_queue += self[:count]
-            del self[:count]
+        elif count < 0 and self.play_history:
+            count = max(count, -len(self.play_history))
+            self.queue[0:0] = self.play_history[count:]
+            del self.play_history[count:]
+            return True
 
-        elif count <= -1:
-            if not self.prev_queue:
-                return False
-
-            self[0:0] = self.prev_queue[count:]
-            del self.prev_queue[count:]
-
-        else:
-            return False
-        
-        return True
+        return False
 
 
-    def get(self) -> Optional[SAD]:
-        if self:
-            return self[0]
-        return
+    def get(self) -> Optional[YTDLPAudioData | Playlist]:
+        if self.queue:
+            return self.queue[0]
+        return None
 
 
 
 
 class MusicController():
-    def __init__(self, _Info:DataInfo):
-        Info = _Info
-        self.Info = Info
-        self.MA = Info.MA
-        self.Mvc = Info.MA.add_player(RNum=30 ,opus=True)
-        self.guild = Info.guild
-        self.gid = Info.gid
-        self.gn = Info.gn
-        self.vc = self.guild.voice_client
-        self.loop = Info.loop
-        self.queue:Union[MusicQueue, List[SAD]] = MusicQueue()
+    def __init__(self, info:DataInfo):
+        self.info = info
+        self.player_track = info.MA.add_track(RNum=30 ,opus=True)
+        self.guild = info.guild
+        self.queue:MusicQueue = MusicQueue()
         self.Index_PL = None
         self.PL:List[SAD] = []
         self.Latest_CH:TextChannel = None
@@ -94,7 +87,8 @@ class MusicController():
         self.embed_playing:Optional[Message] = None
         self.embed_play_options:Optional[Message] = None
         self.last_action:float = 0.0
-        
+        self.ydl = YTDLPExtractor()
+
 
     def _update_action(self, channel= None):
         self.last_action = time.time()
@@ -115,7 +109,7 @@ class MusicController():
         self._update_action(ctx.channel)
         # 一時停止していた場合再生 開始
         if args == ():
-            self.Mvc.resume()
+            self.player_track.resume()
             return
         else:
             arg = ' '.join(args)
@@ -132,30 +126,56 @@ class MusicController():
         self.queue.append(res.sad)
 
         # 再生されるまでループ
-        if not self.Mvc.is_playing():
+        if not self.player_track.is_playing():
             await self.play_loop(None,0)
-        self.Mvc.resume()
+        self.player_track.resume()
 
 
 
+
+    async def _analysis_input(self, arg:str) -> Playlist | YTDLPAudioData | None:
+        url_parse = urllib.parse.urlparse(arg)
+        url_query:dict = {}
+        is_url = False
+        is_yt = False
+        list_id:Optional[str] = None
+        video_id:Optional[str] = None
+
+        if url_parse.query:
+            url_query = urllib.parse.parse_qs(url_parse.query)
+
+        is_url = bool(url_parse.hostname)
+        if is_url:
+            is_yt = re.match(r'^(.*?(youtube\.com|youtube-nocookie\.com)|youtu\.be)$',url_parse.hostname)
+            if is_yt:
+                list_id = url_query.get('list', [None])[0]
+                video_id = url_query.get('v', [None])[0]
+                if not video_id and url_parse.hostname == 'youtu.be':
+                    video_id = url_parse.path[1:]
+
+        if is_yt and list_id:
+            pl = await self.ydl.extract_yt_playlist_info(list_id)
+            if video_id:
+                await pl.set_next_index_from_videoID(video_id)
+            return pl
+
+        return await self.ydl.extract_info(arg)
 
 
     async def play(self, ctx:Context, args):
         _log.info(f"{self.gn} : Command:play {' '.join(args)}")
         self._update_action(ctx.channel)
         # 一時停止していた場合再生 開始
-        if args == ():
-            self.Mvc.resume()
-            return
-        else:
+        if args:
             arg = ' '.join(args)
+        else:
+            self.player_track.resume()
+            return
 
-
-        # 君は本当に動画なのかい　どっちなんだい！
-        res = await AnalysisUrl(arg).url_check()
+        res = await self._analysis_input(arg)
         if not res: return
 
-        if res.playlist:
+        if isinstance(res, Playlist):
             self.Index_PL = res.index
             self.status['random_pl'] = res.random_pl
             self.PL = res.sad
@@ -178,12 +198,12 @@ class MusicController():
 
         # 再生されるまでループ
         await self.play_loop(None,0)
-        self.Mvc.resume()
+        self.player_track.resume()
 
 
 
     async def skip(self, sec:str):
-        if self.vc:
+        if self.guild.voice_client:
 
             self.last_action = time.time()
             if sec:
@@ -202,16 +222,16 @@ class MusicController():
                         sec = int(res.group(3))
                         sec += int(res.group(2)) * 60
                         sec += int(res.group(1)) * 3600
-                        self.Mvc.skip_time((sec * 50) - int(self.Mvc.Timer))
+                        self.player_track.skip_time((sec * 50) - int(self.player_track.Timer))
                         return
 
                     elif res := re_skip_set_m.match(sec):
                         sec = int(res.group(2))
                         sec += int(res.group(1)) * 60
-                        self.Mvc.skip_time((sec * 50) - int(self.Mvc.Timer))
+                        self.player_track.skip_time((sec * 50) - int(self.player_track.Timer))
                         return
 
-                self.Mvc.skip_time(int(sec) * 50)
+                self.player_track.skip_time(int(sec) * 50)
 
             else:
                 await self.skip_music()
@@ -225,17 +245,17 @@ class MusicController():
         _log.info(f'{self.gn} : #{abs(count)}曲{"前へ prev" if count < 0 else "次へ skip"}')
 
         await self.play_loop()
-        if self.Mvc.is_paused():
-            self.Mvc.resume()
+        if self.player_track.is_paused():
+            self.player_track.resume()
 
 
     def resume(self):
         _log.info(f"{self.gn} : #resume")
-        self.Mvc.resume()
+        self.player_track.resume()
 
     def pause(self):
         _log.info(f"{self.gn} : #stop")
-        self.Mvc.pause()
+        self.player_track.pause()
 
 
     #--------------------------------------------------
@@ -244,7 +264,7 @@ class MusicController():
     @run_check_storage()
     async def playing(self):
         try:
-            if self.Mvc.is_playing():
+            if self.player_track.is_playing():
                 
                 # Get Embed
                 if embed := await self.generate_embed():
@@ -279,7 +299,7 @@ class MusicController():
         if not self.Latest_CH: return
 
         if late_E := self.Latest_CH.last_message:
-            if late_E.author.id == self.Info.client.user.id:
+            if late_E.author.id == self.info.client.user.id:
                 if late_E.embeds:
                     em_color = late_E.embeds[0].colour.value
                     if em_color == EmBase.dont_replace_color().value:
@@ -327,7 +347,7 @@ class MusicController():
 
 
     async def generate_embed(self):
-        _SAD = self.Mvc._SAD
+        _SAD = self.player_track._SAD
 
         # Embed
         if not _SAD:
@@ -350,7 +370,7 @@ class MusicController():
 
             # Progress Bar
             i_length = 16
-            NTime = int(self.Mvc.Timer) // 50
+            NTime = int(self.player_track.Timer) // 50
             unit_time = _SAD.st_sec / i_length
             Progress = ''
             text_list = ['　','▏','▎','▍','▌','▋','▋','▊','▉','█']
@@ -363,7 +383,7 @@ class MusicController():
                     Progress += '█'
                 else:
                     Progress += '　'
-            NTime = calc_time(int(self.Mvc.Timer) // 50)
+            NTime = calc_time(int(self.player_track.Timer) // 50)
             Duration = calc_time(_SAD.st_sec)
             embed.set_footer(text=f'{NTime} | {Progress} | {Duration}')
         else:
@@ -535,10 +555,11 @@ class MusicController():
     async def play_loop(self, played=None, did_time=0):
         # あなたは用済みよ
         if not self.vc: return
+        loop = asyncio.get_event_loop()
 
         # Queue削除
         if self.queue:
-            if self.status['loop'] == False and played and self.queue[0].st_url == played or (time.time() - did_time) <= 0.2:
+            if self.status['loop'] == False and played and self.queue[0].stream_url == played or (time.time() - did_time) <= 0.2:
                 self.queue.next()
                 
         # Playlistのお客様Only
@@ -556,7 +577,7 @@ class MusicController():
                 url = await self.queue[0].check_st_url.get_url()
                 if not url:
                     del self.queue[0]
-                    self.loop.create_task(self.play_loop())
+                    loop.create_task(self.play_loop())
 
         # 再生
         if self.queue:
@@ -564,7 +585,7 @@ class MusicController():
             played_time = time.time()
             _log.info(f"{self.gn} : Play {AudioData.web_url}  volume:{AudioData.volume}  [Now len: {str(len(self.queue))}]")
 
-            await self.Mvc.play(AudioData,after=lambda : self.loop.create_task(self.play_loop(AudioData.st_url,played_time)))
+            await self.player_track.play(AudioData,after=lambda : loop.create_task(self.play_loop(AudioData.stream_url,played_time)))
 
 
     async def task_loop(self):

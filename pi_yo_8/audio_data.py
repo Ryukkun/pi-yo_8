@@ -1,50 +1,57 @@
-from typing import Optional
-
 from pi_yo_8.utils import YoutubeUtil, is_url_accessible, task_running_wrapper
 from pi_yo_8.voice_client import StreamAudioData
 
 
 
-class GenericAudioData(StreamAudioData):
-    def __init__(self,
-                 st_url:str,
-                 web_url:str,
-                 volume:Optional[int] = None,
-                 title:Optional[str] = None):
-        super().__init__(st_url, volume)
-   
-        self.web_url = web_url
-        self.title = title if title else self.web_url
+class YTDLPAudioData(StreamAudioData):
+    def __init__(self, info:dict):
+        self.info = info
+        if (volume := info.get('volume_data', {}).get('perceptualLoudnessDb', None)) is not None:
+            volume = -14 - volume
+        super().__init__(info['url'], volume)
 
+    def web_url(self) -> str | None:
+        ret = self.info.get("webpage_url", None)
+        if not ret:
+            ret = self.info.get("original_url", None)
+        return ret
 
+    def title(self) -> str | None:
+        ret = self.info.get("title", None)
+        if not ret:
+            ret = self.web_url()
+        return ret
 
-class YoutubeAudioData(StreamAudioData):
-    def __init__(self,
-                 video_id:str,
-                 title:str,
-                 st_url:Optional[str] = None,
-                 st_sec:Optional[int] = None,
-                 volume:Optional[int] = None,
-                 view_count:Optional[int] = None,
-                 like_count:Optional[int] = None,
-                 upload_date:Optional[str] = None,
-                 ch_id:Optional[str] = None,
-                 ch_name:Optional[str] = None,
-                 ch_icon:Optional[str] = None):
-        super().__init__(st_url, YoutubeUtil.get_web_url(video_id), volume, title)
+    def duration(self) -> int | None:
+        return self.info.get("duration", None)
+    
+    def video_id(self) -> str | None:
+        return self.info.get("id", None)
+    
+    def view_count(self) -> int | None:
+        return self.info.get("view_count", None)
 
-        # video detail
-        self.st_sec = st_sec
-        self.video_id = video_id
-        self.view_count = view_count
-        self.like_count = like_count
-        self.upload_date = upload_date
+    def like_count(self) -> int | None:
+        return self.info.get("like_count", None)
 
-        # channel detail
-        self.ch_id = ch_id
-        self.ch_url = YoutubeUtil.get_ch_url(ch_id)
-        self.ch_name = ch_name
-        self.ch_icon = ch_icon
+    def upload_date(self) -> str | None:
+        if (upload_date := self.info.get('upload_date', None)) is not None:
+            upload_date=f'{upload_date[:4]}/{upload_date[4:6]}/{upload_date[6:]}'
+        return upload_date
+    
+    def ch_id(self) -> str | None:
+        return self.info.get("channel_id", None)
+
+    def ch_url(self) -> str | None:
+        return YoutubeUtil.get_ch_url(self.ch_id())
+    
+    def ch_name(self) -> str | None:
+        return self.info.get("channel", None)
+
+    async def ch_icon(self) -> str | None:
+        if self._ch_icon is None:
+            self._ch_icon = await YoutubeUtil.get_ch_icon(self.ch_id())
+        return self._ch_icon
 
 
     async def is_available(self) -> bool:
@@ -52,8 +59,8 @@ class YoutubeAudioData(StreamAudioData):
         利用可能か利用可能かどうかをチェックする
         最悪5秒程度かかる
         """
-        if self.st_url:
-            return await is_url_accessible(self.st_url)
+        if self.stream_url:
+            return await is_url_accessible(self.stream_url)
         return False
     
 
@@ -64,7 +71,5 @@ class YoutubeAudioData(StreamAudioData):
         投げっぱなし可能
         """
         from pi_yo_8.extractor.yt_dlp import YTDLPExtractor
-        new:YoutubeAudioData = await YTDLPExtractor.load_video(self.video_id)
-        for key, value in new.__dict__.items():
-            if value:
-                self.__dict__[key] = value
+        self.info = await YTDLPExtractor._extract_info(self.web_url())
+        self.stream_url = self.info['url']
