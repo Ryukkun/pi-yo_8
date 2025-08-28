@@ -52,7 +52,9 @@ class YTDLPAudioData(StreamAudioData):
         if self._ch_icon is None:
             self._ch_icon = await YoutubeUtil.get_ch_icon(self.ch_id())
         return self._ch_icon
-
+    
+    def get_thumbnail(self) -> str | None:
+        return self.info.get("thumbnails", [None])[0]
 
     async def is_available(self) -> bool:
         """

@@ -42,9 +42,14 @@ class YTDLPExtractor:
         info = await self._extract_info(url)
 
         if info:
-            if 'entries' in info:
+            if 'entries' in info and info['entries']:
                 return Playlist([YTDLPAudioData(entry) for entry in info['entries']])
             elif "formats" in info and 'url' in info:
+                if (thmb := info.get('thumbnails')) and isinstance(thmb, list):
+                    thmb.sort(key=lambda t:(
+                        t.get("preference", -100),
+                        t.get("width", 0) * t.get("height", 0)  #解像度
+                    ), reverse=True)
                 return YTDLPAudioData(info)
             
         return None
