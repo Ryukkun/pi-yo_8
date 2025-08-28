@@ -115,10 +115,10 @@ def extract():
     #arg = "https://www.youtube.com/playlist?&list=PLB02wINShjkBKnLfufaEPnCupGO-SK6e4&index=4"
     #arg = "https://www.nicovideo.jp/mylist/21130988"
     arg = "https://youtu.be/x06wB8UDxMI?si=yEw3s0RAISEH4Iu4"
-    #arg = "https://www.nicovideo.jp/watch/sm36999938"
+    arg = "https://www.nicovideo.jp/watch/sm36999938"
     #arg = "ytsearch50:ディぺっしゅモード"
-    arg = "ytsearch50:ジブリBGM playlist"
-    arg = "じぶりBGM playlist"
+    #arg = "ytsearch50:ジブリBGM playlist"
+    #arg = "じぶりBGM playlist"
     now = time.perf_counter()
 
     _ = yt_dlp.YoutubeDL({"default_search":"ytsearch30", 'format':'bestaudio/worst', 'extract_flat': "in_playlist", 'skip_download': True})
@@ -127,8 +127,8 @@ def extract():
     __ = _.extract_info(arg, download=False, process=True)
     print(time.perf_counter() - now)
     print(__)
-    # with open("./video_info.json", "w", encoding="utf-8") as f:
-    #     json.dump(__, f, ensure_ascii=False, indent=2)
+    with open("./test/video_info.json", "w", encoding="utf-8") as f:
+        json.dump(__, f, ensure_ascii=False, indent=2)
 
 
 
