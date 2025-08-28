@@ -24,8 +24,9 @@ except Exception:
     raise Exception('Config ファイルを生成しました')
 
 
+from pi_yo_8.gui._embed_controller import EmbedController
 from pi_yo_8.voice_client import MultiAudioVoiceClient
-from pi_yo_8.music_control._music_controller import MusicController
+from pi_yo_8.music_control import MusicController
 from pi_yo_8.utils import set_logger
 
 
@@ -102,14 +103,14 @@ async def bye(ctx:commands.Context):
 async def speed(ctx:commands.Context, arg:float):
     gid = ctx.guild.id
     if data := g_opts.get(gid):
-        await data.Music.player_track.speed.set(arg)
+        await data.music.player_track.speed.set(arg)
 
 
 @client.command()
 async def pitch(ctx:commands.Context, arg:int):
     gid = ctx.guild.id
     if data := g_opts.get(gid):
-        await data.Music.player_track.pitch.set(arg)
+        await data.music.player_track.pitch.set(arg)
 
 
 #--------------------------------------------------
@@ -118,8 +119,8 @@ async def pitch(ctx:commands.Context, arg:int):
 @client.command()
 async def playing(ctx:commands.Context):
     if info := g_opts.get(ctx.guild.id):
-        info.Music.Latest_CH = ctx.channel
-        await info.Music.playing()
+        info.music.lastest_ch = ctx.channel
+        await info.music.playing()
 
 
 
@@ -133,7 +134,7 @@ async def skip(ctx:commands.Context, *arg):
         arg = arg[0]
     else: arg = None
     try:
-        await g_opts[ctx.guild.id].Music.skip(arg)
+        await g_opts[ctx.guild.id].music.skip(arg)
     except KeyError:pass
 
 
@@ -156,7 +157,7 @@ async def download(ctx:commands.Context, arg):
 async def queue(ctx:commands.Context, *args):
     await join(ctx)
     if g_opts.get(ctx.guild.id):
-        await g_opts[ctx.guild.id].Music.def_queue(ctx,args)
+        await g_opts[ctx.guild.id].music.def_queue(ctx,args)
 
 
 
@@ -164,7 +165,7 @@ async def queue(ctx:commands.Context, *args):
 async def play(ctx:commands.Context, *args):
     await join(ctx)
     if g_opts.get(ctx.guild.id):
-        await g_opts[ctx.guild.id].Music.play(ctx,args)
+        await g_opts[ctx.guild.id].music.play(ctx,args)
 
 
 
@@ -176,14 +177,13 @@ async def play(ctx:commands.Context, *args):
 class DataInfo():
     def __init__(self, guild:discord.Guild):
         self.guild = guild
-        self.gid = guild.id
-        self.gn = guild.name
         self.vc = guild.voice_client
         self.loop = client.loop
         self.client = client
         self.config = config
         self.MA = MultiAudioVoiceClient(guild, client, self)
-        self.Music = MusicController(self)
+        self.music = MusicController(self)
+        self.embed = EmbedController(self)
         self.loop_5.start()
 
 
@@ -194,24 +194,24 @@ class DataInfo():
 
     async def _bye(self, text:str):
         self.MA.kill()
-        del g_opts[self.gid]
-        
-        _log.info(f'{self.gn} : #{text}')
+        del g_opts[self.guild.id]
+
+        _log.info(f'{self.guild.name} : #{text}')
         await asyncio.sleep(0.02)
         try: await self.vc.disconnect()
         except Exception: pass
 
         while self.loop_5.is_running():
             await asyncio.sleep(1)
-        if message := self.Music.embed_playing:
+        if message := self.music.embed_playing:
             await message.delete()
-        if message := self.Music.embed_play_options:
+        if message := self.music.embed_play_options:
             await message.delete()
 
 
     @tasks.loop(seconds=5.0)
     async def loop_5(self):
-        if not g_opts.get(self.gid):
+        if not g_opts.get(self.guild.id):
             return
 
         # 強制切断検知
@@ -231,7 +231,7 @@ class DataInfo():
 
 
         # Music Embed
-        await self.Music.task_loop()
+        await self.embed.task_loop()
 
 
 client.run(config.Token, log_level=logging.WARNING)

@@ -111,7 +111,7 @@ class MultiAudioVoiceClient:
 
 
     def add_track(self ,RNum=0 ,opus=False) -> 'AudioTrack':
-        player = AudioTrack(RNum ,opus=opus ,parent=self)
+        player = AudioTrack(RNum ,opus=opus ,vc=self)
         self.players.append(player)
         self.P1_read_bytes = player.read_bytes
         self.pLen = len(self.players)
@@ -203,13 +203,13 @@ class MultiAudioVoiceClient:
             
 
 class AudioTrack:
-    def __init__(self ,RNum ,opus ,parent:'MultiAudioVoiceClient'):
-        self.AudioSource = None
-        self._SAD = None
+    def __init__(self ,RNum ,opus ,vc:'MultiAudioVoiceClient'):
+        self.ffmpeg_audio = None
+        self.audio_data = None
         self.Pausing = True
-        self.Parent = parent
+        self.vc = vc
         self.RNum = RNum*50
-        self.Timer:float = 0.0
+        self.timer:float = 0.0
         self.pitch = _Attribute(init=0, min=-60, max=60, update_asource=self.update_asouce_sec)
         self.speed = _Attribute(init=1.0, min=0.1, max=3.0, update_asource=self.update_asouce_sec)
         self.read_fin = False
@@ -217,18 +217,15 @@ class AudioTrack:
         self.opus = opus
         self.QBytes = []
         self.RBytes = []
-        self.Duration = None
     
 
-    async def play(self,_SAD:_StreamAudioData,after):
-        self._SAD = _SAD
-        self.Duration = _SAD.st_sec
-        AudioSource = await _SAD.get_ffmpegaudio(self.opus, speed=self.speed.get, pitch=self.pitch.get)
+    async def play(self,sad:StreamAudioData,after):
+        self.audio_data = sad
+        self.ffmpeg_audio = await sad.get_ffmpegaudio(self.opus, speed=self.speed.get, pitch=self.pitch.get)
         # 最初のロードは少し時間かかるから先にロード
         self.QBytes.clear()
         self.RBytes.clear()
-        self.AudioSource = AudioSource
-        self.Timer = 0.0
+        self.timer = 0.0
         self.read_fin = False
         self.After = after
         self.Pausing = False
@@ -236,10 +233,10 @@ class AudioTrack:
 
 
     def stop(self):
-        if self.AudioSource:
+        if self.ffmpeg_audio:
             self.pause()
-        self.AudioSource = None
-        self._SAD = None
+        self.ffmpeg_audio = None
+        self.audio_data = None
 
     def resume(self):
         if self.Pausing:
@@ -252,7 +249,7 @@ class AudioTrack:
             self._speaking(False)
 
     def is_playing(self):
-        if self._SAD:
+        if self.audio_data:
             return True
         return False
 
@@ -260,47 +257,48 @@ class AudioTrack:
         return self.Pausing
 
     def _speaking(self,status: bool):
-        self.Parent._speaking(status=status)
+        self.vc._speaking(status=status)
 
     def skip_time(self, stime:int):
         # n秒 進む
+        loop = asyncio.get_event_loop()
         if 0 < stime:
             if len(self.QBytes) < stime:
-                target_time = int(self.Timer) + stime
+                target_time = int(self.timer) + stime
                 target_sec = target_time // 50
-                if target_sec > self._SAD.st_sec:
+                if target_sec > self.audio_data.st_sec:
                     self._finish()
                     return
-                self.Parent.loop.create_task(self.update_asouce_sec(sec=target_sec))
+                loop.create_task(self.update_asouce_sec(sec=target_sec))
 
             else:
                 with lock:
-                    self.Timer += float(stime)
+                    self.timer += float(stime)
                 self.RBytes.extend(self.QBytes[:stime])
                 del self.QBytes[:stime]
 
         # n秒 前に戻る
         elif stime < 0:
             stime = -stime
-            target_time = int(self.Timer) - stime
+            target_time = int(self.timer) - stime
             if target_time < 0:
                 stime += target_time
 
             if len(self.RBytes) < stime:
                 target_sec = target_time // 50
                 if target_sec < 0: target_sec = 0
-                self.Parent.loop.create_task(self.update_asouce_sec(sec=target_sec))
+                loop.create_task(self.update_asouce_sec(sec=target_sec))
 
             else:
                 with lock:
                     self.QBytes = self.RBytes[-stime:] + self.QBytes
-                    self.Timer -= float(stime)
+                    self.timer -= float(stime)
                 del self.RBytes[-stime:]
 
 
 
     def read_bytes(self):
-        if self.AudioSource:            
+        if self.ffmpeg_audio:            
             # Read Bytes
             if len(self.QBytes) <= (45 * 50):
                 self._read_bytes()
@@ -315,7 +313,7 @@ class AudioTrack:
                         return
 
                     with lock:
-                        self.Timer += (1.0 * self.speed.get)
+                        self.timer += (1.0 * self.speed.get)
                         if self.RNum != 0:
                             self.RBytes.append(_byte)
                             if len(self.RBytes) > self.RNum:
@@ -326,12 +324,12 @@ class AudioTrack:
 
     async def update_asouce_sec(self, time=None, sec=None):
         if time == None and sec == None:
-            time = self.Timer
+            time = self.timer
         if time != None:
             sec = time // 50
 
-        self.AudioSource = await self._SAD.get_ffmpegaudio(self.opus, sec, speed=self.speed.get, pitch=self.pitch.get)
-        self.Timer = float(sec * 50)
+        self.ffmpeg_audio = await self.audio_data.get_ffmpegaudio(self.opus, sec, speed=self.speed.get, pitch=self.pitch.get)
+        self.timer = float(sec * 50)
         self.QBytes.clear()
         self.RBytes.clear()
         self.read_fin = False
@@ -339,8 +337,8 @@ class AudioTrack:
 
 
     def _finish(self):
-        self.AudioSource = None
-        self._SAD = None
+        self.ffmpeg_audio = None
+        self.audio_data = None
         self._speaking(False)
         if self.After:
             self.After()
@@ -354,8 +352,8 @@ class AudioTrack:
 
     @run_check_storage()
     def read_bytes_loop(self):
-        while len(self.QBytes) <= (90 * 50) and self.Parent.enable_loop:
-            if byte := self.AudioSource.read():
+        while len(self.QBytes) <= (90 * 50) and self.vc.enable_loop:
+            if byte := self.ffmpeg_audio.read():
                 self.QBytes.append(byte)
             else: 
                 self.read_fin = True
