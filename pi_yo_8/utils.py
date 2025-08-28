@@ -3,98 +3,13 @@ import datetime
 import logging
 import asyncio
 import aiohttp
+import re
+import urllib.parse
 from discord.utils import _ColourFormatter
 
 
+
 FREE_THREADS = ThreadPoolExecutor(max_workers=50)
-
-def int_analysis(arg):
-    '''
-    数字を見やすく変換
-    12345 -> 1万
-    '''
-    arg = str(arg)
-    ketas = ['万', '億', '兆', '京']
-    arg_list = []
-    while arg:
-        if 4 < len(arg):
-            arg_list.insert(0, arg[-4:])
-            arg = arg[:-4]
-        else:
-            arg_list.insert(0, arg)
-            break
-    
-    if len(arg_list) == 1:
-        return arg_list[0]
-    
-    num = arg_list[0]
-    if len(arg_list[0]) == 1 and arg_list[1][0] != '0':
-        num = f'{num}.{arg_list[1][0]}'
-    return f'{num}{ketas[ len(arg_list)-2 ]}'
-
-
-def date_difference(arg:str) -> str:
-    """何日前の日付か計算
-
-    Parameters
-    ----------
-    arg : str
-        YYYY/MM/DD
-
-    Returns
-    -------
-    str
-        
-    """
-    up_date = arg.split("/")
-
-    diff = datetime.datetime.now() - datetime.datetime(year=int(up_date[0]), month=int(up_date[1]), day=int(up_date[2]))
-    diff = diff.days 
-    year_days = 365.24219
-    month_days = year_days / 12
-    if _ := diff // year_days:
-        res = f'{int(_)}年前'
-
-    elif _ := diff // month_days:
-        res = f'{int(_)}ヵ月前'
-
-    elif diff:
-        res = f'{diff}日前'
-
-    else:
-        res = '今日'
-        
-    return res
-
-
-
-def calc_time(Time:int) -> str:
-    """秒から分と時間を計算
-
-    Parameters
-    ----------
-    Time : int
-        sec
-
-    Returns
-    -------
-    str
-        HH:MM:SS
-    """
-    Sec = Time % 60
-    Min = Time // 60 % 60
-    Hour = Time // 3600
-    if Sec <= 9:
-        Sec = f'0{Sec}'
-    if Hour == 0:
-        Hour = ''
-    else:
-        Hour = f'{Hour}:'
-        if Min <= 9:
-            Min = f'0{Min}'
-    
-    return f'{Hour}{Min}:{Sec}'
-
 
 
 def set_logger():
@@ -104,6 +19,28 @@ def set_logger():
     handler.setFormatter(_ColourFormatter())
     logger.setLevel(logging.INFO)
     logger.addHandler(handler)
+
+
+class UrlAnalyzer:
+    def __init__(self, arg:str):
+        self.url_parse = urllib.parse.urlparse(arg)
+        self.url_query:dict = {}
+        self.is_url = False
+        self.is_yt = False
+        self.list_id:str | None = None
+        self.video_id:str | None = None
+
+        if self.url_parse.query:
+            self.url_query = urllib.parse.parse_qs(self.url_parse.query)
+
+        self.is_url = bool(self.url_parse.hostname)
+        if self.is_url:
+            self.is_yt = re.match(r'^(.*?(youtube\.com|youtube-nocookie\.com)|youtu\.be)$',self.url_parse.hostname)
+            if self.is_yt:
+                self.list_id = self.url_query.get('list', [None])[0]
+                self.video_id = self.url_query.get('v', [None])[0]
+                if not self.video_id and self.url_parse.hostname == 'youtu.be':
+                    self.video_id = self.url_parse.path[1:]
 
 
 async def is_url_accessible(url: str) -> bool:
@@ -243,9 +180,8 @@ class TaskRunningWrapper(WrapperAbstract):
         self.task: asyncio.Task | None = None
 
     def create_task(self, *args, **kwargs):
-        if self.is_running():
-            raise Exception("Task is already running")
-        self.task = asyncio.get_event_loop().create_task(self.func(*args, **kwargs))
+        if not self.is_running():
+            self.task = asyncio.get_event_loop().create_task(self.func(*args, **kwargs))
 
     async def wait(self):
         if not self.is_running():
@@ -254,7 +190,7 @@ class TaskRunningWrapper(WrapperAbstract):
     
     async def run(self, *args, **kwargs):
         if self.is_running():
-            raise Exception("Task is already running")
+            return await self.wait()
         return await self.task(*args, **kwargs)
     
     def is_running(self) -> bool:
