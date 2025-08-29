@@ -193,7 +193,7 @@ class CreateSelect(discord.ui.Select):
         #print(f'{interaction.user.name}は{self.values[0]}を選択しました')
 
 
-async def playoptionmessage(channel:discord.TextChannel, info:DataInfo) -> discord.Message:
+async def playoptionmessage(channel:discord.abc.Messageable, info:DataInfo) -> discord.Message:
     return await channel.send(
         embed= PlayConfigEmbed(info.music.player_track),
         view= PlayConfigView(info)

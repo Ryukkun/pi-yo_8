@@ -1,10 +1,11 @@
-from pi_yo_8.utils import YoutubeUtil, is_url_accessible, task_running_wrapper
+from typing import Any
+from pi_yo_8.utils import YoutubeUtil, is_url_accessible, task_running_wrapper, TaskRunningWrapper
 from pi_yo_8.voice_client import StreamAudioData
 
 
 
 class YTDLPAudioData(StreamAudioData):
-    def __init__(self, info:dict):
+    def __init__(self, info:dict[str, Any]):
         self.info = info
         if (volume := info.get('volume_data', {}).get('perceptualLoudnessDb', None)) is not None:
             volume = -14 - volume

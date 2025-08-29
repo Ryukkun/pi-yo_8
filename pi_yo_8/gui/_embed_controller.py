@@ -1,6 +1,7 @@
 import time
 from typing import TYPE_CHECKING
 from discord import Embed, Message, NotFound, TextChannel
+from discord.abc import Messageable
 
 
 from pi_yo_8.audio_data import YTDLPAudioData
@@ -16,12 +17,12 @@ class EmbedController:
     def __init__(self, info: DataInfo) -> None:
         self.info = info
         self.lastest_action_time = 0.0
-        self.lastest_action_ch: TextChannel | None = None  # 最新のチャンネル
+        self.lastest_action_ch: Messageable | None = None  # 最新のチャンネル
         self.main_display: Message | None = None  # 再生中のEmbed
         self.options_display: Message | None = None  # 再生中のオプションEmbed
 
 
-    def update_action_time(self, channel: TextChannel | None = None):
+    def update_action_time(self, channel: Messageable | None = None):
         self.lastest_action_time = time.time()
         if channel:
             self.lastest_action_ch = channel
@@ -30,7 +31,7 @@ class EmbedController:
     @run_check_storage()
     async def send_new_main_display(self):
         try:
-            if self.info.music.player_track.is_playing():
+            if self.info.music.player_track.is_playing() and self.lastest_action_ch:
                 # Get Embed
                 if embed := await self.generate_main_display():
                     play_option = False

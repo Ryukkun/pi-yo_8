@@ -56,12 +56,12 @@ class MusicQueue:
         self.play_queue:List[YTDLPAudioData | Playlist] = []
 
 
-    async def next(self, count:int=1, ignore_playlist:bool=False) -> bool:
+    def next(self, count:int=1, ignore_playlist:bool=False) -> bool:
         if not self.play_queue:
             return False
 
         if isinstance(self.play_queue[0], Playlist) and not ignore_playlist:
-            if await self.play_queue[0].next(count):
+            if self.play_queue[0].next(count):
                 return True
             else:
                 count = 1
@@ -171,12 +171,12 @@ class MusicController():
         analysis = UrlAnalyzer(arg)
 
         if analysis.is_yt and analysis.list_id:
-            pl = await self.ydl.extract_yt_playlist_info(analysis.list_id)
-            if analysis.video_id:
-                pl.status = Status(loop=False, loop_pl=True, random_pl=False)
-                await pl.set_next_index_from_videoID(analysis.video_id)
-            else:
-                pl.status = Status(loop=False, loop_pl=True, random_pl=True)
+            if pl := await self.ydl.extract_yt_playlist_info(analysis.list_id):
+                if analysis.video_id:
+                    pl.status = Status(loop=False, loop_pl=True, random_pl=False)
+                    await pl.set_next_index_from_videoID(analysis.video_id)
+                else:
+                    pl.status = Status(loop=False, loop_pl=True, random_pl=True)
             return pl
 
         result = await self.ydl.extract_info(arg)
@@ -186,13 +186,13 @@ class MusicController():
     
 
 
-    async def skip(self, sec:str):
+    async def skip(self, sec_str:str):
         if self.guild.voice_client:
             self.info.embed.update_action_time()
-            if sec:
-                try:sec = int(sec)
+            if sec_str:
+                try:sec = int(sec_str)
                 except Exception:
-                    sec = sec.lower()
+                    sec = sec_str.lower()
                     if res := re_skip.match(sec):
                         sec = int(res.group(1))
                         suf = res.group(3)

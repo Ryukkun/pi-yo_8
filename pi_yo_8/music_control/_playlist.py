@@ -15,7 +15,7 @@ class Playlist:
         entriesは常に1つ以上ある
         """
         self.entries: list[YTDLPAudioData] = info.pop('entries')
-        self.now_index: int | None = None
+        self.now_index: int = -1
         self.next_indexes: deque[int] = deque([0])
         self.cooldowns: list[int] = [0] * len(self.entries)
         # statusはMusicControllerと同期させる
@@ -29,6 +29,9 @@ class Playlist:
 
     @status.setter
     def status(self, value: Status):
+        """
+        overrideできないからGenerator想定で書く
+        """
         old = self._status
         self._status = value
         if self._status.loop_pl != old.loop_pl or self._status.random_pl != old.random_pl:
@@ -62,22 +65,21 @@ class Playlist:
                 break
 
 
-    async def next(self, count:int = 1) -> bool:
+    def next(self, count:int = 1) -> bool:
         """
         indexを進める 動画のロードはしない
         """
-        if self.status.random_pl:
-            self.now_index = self.next_indexes.popleft()
-        else:
-            self.now_index = self.now_index + count
-            if self.status.loop_pl:
-                self.now_index %= len(self.entries)
-            elif not (0 <= self.now_index < len(self.entries)):
-                return False
+        self.now_index = self.next_indexes.popleft()
+        if self.status.loop_pl:
+            self.now_index %= len(self.entries)
+        elif not (0 <= self.now_index < len(self.entries)):
+            return False
 
-            self.next_index = (self.now_index + 1) % len(self.entries)
+        self.generate_next_indexies()
+        #self.next_index = (self.now_index + 1) % len(self.entries)
 
-        next_entry = self.entries[self.next_index]
+        if self.next_indexes:
+            next_entry = self.entries[self.next_indexes[0]]
         if not next_entry.is_available():
             next_entry.update_streaming_data.create_task()
 
@@ -112,7 +114,12 @@ class GeneratorPlaylist(Playlist):
 
         def task():
             try:
-                self.entries.append(YTDLPAudioData(next(generator)))
+                while True:
+                    info:dict | None = next(generator)
+                    if not info:
+                        break
+                    if info.get("channel", None):
+                        self.entries.append(YTDLPAudioData(info))
             except:
                 pass
         with ThreadPoolExecutor(max_workers=1) as exe:
