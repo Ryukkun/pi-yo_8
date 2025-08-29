@@ -1,9 +1,12 @@
+from calendar import c
 import discord
 import os
 import asyncio
 import logging
 from discord.ext import commands, tasks
-from typing import Dict
+from typing import Dict, overload
+
+from pi_yo_8.type import SendableChannels
 
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -50,9 +53,10 @@ tree = client.tree
 
 @tree.command(description="年中無休でカラオケ生活 のど自慢系ぴーよ")
 @discord.app_commands.describe(arg='URL or 検索したい文字')
-async def download(ctx:discord.Interaction, arg:str):
+@overload
+async def download(iteration:discord.Interaction, arg:str):
     if embeds := await MusicController.download(arg):
-        ctx:commands.Context = await commands.Context.from_interaction(ctx)
+        ctx:commands.Context = await commands.Context.from_interaction(iteration)
         for em in embeds:
             await ctx.send(embed=em, ephemeral=True)
 
@@ -61,8 +65,8 @@ async def download(ctx:discord.Interaction, arg:str):
 @client.event
 async def on_ready():
     _log.info('Logged in')
-    _log.info(client.user.name)
-    _log.info(client.user.id)
+    _log.info(client.user.name if client.user else "error")
+    _log.info(client.user.id if client.user else -1)
     print('--------------------------')
     await tree.sync()
 
@@ -80,36 +84,34 @@ async def on_ready():
 
 @client.command()
 async def join(ctx:commands.Context):
-    gid = ctx.guild.id
-    if not g_opts.get(gid):
+    
+    if ctx.guild and not g_opts.get(ctx.guild.id):
         try: 
-            await ctx.author.voice.channel.connect(self_deaf=True)
-            _log.info(f'{ctx.guild.name} : #join')
-            g_opts[gid] = DataInfo(ctx.guild)
-            return True
+            if isinstance(ctx.author, discord.Member) and ctx.author.voice and ctx.author.voice.channel:
+                await ctx.author.voice.channel.connect(self_deaf=True)
+                _log.info(f'{ctx.guild.name} : #join')
+                g_opts[ctx.guild.id] = DataInfo(ctx.guild)
+                return True
         except Exception as e:
             print(e)
 
 
 @client.command()
 async def bye(ctx:commands.Context):
-    guild = ctx.guild
-    if info := g_opts.get(guild.id):
+    if ctx.guild and (info := g_opts.get(ctx.guild.id)):
         await info.bye()
 
     
 
 @client.command()
 async def speed(ctx:commands.Context, arg:float):
-    gid = ctx.guild.id
-    if data := g_opts.get(gid):
+    if ctx.guild and (data := g_opts.get(ctx.guild.id)):
         await data.music.player_track.speed.set(arg)
 
 
 @client.command()
 async def pitch(ctx:commands.Context, arg:int):
-    gid = ctx.guild.id
-    if data := g_opts.get(gid):
+    if ctx.guild and (data := g_opts.get(ctx.guild.id)):
         await data.music.player_track.pitch.set(arg)
 
 
@@ -118,9 +120,10 @@ async def pitch(ctx:commands.Context, arg:int):
 #--------------------------------------------------
 @client.command()
 async def playing(ctx:commands.Context):
-    if info := g_opts.get(ctx.guild.id):
-        info.music.lastest_ch = ctx.channel
-        await info.music.playing()
+    if ctx.guild and (info := g_opts.get(ctx.guild.id)):
+        if isinstance(ctx.channel, SendableChannels):
+            info.embed.lastest_action_ch = ctx.channel
+        await info.embed.playing()
 
 
 
@@ -129,13 +132,14 @@ async def playing(ctx:commands.Context):
 #---------------------------------------------------------------------------------------------------
 
 @client.command(aliases=['s'])
-async def skip(ctx:commands.Context, *arg):
-    if arg:
-        arg = arg[0]
-    else: arg = None
-    try:
-        await g_opts[ctx.guild.id].music.skip(arg)
-    except KeyError:pass
+async def skip(ctx:commands.Context, arg:str | None):
+    if ctx.guild:
+        if arg:
+            arg = arg[0]
+        else: arg = None
+        try:
+            await g_opts[ctx.guild.id].music.skip(arg)
+        except KeyError:pass
 
 
 #---------------------------------------------------------------------------------------
@@ -155,17 +159,19 @@ async def download(ctx:commands.Context, arg):
 
 @client.command(aliases=['q'])
 async def queue(ctx:commands.Context, *args):
-    await join(ctx)
-    if g_opts.get(ctx.guild.id):
-        await g_opts[ctx.guild.id].music.def_queue(ctx,args)
+    if ctx.guild:
+        await join(ctx)
+        if g_opts.get(ctx.guild.id):
+            await g_opts[ctx.guild.id].music.def_queue(ctx,args)
 
 
 
 @client.command(aliases=['p','pl'])
 async def play(ctx:commands.Context, *args):
-    await join(ctx)
-    if g_opts.get(ctx.guild.id):
-        await g_opts[ctx.guild.id].music.play(ctx,args)
+    if ctx.guild:
+        await join(ctx)
+        if g_opts.get(ctx.guild.id):
+            await g_opts[ctx.guild.id].music.play(ctx,args)
 
 
 
@@ -177,18 +183,24 @@ async def play(ctx:commands.Context, *args):
 class DataInfo():
     def __init__(self, guild:discord.Guild):
         self.guild = guild
-        self.vc = guild.voice_client
-        self.loop = client.loop
         self.client = client
+        self.client_user_id = client.user.id if client.user else -1
         self.config = config
         self.MA = MultiAudioVoiceClient(guild, client, self)
         self.music = MusicController(self)
         self.embed = EmbedController(self)
         self.loop_5.start()
+        vc = guild.voice_channels
+        if isinstance(vc, discord.VoiceClient):
+            self.vc:discord.VoiceClient = vc
+        else:
+            _log.error("vcがVoiceClientじゃない")
+            asyncio.get_event_loop().create_task(self.bye())
+            
 
 
     async def bye(self, text:str='切断'):
-        self.loop.create_task(self._bye(text))
+        asyncio.get_event_loop().create_task(self._bye(text))
         self.loop_5.stop()
 
 
@@ -216,7 +228,7 @@ class DataInfo():
 
         # 強制切断検知
         mems = self.vc.channel.members
-        if not client.user.id in [_.id for _ in mems]:
+        if not self.client_user_id in [_.id for _ in mems]:
             await self.bye('強制切断')
 
         # voice channelに誰もいなくなったことを確認

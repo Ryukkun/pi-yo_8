@@ -1,10 +1,11 @@
 import time
-from typing import TYPE_CHECKING
-from discord import Embed, Message, NotFound, TextChannel
-from discord.abc import Messageable
+from typing import TYPE_CHECKING, Any
+from discord import Embed, Message, NotFound
+from numpy import isin
 
 
-from pi_yo_8.audio_data import YTDLPAudioData
+from pi_yo_8.extractor.yt_dlp import YTDLPAudioData
+from pi_yo_8.type import SendableChannels
 from pi_yo_8.utils import run_check_storage
 from pi_yo_8.gui.view import CreateButton, playoptionmessage
 from pi_yo_8.gui import EmbedTemplates, int_analysis, date_difference, calc_time
@@ -17,14 +18,14 @@ class EmbedController:
     def __init__(self, info: DataInfo) -> None:
         self.info = info
         self.lastest_action_time = 0.0
-        self.lastest_action_ch: Messageable | None = None  # 最新のチャンネル
+        self.lastest_action_ch: SendableChannels | None = None  # 最新のチャンネル
         self.main_display: Message | None = None  # 再生中のEmbed
         self.options_display: Message | None = None  # 再生中のオプションEmbed
 
 
-    def update_action_time(self, channel: Messageable | None = None):
+    def update_action_time(self, channel: Any | None = None):
         self.lastest_action_time = time.time()
-        if channel:
+        if isinstance(channel, SendableChannels):
             self.lastest_action_ch = channel
 
 
@@ -58,16 +59,16 @@ class EmbedController:
         if not self.lastest_action_ch: return
 
         if last_message := self.lastest_action_ch.last_message:
-            if last_message.author.id == self.info.client.user.id:
+            if self.info.client.user and self.info.client.user.id == last_message.author.id:
                 if last_message.embeds:
-                    em_color = last_message.embeds[0].colour.value
-                    if em_color == EmbedTemplates.dont_replace_color().value:
-                        if await self._update_main_display(self.main_display):
-                            return
+                    if em_color := last_message.embeds[0].colour:
+                        if em_color.value == EmbedTemplates.dont_replace_color().value and self.main_display:
+                            if await self._update_main_display(self.main_display):
+                                return
 
-                    if em_color == EmbedTemplates.player_color().value:
-                        if await self._update_main_display(last_message):
-                            return
+                        if em_color.value == EmbedTemplates.player_color().value:
+                            if await self._update_main_display(last_message):
+                                return
         await self.send_new_main_display()
 
 
@@ -105,16 +106,16 @@ class EmbedController:
     async def generate_main_display(self):
         audio_data = self.info.music.player_track.audio_data
 
-        if audio_data and isinstance(audio_data, YTDLPAudioData):
+        if isinstance(audio_data, YTDLPAudioData):
             embed=Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.player_color())
             if thumbnail := audio_data.get_thumbnail():
                 embed.set_thumbnail(url=thumbnail)
             embed.set_author(name=audio_data.ch_name(), url=audio_data.ch_url(), icon_url=audio_data.ch_icon())
             descriptions = []
-            if audio_data.view_count():
-                descriptions.append(f'{int_analysis(audio_data.view_count())} 回再生')
-            if audio_data.upload_date():
-                descriptions.append(date_difference(audio_data.upload_date()))
+            if (view_count := audio_data.view_count()):
+                descriptions.append(f'{int_analysis(view_count)} 回再生')
+            if (up_date := audio_data.upload_date()):
+                descriptions.append(date_difference(up_date))
                 descriptions.append(audio_data.upload_date())
             # if _SAD.like_count:
             #     des.append(f'\n👍{int_analysis(_SAD.like_count)}')
