@@ -202,8 +202,8 @@ async def playoptionmessage(channel:discord.abc.Messageable, info:DataInfo) -> d
 
 def PlayConfigEmbed(audio_track:AudioTrack):
     embed = discord.Embed(colour=EmbedTemplates.dont_replace_color())
-    embed.add_field(name='テンポ (x0.1 ~ x3.0)', value=f'x{round(audio_track.speed.get,2)}', inline=True)
-    embed.add_field(name='キー', value=f'{audio_track.pitch.get}', inline=True)
+    embed.add_field(name='テンポ (x0.1 ~ x3.0)', value=f'x{round(audio_track.speed.get(),2)}', inline=True)
+    embed.add_field(name='キー', value=f'{audio_track.pitch.get()}', inline=True)
     return embed
 
 

@@ -120,12 +120,13 @@ def extract():
     #arg = "ytsearch50:ディぺっしゅモード"
     #arg = "ytsearch50:ジブリBGM playlist"
     #arg = "じぶりBGM playlist"
+    arg = "https://www.youtube.com/channel/UCGmO0S4S-AunjRdmxA6TQYg" # Channel
     now = time.perf_counter()
 
     _ = yt_dlp.YoutubeDL({"default_search":"ytsearch30", 'format':'bestaudio/worst', 'extract_flat': "in_playlist", 'skip_download': True})
     supported_url(_, arg)
     print(time.perf_counter() - now)
-    __ = _.extract_info(arg, download=False, process=True)
+    __ = _.extract_info(arg, download=False, process=False)
     print(time.perf_counter() - now)
     print(__)
     with open("./test/video_info.json", "w", encoding="utf-8") as f:

@@ -1,23 +1,18 @@
 import re
-import random
 import time
 import tabulate
 import asyncio
 import logging
 import copy
-from typing import Optional, List, Union, TYPE_CHECKING
-from discord import Embed, NotFound, TextChannel, Button, Message, SelectMenu
+from typing import List,  TYPE_CHECKING
+from discord import Embed
 from discord.ext.commands import Context
 from dataclasses import dataclass
 
 
-from pi_yo_8.extractor.yt_dlp import YTDLPExtractor
+from pi_yo_8.extractor.yt_dlp import YTDLPAudioData
 from pi_yo_8.music_control import Playlist
-from pi_yo_8.utils import UrlAnalyzer, run_check_storage
-from pi_yo_8.utils import int_analysis, date_difference, calc_time
-from pi_yo_8.audio_data import AnalysisUrl, YTDLPAudioData
-from pi_yo_8.audio_data import StreamAudioData as SAD
-from pi_yo_8.gui.view import CreateButton, playoptionmessage
+from pi_yo_8.utils import YT_DLP, UrlAnalyzer
 
 if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
@@ -113,7 +108,6 @@ class MusicController():
         self.queue:MusicQueue = MusicQueue()
         self.status = Status()
         self.last_status = copy.copy(self.status)
-        self.ydl = YTDLPExtractor()
 
 
 
@@ -170,23 +164,24 @@ class MusicController():
     async def _analysis_input(self, arg:str) -> Playlist | YTDLPAudioData | None:
         analysis = UrlAnalyzer(arg)
 
-        if analysis.is_yt and analysis.list_id:
-            if pl := await self.ydl.extract_yt_playlist_info(analysis.list_id):
-                if analysis.video_id:
-                    pl.status = Status(loop=False, loop_pl=True, random_pl=False)
-                    await pl.set_next_index_from_videoID(analysis.video_id)
-                else:
-                    pl.status = Status(loop=False, loop_pl=True, random_pl=True)
-            return pl
+        with YT_DLP.get() as ydl:
+            if analysis.is_yt and analysis.list_id:
+                if pl := await ydl.extract_yt_playlist_info(analysis.list_id):
+                    if analysis.video_id:
+                        pl.status = Status(loop=False, loop_pl=True, random_pl=False)
+                        await pl.set_next_index_from_videoID(analysis.video_id)
+                    else:
+                        pl.status = Status(loop=False, loop_pl=True, random_pl=True)
+                return pl
 
-        result = await self.ydl.extract_info(arg)
+            result = await ydl.extract_info(arg)
         if isinstance(result, Playlist):
             result.status = Status(loop=False, loop_pl=True, random_pl=False)
         return result
     
 
 
-    async def skip(self, sec_str:str):
+    async def skip(self, sec_str:str | None):
         if self.guild.voice_client:
             self.info.embed.update_action_time()
             if sec_str:
@@ -247,7 +242,7 @@ class MusicController():
 #   Download
 #---------------------------------------------------------------------------------------
     @classmethod
-    async def download(self, arg):
+    async def download(self, arg:str):
 
         # Download Embed
 
