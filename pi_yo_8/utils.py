@@ -8,9 +8,12 @@ import re
 import urllib.parse
 from discord.utils import _ColourFormatter
 
+from pi_yo_8.extractor.yt_dlp._manager import YTDLPManager
+
 
 
 FREE_THREADS = ThreadPoolExecutor(max_workers=50)
+YT_DLP = YTDLPManager()
 
 
 def set_logger():
