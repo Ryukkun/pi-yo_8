@@ -1,5 +1,5 @@
 from typing import Any
-from pi_yo_8.utils import YoutubeUtil, is_url_accessible, task_running_wrapper, TaskRunningWrapper
+from pi_yo_8.utils import YT_DLP, is_url_accessible, task_running_wrapper
 from pi_yo_8.voice_client import StreamAudioData
 
 
@@ -7,18 +7,19 @@ from pi_yo_8.voice_client import StreamAudioData
 class YTDLPAudioData(StreamAudioData):
     def __init__(self, info:dict[str, Any]):
         self.info = info
+        self._ch_icon: str | None = None
         if (volume := info.get('volume_data', {}).get('perceptualLoudnessDb', None)) is not None:
             volume = -14 - volume
         super().__init__(info['url'], volume)
 
-    def web_url(self) -> str | None:
+    def web_url(self) -> str:
         ret = self.info.get("webpage_url", None)
         if not ret:
-            ret = self.info.get("original_url", None)
+            ret = self.info.get("original_url", "")
         return ret
 
-    def title(self) -> str | None:
-        ret = self.info.get("title", None)
+    def title(self) -> str:
+        ret = self.info.get("title", "No Title")
         if not ret:
             ret = self.web_url()
         return ret
@@ -41,17 +42,22 @@ class YTDLPAudioData(StreamAudioData):
         return upload_date
     
     def ch_id(self) -> str | None:
-        return self.info.get("channel_id", None)
+        return self.info.get("uploader_id", None)
 
     def ch_url(self) -> str | None:
-        return YoutubeUtil.get_ch_url(self.ch_id())
-    
+        return self.info.get("uploader_url", None)
+
     def ch_name(self) -> str | None:
-        return self.info.get("channel", None)
+        return self.info.get("uploader", None)
 
     async def ch_icon(self) -> str | None:
-        if self._ch_icon is None:
-            self._ch_icon = await YoutubeUtil.get_ch_icon(self.ch_id())
+        if self._ch_icon is None and (ch_url := self.ch_url()) is not None:
+            with YT_DLP.get() as ydl:
+                result = await ydl._extract_info(ch_url, process=False)
+            if result:
+                self._ch_icon = result.get("thumbnails", [""])[0]
+            else:
+                self._ch_icon = ""
         return self._ch_icon
     
     def get_thumbnail(self) -> str | None:
@@ -73,6 +79,8 @@ class YTDLPAudioData(StreamAudioData):
         音声ファイル直のURLを取得する
         投げっぱなし可能
         """
-        from pi_yo_8.extractor.yt_dlp import YTDLPExtractor
-        self.info = await YTDLPExtractor._extract_info(self.web_url())
-        self.stream_url = self.info['url']
+        with YT_DLP.get() as ydl:
+            info = await ydl._extract_info(self.web_url())
+        if info:
+            self.info = info
+            self.stream_url = info['url']
