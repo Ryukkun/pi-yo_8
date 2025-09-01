@@ -1,4 +1,5 @@
 from calendar import c
+import shutil
 import discord
 import os
 import asyncio
@@ -9,21 +10,13 @@ from typing import Dict, overload
 from pi_yo_8.type import SendableChannels
 
 
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+#os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
 ####  Config
 try: from pi_yo_8 import config
 except Exception:
-    CLines= [
-        "Prefix = ','",
-        "#youtube data api v3",
-        "youtube_key = ''",
-        "Token = ''"
-    ]
-    with open('config.py','w') as f:
-        f.write('\n'.join(CLines))
-    
+    shutil.copy("./pi_yo_8/resources/config_template.py", "./pi_yo_8/config.py")
     raise Exception('Config ファイルを生成しました')
 
 
@@ -123,7 +116,7 @@ async def playing(ctx:commands.Context):
     if ctx.guild and (info := g_opts.get(ctx.guild.id)):
         if isinstance(ctx.channel, SendableChannels):
             info.embed.lastest_action_ch = ctx.channel
-        await info.embed.playing()
+        await info.embed.generate_main_display()
 
 
 
@@ -215,9 +208,9 @@ class DataInfo():
 
         while self.loop_5.is_running():
             await asyncio.sleep(1)
-        if message := self.music.embed_playing:
+        if message := self.embed.main_display:
             await message.delete()
-        if message := self.music.embed_play_options:
+        if message := self.embed.options_display:
             await message.delete()
 
 
