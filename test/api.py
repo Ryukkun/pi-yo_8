@@ -1,7 +1,7 @@
 import asyncio
 import aiohttp
 import pprint
-import config
+from . import config
 
 youtube_api = 'https://www.googleapis.com/youtube/v3'
 

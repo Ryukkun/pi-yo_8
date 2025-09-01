@@ -1,5 +1,6 @@
 import json
 import pprint
+from typing import Any
 import yt_dlp
 from yt_dlp.utils import orderedSet
 from yt_dlp.extractor.youtube._tab import YoutubeTabIE, YoutubeTabBaseInfoExtractor
@@ -37,16 +38,14 @@ class YoutubeIE(OldYoutubeIE):
         return webpage, webpage_ytcfg, initial_data, is_premium_subscriber, player_responses, player_url
 
 
-    def extract_comments(self, *args, **kwargs):
+    def extract_comments(self, *args, **kwargs): # type: ignore
         """
         このメソッドの戻り値はInfo（YoutubeDL.extract_info()の戻り値）のKey["__post_extractor"]に保存される
         """
-        volume:dict = args[0].pop("volume_data", None)
-        ret = super().extract_comments(*args, **kwargs)
+        volume = args[0].pop("volume_data", None)
+        ret = [super().extract_comments(*args, **kwargs)]
         if volume:
-            if ret is None:
-                ret = {}
-            ret["volume_data"] = volume
+            ret.append(volume)
         return ret
 
 
@@ -54,14 +53,11 @@ class YoutubeIE(OldYoutubeIE):
         """
         info["volume_data"] <= info["__post_extractor"]["volume_data"]
         """
-        info = super()._real_extract(url)
-        if isinstance(info, dict) and "__post_extractor" in info and info['__post_extractor']:
-            volume = info['__post_extractor'].pop('volume_data', {})
-            if volume:
-                info['volume_data'] = volume
-            
-            if not info['__post_extractor']:
-                info['__post_extractor'] = None
+        info:dict[str, list[Any]] = super()._real_extract(url)
+        if isinstance(info, dict) and "__post_extractor" in info and len(info['__post_extractor']) == 2:
+            _ = info['__post_extractor'][0]
+            info['volume_data'] = info['__post_extractor'][1]
+            info['__post_extractor'] = _
         return info
 
 

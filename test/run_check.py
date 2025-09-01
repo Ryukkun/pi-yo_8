@@ -1,4 +1,7 @@
 import asyncio
+from typing import Any, Callable
+
+from discord import Self
 
 
 class WrapperAbstract:
@@ -9,14 +12,14 @@ class WrapperAbstract:
     実装クラスがimportで読み込まれた時点で_class=Noneのインスタンスが生成される
     実装クラスがインスタンス化された後、呼び出される際に __get__ , __call__ の順で呼び出される
     """
-    def __init__(self, func, _class=None):
+    def __init__(self, func:Callable[..., Any], _class:object=None):
         self.func = func
         self._class = _class
 
     def _new_instance(self, obj):
         return WrapperAbstract(self.func, _class=obj)
 
-    def __get__(self, obj, objtype):
+    def __get__(self, obj:object, objtype) -> Self:
         """
         このインスタンスが参照された場合に呼び出される
 
@@ -44,7 +47,7 @@ class WrapperAbstract:
         wrapper = self._new_instance(obj)
         # objの self.func.__name__[str] に wrapper をセットする
         setattr(obj, self.func.__name__, wrapper)
-        return wrapper
+        return wrapper  # type: ignore
 
 
 class RunCheckStorageWrapper(WrapperAbstract):
@@ -55,30 +58,30 @@ class RunCheckStorageWrapper(WrapperAbstract):
     実装クラスがimportで読み込まれた時点で_class=Noneのインスタンスが生成される
     実装クラスがインスタンス化された後、呼び出される際に __get__ , __call__ の順で呼び出される
     """
-    def __init__(self, func, check_fin, _class=None):
+    def __init__(self, func:Callable[..., Any], check_fin:bool, _class:object=None):
         super().__init__(func, _class)
         self.is_running = False
         self.check_fin = check_fin
         self.is_coroutine = asyncio.iscoroutinefunction(func)
 
-    def __call__(self, *args, **kwds):
+    def __call__(self, *args:Any, **kwargs:Any):
         if self.is_running:
             raise Exception(f'{self.func.__name__} is already running')
         self.is_running = True
         if self._class:
             args = (self._class,) + args
-        return self.async_run(*args, **kwds) if self.is_coroutine else self.sync_run(*args, **kwds)
+        return self.async_run(*args, **kwargs) if self.is_coroutine else self.sync_run(*args, **kwargs)
 
-    def sync_run(self, *a, **k):
+    def sync_run(self, *args:Any, **kwargs:Any):
         try:
-            return self.func(*a, **k)
+            return self.func(*args, **kwargs)
         finally:
             if self.check_fin:
                 self.is_running = False
 
-    async def async_run(self, *a, **k):
+    async def async_run(self, *args:Any, **kwargs:Any):
         try:
-            return await self.func(*a, **k)
+            return await self.func(*args, **kwargs)
         finally:
             if self.check_fin:
                 self.is_running = False
@@ -86,24 +89,18 @@ class RunCheckStorageWrapper(WrapperAbstract):
     def set_running(self, status: bool):
         self.is_running = status
 
-    def _new_instance(self, obj):
+    def _new_instance(self, obj) -> 'RunCheckStorageWrapper':
         return RunCheckStorageWrapper(self.func, self.check_fin, _class=obj)
 
 
-def run_check_storage(check_fin= True):
-    def wapper(func) -> RunCheckStorageWrapper:
-        return RunCheckStorageWrapper(func, check_fin)
-    
-    return wapper
-
-    
-
 
 def run_check_storage(check_fin= True):
     def wapper(func) -> RunCheckStorageWrapper:
         return RunCheckStorageWrapper(func, check_fin)
     
     return wapper
+
+
 
 
 class MyClass:
