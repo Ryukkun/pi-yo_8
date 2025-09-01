@@ -4,7 +4,7 @@ import tabulate
 import asyncio
 import logging
 import copy
-from typing import List,  TYPE_CHECKING
+from typing import Any, Callable, List,  TYPE_CHECKING
 from discord import Embed
 from discord.ext.commands import Context
 from dataclasses import dataclass
@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from pi_yo_8.extractor.yt_dlp import YTDLPAudioData
 from pi_yo_8.music_control import Playlist
+from pi_yo_8.music_control._playlist import GeneratorPlaylist
 from pi_yo_8.utils import YT_DLP, UrlAnalyzer
 
 if TYPE_CHECKING:
@@ -43,6 +44,17 @@ class Status:
     loop: bool = False
     loop_pl: bool = False
     random_pl: bool = False
+    callback: Callable[..., Any] | None = None
+
+    def set(self, loop: bool | None = None, loop_pl: bool | None = None, random_pl: bool | None = None):
+        old = copy.copy(self)
+        if loop != None: self.loop = loop
+        if loop_pl != None: self.loop_pl = loop_pl
+        if random_pl != None: self.random_pl = random_pl
+
+        if self.callback and self != old:
+            self.callback(old=old, new=copy.copy(self))
+
 
 
 class MusicQueue:
@@ -92,11 +104,17 @@ class MusicQueue:
         if not self.play_queue:
             return []
         items = []
-        for _ in range(count):
-            item = self.play_queue.pop(0)
+        for queue_index in range(count):
+            item = self.play_queue[queue_index]
             if isinstance(item, Playlist):
-                item = await item.get_now_entry()
-            items.append(item)
+                for entry in [item.entries[i] for i in item.next_indexes]:
+                    items.append(entry)
+                    if count <= len(items): break
+                if isinstance(item, GeneratorPlaylist) and not item.decompres_task.done():
+                    return items
+            else:
+                items.append(item)
+            if count <= len(items): break
         return items
 
 
@@ -168,15 +186,15 @@ class MusicController():
             if analysis.is_yt and analysis.list_id:
                 if pl := await ydl.extract_yt_playlist_info(analysis.list_id):
                     if analysis.video_id:
-                        pl.status = Status(loop=False, loop_pl=True, random_pl=False)
+                        pl.status.set(loop=False, loop_pl=True, random_pl=False)
                         await pl.set_next_index_from_videoID(analysis.video_id)
                     else:
-                        pl.status = Status(loop=False, loop_pl=True, random_pl=True)
+                        pl.status.set(loop=False, loop_pl=True, random_pl=True)
                 return pl
 
             result = await ydl.extract_info(arg)
         if isinstance(result, Playlist):
-            result.status = Status(loop=False, loop_pl=True, random_pl=False)
+            result.status.set(loop=False, loop_pl=True, random_pl=False)
         return result
     
 
@@ -245,15 +263,7 @@ class MusicController():
     async def download(self, arg:str):
 
         # Download Embed
-
-        # よそはよそ　うちはうち
-        if re_URL_PL.match(arg):
-            return
-        if re_URL_YT.match(arg) and not re_URL_Video.match(arg):
-            return
-
-        # 君は本当に動画なのかい　どっちなんだい！
-        audio_data = await self._analysis_input(arg)
+        url = UrlAnalyzer(arg)
         if not audio_data: return
 
         if audio_data.YT:

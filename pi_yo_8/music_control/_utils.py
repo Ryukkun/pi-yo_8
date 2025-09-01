@@ -14,7 +14,8 @@ class PlaylistRandom:
     def range(self, value:int):
         self._range = value
         max_value = max(self.cooldowns)
-        self.cooldowns.extend([max_value] * (value - len(self.cooldowns)))
+        for _ in range(value - len(self.cooldowns)):
+            self.cooldowns.append(max_value)
 
     def next(self):
         # 重みを二次関数で計算
