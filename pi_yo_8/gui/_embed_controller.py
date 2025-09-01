@@ -1,6 +1,6 @@
 import time
 from typing import TYPE_CHECKING, Any
-from discord import Embed, Message, NotFound
+from discord import ActionRow, Button, Embed, Message, NotFound, SelectMenu
 from numpy import isin
 
 
@@ -84,13 +84,16 @@ class EmbedController:
         view = CreateButton(self.info)
         change_view = False
         coms = target_message.components
-        _view = coms[0].children[0]
-        if [temp.label for temp in view.select_opt] != [temp.label for temp in _view.options]:
-            change_view = True
-        
-        _view = coms[2].children[2]
-        if view.pause_play.label != _view.label:
-            change_view = True
+        if len(coms) >= 3:
+            if isinstance(coms[0], ActionRow) and coms[0].children and isinstance(coms[0].children[0], SelectMenu):
+                old_select = coms[0].children[0]
+                if [temp.label for temp in view.select_opt] != [temp.label for temp in old_select.options]:
+                    change_view = True
+            
+            if isinstance(coms[2], ActionRow) and len(coms[2].children) >= 3 and isinstance(coms[2].children[2], Button):
+                old_pause_play = coms[2].children[2]
+                if view.pause_play.label != old_pause_play.label:
+                    change_view = True
                 
         try:
             if change_view:
@@ -106,7 +109,7 @@ class EmbedController:
     async def generate_main_display(self):
         audio_data = self.info.music.player_track.audio_data
 
-        if isinstance(audio_data, YTDLPAudioData):
+        if isinstance(audio_data, YTDLPAudioData) and audio_data.duration:
             embed=Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.player_color())
             if thumbnail := audio_data.get_thumbnail():
                 embed.set_thumbnail(url=thumbnail)
@@ -125,7 +128,7 @@ class EmbedController:
             # Progress Bar
             i_length = 16
             play_time = int(self.info.music.player_track.timer) // 50
-            unit_time = audio_data.duration() / i_length
+            unit_time = audio_data.duration / i_length
             Progress = ''
             text_list = ['　','▏','▎','▍','▌','▋','▋','▊','▉','█']
             for i in range(i_length):
@@ -138,7 +141,7 @@ class EmbedController:
                 else:
                     Progress += '　'
             formatted_play_time = calc_time(play_time)
-            formatted_duration = calc_time(audio_data.duration())
+            formatted_duration = calc_time(audio_data.duration)
             embed.set_footer(text=f'{formatted_play_time} | {Progress} | {formatted_duration}')
         else:
             embed=Embed(title='N/A', colour=EmbedTemplates.player_color())

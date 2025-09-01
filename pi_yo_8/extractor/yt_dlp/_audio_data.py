@@ -8,9 +8,7 @@ class YTDLPAudioData(StreamAudioData):
     def __init__(self, info:dict[str, Any]):
         self.info = info
         self._ch_icon: str | None = None
-        if (volume := info.get('volume_data', {}).get('perceptualLoudnessDb', None)) is not None:
-            volume = -14 - volume
-        super().__init__(info['url'], volume)
+        super().__init__(info['url'], self.volume(), self.get_duration())
 
     def web_url(self) -> str:
         ret = self.info.get("webpage_url", None)
@@ -24,7 +22,11 @@ class YTDLPAudioData(StreamAudioData):
             ret = self.web_url()
         return ret
 
-    def duration(self) -> int | None:
+    def volume(self) -> float | None:
+        if (volume := self.info.get('volume_data', {}).get('perceptualLoudnessDb', None)) is not None:
+            return -14.0 - float(volume)
+
+    def get_duration(self) -> int | None:
         return self.info.get("duration", None)
     
     def video_id(self) -> str | None:
@@ -74,11 +76,14 @@ class YTDLPAudioData(StreamAudioData):
     
 
     @task_running_wrapper()
-    async def update_streaming_data(self):
+    async def check_streaming_data(self):
         """
         音声ファイル直のURLを取得する
         投げっぱなし可能
         """
+        if await self.is_available():
+            return
+        
         with YT_DLP.get() as ydl:
             info = await ydl._extract_info(self.web_url())
         if info:

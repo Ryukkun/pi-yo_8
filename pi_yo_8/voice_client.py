@@ -23,8 +23,8 @@ lock = threading.Lock()
 class StreamAudioData:
     def __init__(self, 
                  st_url:str,
-                 volume:Optional[int] = None,
-                 duration:int|None = None):
+                 volume:float | None = None,
+                 duration:int | None = None):
         self.stream_url = st_url
         self.volume = volume
         self.duration = duration

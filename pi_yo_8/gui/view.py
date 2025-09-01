@@ -1,10 +1,11 @@
 import asyncio
 import discord
-from typing import Any, List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from discord.interactions import Interaction
 
 from pi_yo_8.gui import EmbedTemplates
+from pi_yo_8.type import SendableChannels
 
 
 if TYPE_CHECKING:
@@ -19,7 +20,7 @@ class CreateButton(discord.ui.View):
     def __init__(self, info:DataInfo):
         super().__init__(timeout=None)
         self.info = info
-        self.select_opt:list[discord.SelectOption] = None
+        self.select_opt:list[discord.SelectOption] = []
         self.pause_play = Button2(self.info)
         self.add_item(self.pause_play)
         self.add_item(Button3(self.info))
@@ -97,15 +98,16 @@ class Button5(discord.ui.Button):
         self.info.embed.update_action_time()
         asyncio.get_event_loop().create_task(interaction.response.defer())
         if message := self.info.embed.options_display:
-            if message.channel.last_message == message:
+            if isinstance(message.channel, SendableChannels) and message.channel.last_message == message:
                 return
             else:
                 try:
                     await message.delete()
                 except discord.NotFound:
                     pass
-
-        self.info.embed.options_display = await playoptionmessage(interaction.channel, self.info)
+        
+        if isinstance(interaction.channel, discord.abc.Messageable):
+            self.info.embed.options_display = await playoptionmessage(interaction.channel, self.info)
 
     # @discord.ui.button(label="歌詞", row=3)
     # async def def_button6(self, interaction:discord.Interaction, button):
@@ -157,7 +159,7 @@ class CreateStatusButton(discord.ui.Button):
         status = self.view_parent.info.music.status.__dict__
         status[self.name] = not status[self.name]
         self.style = self.style_check()
-        self.view_parent.info.embed._update_action()
+        self.view_parent.info.embed.update_action_time()
         await interaction.response.edit_message(view=self.view_parent)
 
 
@@ -169,7 +171,7 @@ class CreateSelect(discord.ui.Select):
         select_opt = []
         _audio: YTDLPAudioData
         #print(args)
-        for i, _audio in enumerate(queue):
+        for i, _audio in enumerate(queue.get_next_items()):
             title = _audio.title()
             if i >= 25:
                 break
@@ -215,7 +217,8 @@ class PlayConfigView(discord.ui.View):
         self.player_track = info.music.player_track
 
     async def edit_message(self, interaction:discord.Interaction):
-        await interaction.message.edit(embed=PlayConfigEmbed(self.player_track))
+        if interaction.message:
+            await interaction.message.edit(embed=PlayConfigEmbed(self.player_track))
 
     async def edit_speed(self, interaction:discord.Interaction, num:float):
         asyncio.get_event_loop().create_task(interaction.response.defer())
@@ -299,7 +302,8 @@ class PlayConfigView(discord.ui.View):
     async def delete(self, interaction:discord.Interaction, button):
         self.info.embed.update_action_time()
         await interaction.response.defer()
-        await interaction.message.delete()
+        if interaction.message:
+            await interaction.message.delete()
         self.info.embed.options_display = None
 
 
