@@ -20,9 +20,9 @@ except Exception:
     raise Exception('Config ファイルを生成しました')
 
 
-from pi_yo_8.gui._embed_controller import EmbedController
+from pi_yo_8.gui.controller import EmbedController
 from pi_yo_8.voice_client import MultiAudioVoiceClient
-from pi_yo_8.music_control import MusicController
+from pi_yo_8.music_control.controller import MusicController
 from pi_yo_8.utils import set_logger
 
 
@@ -46,12 +46,11 @@ tree = client.tree
 
 @tree.command(description="年中無休でカラオケ生活 のど自慢系ぴーよ")
 @discord.app_commands.describe(arg='URL or 検索したい文字')
-@overload
-async def download(iteration:discord.Interaction, arg:str):
+async def download(interaction:discord.Interaction, arg:str): # type: ignore
+    await interaction.response.defer(thinking=True)
     if embeds := await MusicController.download(arg):
-        ctx:commands.Context = await commands.Context.from_interaction(iteration)
         for em in embeds:
-            await ctx.send(embed=em, ephemeral=True)
+            await interaction.followup.send(embed=em, ephemeral=True)
 
 
 ####  基本的コマンド
@@ -141,7 +140,7 @@ async def skip(ctx:commands.Context, arg:str | None):
 @client.command(aliases=['dl'])
 async def download(ctx:commands.Context, arg):
     if embeds := await MusicController.download(arg):
-       for em in embeds:
+        for em in embeds:
             await ctx.send(embed=em)
 
 
