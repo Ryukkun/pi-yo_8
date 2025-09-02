@@ -1,6 +1,8 @@
+import re
 from typing import Any
-from pi_yo_8.utils import YT_DLP, is_url_accessible, task_running_wrapper
+from pi_yo_8.utils import is_url_accessible, task_running_wrapper
 from pi_yo_8.voice_client import StreamAudioData
+from pi_yo_8.extractor.yt_dlp.manager import YT_DLP
 
 
 
@@ -51,19 +53,20 @@ class YTDLPAudioData(StreamAudioData):
 
     def ch_name(self) -> str | None:
         return self.info.get("uploader", None)
+    
+    def formats(self) -> list[dict[str, Any]]:
+        return self.info.get("formats", [])
+
 
     async def ch_icon(self) -> str | None:
         if self._ch_icon is None and (ch_url := self.ch_url()) is not None:
             with YT_DLP.get() as ydl:
                 result = await ydl._extract_info(ch_url, process=False)
-            if result:
-                self._ch_icon = result.get("thumbnails", [""])[0]
-            else:
-                self._ch_icon = ""
+            self._ch_icon = result.get("thumbnails", [{"url":None}])[0]["url"] if result else None
         return self._ch_icon
     
     def get_thumbnail(self) -> str | None:
-        return self.info.get("thumbnails", [None])[0]
+        return self.info.get("thumbnails", [{"url":None}])[0]["url"]
 
     async def is_available(self) -> bool:
         """

@@ -1,19 +1,21 @@
 import asyncio
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Generator
+from typing import TYPE_CHECKING, Any, Generator
 
-from pi_yo_8.extractor.yt_dlp import YTDLPAudioData
-from pi_yo_8.music_control import Status
-from pi_yo_8.music_control import PlaylistRandom
+from pi_yo_8.music_control.utils import Status
+from pi_yo_8.music_control.utils import PlaylistRandom
 
+if TYPE_CHECKING:
+    from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
 
 class Playlist:
     def __init__(self, info:dict[str, Any]):
         """
         entriesは常に1つ以上ある
         """
-        self.entries: list[YTDLPAudioData] = [YTDLPAudioData(_) for _ in info['entries']]
+        from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
+        self.entries: list["YTDLPAudioData"] = [YTDLPAudioData(_) for _ in info['entries']]
         # 0 再生中, 1~ 次に再生
         self.next_indexes: deque[int] = deque()
         self.cooldowns: list[int] = [0] * len(self.entries)
@@ -23,10 +25,10 @@ class Playlist:
 
 
     @property
-    def status(self) -> Status:
+    def status(self) -> "Status":
         return self._status
 
-    def status_callback(self, old: Status, new: Status):
+    def status_callback(self, old: "Status", new: "Status"):
         if new.loop_pl != old.loop_pl or new.random_pl != old.random_pl:
             if self.next_indexes:
                 playing_index = self.next_indexes[0]
@@ -56,7 +58,7 @@ class Playlist:
             if entry.video_id() == video_id:
                 self.next_indexes.clear()
                 self.next_indexes.append(i)
-                if not entry.is_available():
+                if not await entry.is_available():
                     entry.check_streaming_data.create_task()
                 break
 
@@ -82,13 +84,10 @@ class Playlist:
         return True
     
 
-    async def get_now_entry(self) -> YTDLPAudioData | None:
+    async def get_now_entry(self) -> "YTDLPAudioData | None":
         if self.next_indexes:
             now_entry = self.entries[self.next_indexes[0]]
-            if now_entry.check_streaming_data.is_running():
-                await now_entry.check_streaming_data.wait()
-            else:
-                await now_entry.check_streaming_data.run()
+            await now_entry.check_streaming_data.run()
             if await now_entry.is_available():
                 return now_entry
         return None
@@ -96,6 +95,7 @@ class Playlist:
 
 class GeneratorPlaylist(Playlist):
     def __init__(self, info:dict[str, Any]):
+        from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
         generator : Generator[dict[str, Any] | None] = info['entries']
         info['entries'] = []
         super().__init__(info)
@@ -144,7 +144,7 @@ class GeneratorPlaylist(Playlist):
             if entry.video_id() == video_id:
                 self.next_indexes.clear()
                 self.next_indexes.append(i)
-                if not entry.is_available():
+                if not await entry.is_available():
                     entry.check_streaming_data.create_task()
                 return
             i += 1
@@ -166,6 +166,6 @@ class GeneratorPlaylist(Playlist):
         return await super().next(count)        
     
 
-    async def get_now_entry(self) -> YTDLPAudioData | None:
+    async def get_now_entry(self) -> "YTDLPAudioData | None":
         await self._wait_load_entry(self.next_indexes[0])
         return await super().get_now_entry()

@@ -1,21 +1,19 @@
 import time
 from typing import TYPE_CHECKING, Any
 from discord import ActionRow, Button, Embed, Message, NotFound, SelectMenu
-from numpy import isin
 
 
-from pi_yo_8.extractor.yt_dlp import YTDLPAudioData
 from pi_yo_8.type import SendableChannels
 from pi_yo_8.utils import run_check_storage
 from pi_yo_8.gui.view import CreateButton, playoptionmessage
-from pi_yo_8.gui import EmbedTemplates, int_analysis, date_difference, calc_time
+from pi_yo_8.gui.utils import EmbedTemplates, int_analysis, date_difference, calc_time
 
 if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
 
 
 class EmbedController:
-    def __init__(self, info: DataInfo) -> None:
+    def __init__(self, info: "DataInfo") -> None:
         self.info = info
         self.lastest_action_time = 0.0
         self.lastest_action_ch: SendableChannels | None = None  # 最新のチャンネル
@@ -109,6 +107,7 @@ class EmbedController:
     async def generate_main_display(self):
         audio_data = self.info.music.player_track.audio_data
 
+        from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
         if isinstance(audio_data, YTDLPAudioData) and audio_data.duration:
             embed=Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.player_color())
             if thumbnail := audio_data.get_thumbnail():

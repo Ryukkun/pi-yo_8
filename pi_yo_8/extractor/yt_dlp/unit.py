@@ -2,13 +2,14 @@ import asyncio
 import time
 from types import TracebackType
 from yt_dlp import YoutubeDL
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from _ie import YoutubeIE
-from pi_yo_8.music_control import GeneratorPlaylist, Playlist
+from ._ie import YoutubeIE
+from pi_yo_8.music_control.playlist import GeneratorPlaylist, Playlist
 from pi_yo_8.utils import FREE_THREADS
-from pi_yo_8.extractor.yt_dlp import YTDLPAudioData
 
+if TYPE_CHECKING:
+    from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
 
 class YTDLPExtractor:
     YTDLP_PARAMS = {
@@ -27,12 +28,12 @@ class YTDLPExtractor:
         """
         self.opts: dict = opts
         self.opts.update(self.YTDLP_PARAMS)
-        self._is_running:bool = False
+        self.is_running:bool = False
         self._latest_accessed:float = time.time()
 
 
     def __enter__(self):
-        if self._is_running:
+        if self.is_running:
             raise RuntimeError("This yt_dlp extractor is already running")
         self.is_running = True
         self.latest_accessed = time.time()
@@ -49,10 +50,11 @@ class YTDLPExtractor:
         return ydl
 
 
-    async def extract_info(self, url: str) -> YTDLPAudioData| Playlist | None:
+    async def extract_info(self, url: str) -> "YTDLPAudioData | Playlist | None":
         """
         yt-dlpで動画を解析。Youtube以外も想定
         """
+        from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
         info = await self._extract_info(url)
 
         if info:

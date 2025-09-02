@@ -10,26 +10,23 @@ from discord.ext.commands import Context
 from dataclasses import dataclass
 
 
-from pi_yo_8.extractor.yt_dlp import YTDLPAudioData
-from pi_yo_8.music_control import Playlist
-from pi_yo_8.music_control._playlist import GeneratorPlaylist
-from pi_yo_8.utils import YT_DLP, UrlAnalyzer
+
+from pi_yo_8.gui.utils import EmbedTemplates, calc_time
+from pi_yo_8.music_control.playlist import Playlist, GeneratorPlaylist
+from pi_yo_8.music_control.utils import Status
+from pi_yo_8.utils import UrlAnalyzer
+from pi_yo_8.extractor.yt_dlp.manager import YT_DLP
 
 if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
+    from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
 
 
-re_URL_YT = re.compile(r'https://((www.|)youtube.com|youtu.be)/')
-re_URL_Video = re.compile(r'https://((www.|)youtube.com/watch\?v=|(youtu.be/))(.+)')
-re_URL_PL = re.compile(r'https://(www.|)youtube.com/playlist\?list=')
 re_skip = re.compile(r'^((-|)\d+)([hms])$')
 re_skip_set_h = re.compile(r'^(\d+)[:;,](\d+)[:;,](\d+)$')
 re_skip_set_m = re.compile(r'^(\d+)[:;,](\d+)$')
 
 
-re_video = re.compile(r'video/(.+);')
-re_audio = re.compile(r'audio/(.+);')
-re_codecs = re.compile(r'codecs="(.+)"')
 re_space = re.compile(r'\)` +?\|')
 re_space2 = re.compile(r'(( |-)\|$|^\|( |-))')
 re_space3 = re.compile(r'^\|( |-)+?\|')
@@ -39,28 +36,12 @@ _log = logging.getLogger(__name__)
 
 
 
-@dataclass
-class Status:
-    loop: bool = False
-    loop_pl: bool = False
-    random_pl: bool = False
-    callback: Callable[..., Any] | None = None
-
-    def set(self, loop: bool | None = None, loop_pl: bool | None = None, random_pl: bool | None = None):
-        old = copy.copy(self)
-        if loop != None: self.loop = loop
-        if loop_pl != None: self.loop_pl = loop_pl
-        if random_pl != None: self.random_pl = random_pl
-
-        if self.callback and self != old:
-            self.callback(old=old, new=copy.copy(self))
-
 
 
 class MusicQueue:
     def __init__(self):
-        self.play_history:List[YTDLPAudioData | Playlist] = []
-        self.play_queue:List[YTDLPAudioData | Playlist] = []
+        self.play_history:List["YTDLPAudioData | Playlist"] = []
+        self.play_queue:List["YTDLPAudioData | Playlist"] = []
 
 
     def next(self, count:int=1, ignore_playlist:bool=False) -> bool:
@@ -100,7 +81,7 @@ class MusicQueue:
         return isinstance(item, Playlist)
     
 
-    def get_next_items(self, count:int = 25) -> List[YTDLPAudioData]:
+    def get_next_items(self, count:int = 25) -> List["YTDLPAudioData"]:
         if not self.play_queue:
             return []
         items = []
@@ -119,7 +100,7 @@ class MusicQueue:
 
 
 class MusicController():
-    def __init__(self, info:DataInfo):
+    def __init__(self, info:"DataInfo"):
         self.info = info
         self.player_track = info.MA.add_track(RNum=30 ,opus=True)
         self.guild = info.guild
@@ -179,7 +160,7 @@ class MusicController():
 
 
 
-    async def _analysis_input(self, arg:str) -> Playlist | YTDLPAudioData | None:
+    async def _analysis_input(self, arg:str) -> "Playlist | YTDLPAudioData | None":
         analysis = UrlAnalyzer(arg)
 
         with YT_DLP.get() as ydl:
@@ -259,101 +240,83 @@ class MusicController():
 #---------------------------------------------------------------------------------------
 #   Download
 #---------------------------------------------------------------------------------------
-    @classmethod
-    async def download(self, arg:str):
+    @staticmethod
+    async def download(arg:str):
 
         # Download Embed
         url = UrlAnalyzer(arg)
-        if not audio_data: return
+        with YT_DLP.get() as ydl:
+            result = await ydl.extract_info(arg)
+        if result is None:
+            return
+        audio_data = result.entries[0] if isinstance(result, Playlist) else result
+        await audio_data.check_streaming_data.run()
+        if not await audio_data.is_available():
+            return
 
-        if audio_data.YT:
-            embed=Embed(title=audio_data.title, url=audio_data.web_url, colour=EmBase.main_color())
-            embed.set_thumbnail(url=f'https://img.youtube.com/vi/{audio_data.video_id}/mqdefault.jpg')
-            embed.set_author(name=audio_data.ch_name, url=audio_data.ch_url, icon_url=audio_data.ch_icon)
+        embed=Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.main_color())
+        embed.set_thumbnail(url=audio_data.get_thumbnail())
+        embed.set_author(name=audio_data.ch_name(), url=audio_data.ch_url(), icon_url=await audio_data.ch_icon())
             
-        else:
-            embed=Embed(title=audio_data.web_url, url=audio_data.web_url, colour=EmBase.main_color())
 
-        if audio_data.st_sec:
-            Duration = calc_time(audio_data.st_sec)
+        if audio_data.duration:
+            Duration = calc_time(audio_data.duration)
             embed.add_field(name="Length", value=Duration, inline=True)
 
             
         __list = []
-        if audio_data.formats:
-            for F in audio_data.formats:
+        for f in audio_data.formats():
 
-                _dl = f'[`download`]({F["url"]})`'
+            _dl_string = f'[`download`]({f["url"]})`'
 
-                if F.get('width'):
-                    _res = f"{F['width']}x{F['height']}"
-                elif F.get('resolution'):
-                    _res = F.get('resolution')
-                else: 
-                    _res = ''
+            if f.get('width'):
+                _res = f"{f['width']}x{f['height']}"
+            elif f.get('resolution'):
+                _res = f.get('resolution')
+            else: 
+                _res = ''
 
-                ext = F.get('ext','')
-                acodec = F.get('acodec','')
-                vcodec = F.get('vcodec','')
-                abr = F.get('abr','?k')
-                protocol = F.get('protocol','')
+            ext = f.get('ext','')
+            acodec = f.get('acodec','')
+            vcodec = f.get('vcodec','')
+            abr = f.get('abr','?k')
+            protocol = f.get('protocol','')
 
-                if res := re_codecs.search(F.get('mimeType','')):
-                    codec = res.group(1).split(', ')
-                    _type = F.get('mimeType')
-                    _type = _type.replace(f' {res.group(0)}','')
+            if '3gpp' in ext or 'm3u8' in protocol:
+                continue
 
-                    if res := re_video.match(_type):
-                        ext = res.group(1)
-                        vcodec = codec[0]
-                        if len(codec) == 2:
-                            acodec = codec[1]
-                    
-                    elif res := re_audio.match(_type):
-                        ext = res.group(1)
-                        _res = 'audio'
-                        acodec = codec[0]
-                        abr = f"{F['bitrate']//10/100}k"
+            __list.append([_dl_string,ext,_res,vcodec,acodec,abr])
 
-                if '3gpp' in ext or 'm3u8' in protocol:
-                    continue
+        headers = ['','EXT','RES','Video','Audio','ABR']
+        table = tabulate.tabulate(tabular_data=__list, headers=headers, tablefmt='github')
+        table = re_space.sub(')`|',table)
+        table = table.split('\n')
+        table[0] = re_space2.sub('',re_space3.sub('[`--------`](https://github.com/Ryukkun/pi-yo_8)`|',table[0]))
+        table[1] = re_space2.sub('',re_space3.sub('[`--------`](https://github.com/Ryukkun/pi-yo_8)`|',table[1]))
 
-                __list.append([_dl,ext,_res,vcodec,acodec,abr])
-
-            headers = ['','EXT','RES','Video','Audio','ABR']
-            table = tabulate.tabulate(tabular_data=__list, headers=headers, tablefmt='github')
-            table = re_space.sub(')`|',table)
-            table = table.split('\n')
-            table[0] = re_space2.sub('',re_space3.sub('[`--------`](https://github.com/Ryukkun/pi-yo_8)`|',table[0]))
-            table[1] = re_space2.sub('',re_space3.sub('[`--------`](https://github.com/Ryukkun/pi-yo_8)`|',table[1]))
-
-            _embeds = [embed]
+        _embeds = [embed]
+        while table:
+            __table = ''
+            embed = Embed(colour=EmbedTemplates.main_color())
             while table:
-                __table = ''
-                embed = Embed(colour=EmBase.main_color())
-                while len(__table) <= 4000:
-                    if __table: 
-                        del table[0]
-                    if len(table) == 0:
-                        _table = __table
-                        break
-                    _table = __table
-                    temp = re_space2.sub('',table[0])
-                    __table += f'{temp}`\n'
+                temp = re_space2.sub('', table[0])
+                if len(__table) + len(temp) + 5 > 4096:
+                    break
+                __table += f'{temp}`\n'
+                table.pop(0)
+                
+            embed.description = __table
+            _embeds.append(embed)
 
-                embed.description = _table
-                _embeds.append(embed)
-                embed = None
-
-            return _embeds
+        return _embeds
 
 
 
-        else:
-            embed=Embed(title=audio_data.web_url, url=audio_data.web_url, colour=EmBase.main_color())
-            embed_list = [embed]
-            embed=Embed(title='Download', url=audio_data.st_url, colour=EmBase.main_color())
-            embed_list.append(embed)
+        
+            # embed=Embed(title=audio_data.web_url, url=audio_data.web_url, colour=EmbedTemplates.main_color())
+            # embed_list = [embed]
+            # embed=Embed(title='Download', url=audio_data.st_url, colour=EmbedTemplates.main_color())
+            # embed_list.append(embed)
 
         return embed_list
             
@@ -362,7 +325,7 @@ class MusicController():
 #---------------------------------------------------------------------------------------
 #   再生 Loop
 #---------------------------------------------------------------------------------------
-    async def play_loop(self, played=None, did_time=0):
+    async def play_loop(self, played=None, did_time=0.0):
         """
         再生後に実行される
         """
@@ -372,8 +335,9 @@ class MusicController():
         loop = asyncio.get_event_loop()
 
         # Queue削除
-        if self.queue:
-            if self.status['loop'] == False and self.queue[0].stream_url == played or (time.time() - did_time) <= 0.2:
+        audio_data = await self.queue.get_item0()
+        if audio_data:
+            if self.status.loop == False and audio_data.stream_url == played or (time.time() - did_time) <= 0.2:
                 self.queue.next()
 
         # 再生

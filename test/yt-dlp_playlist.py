@@ -112,11 +112,11 @@ def extract():
     #arg = "https://www.nicovideo.jp/mylist/21130988"
     arg = "https://youtu.be/x06wB8UDxMI?si=yEw3s0RAISEH4Iu4"
     arg = "https://www.nicovideo.jp/watch/sm36999938"
-    arg = "https://www.youtube.com/watch?v=Y1Nip-y0BcQ&list=PLYITQsyLyAGkqp1e18fF22RbsisWzXazN" #再生不可能なものが入っている
+    #arg = "https://www.youtube.com/watch?v=Y1Nip-y0BcQ&list=PLYITQsyLyAGkqp1e18fF22RbsisWzXazN" #再生不可能なものが入っている
     #arg = "ytsearch50:ディぺっしゅモード"
     #arg = "ytsearch50:ジブリBGM playlist"
     #arg = "じぶりBGM playlist"
-    arg = "https://www.youtube.com/channel/UCGmO0S4S-AunjRdmxA6TQYg" # Channel
+    #arg = "https://www.youtube.com/channel/UCGmO0S4S-AunjRdmxA6TQYg" # Channel
     now = time.perf_counter()
 
     _ = yt_dlp.YoutubeDL({"default_search":"ytsearch30", 'format':'bestaudio/worst', 'extract_flat': "in_playlist", 'skip_download': True})

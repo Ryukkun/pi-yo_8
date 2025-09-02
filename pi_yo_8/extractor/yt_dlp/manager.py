@@ -1,21 +1,27 @@
 import asyncio
-from pi_yo_8.extractor.yt_dlp import YTDLPExtractor
-from pi_yo_8.utils import FREE_THREADS
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pi_yo_8.extractor.yt_dlp.unit import YTDLPExtractor
 
 
 class YTDLPManager:
     def __init__(self):
+        from pi_yo_8.extractor.yt_dlp.unit import YTDLPExtractor
+
         self.free_ftdlp: list[YTDLPExtractor] = [YTDLPExtractor() for _ in range(2)]
         self.special_ftdlp: dict[str, YTDLPExtractor] = {}
 
 
-    def get(self, id:str ="") -> YTDLPExtractor:
+    def get(self, id:str ="") -> "YTDLPExtractor":
         if id:
             return self._get_special_ftdlp(id)
         return self._get_free_ftdlp()
     
 
     def _get_free_ftdlp(self):
+        from pi_yo_8.utils import FREE_THREADS
+    
         for ytdlp in self.free_ftdlp:
             if not ytdlp.is_running:
                 if ytdlp == self.free_ftdlp[-1]:
@@ -24,13 +30,15 @@ class YTDLPManager:
         return self._add_ftdlp()
 
 
-    def _get_special_ftdlp(self, id:str) -> YTDLPExtractor:
+    def _get_special_ftdlp(self, id:str) -> "YTDLPExtractor":
         if id in self.special_ftdlp:
             return self.special_ftdlp[id]
         return self._add_ftdlp(id, option={}) 
 
 
-    def _add_ftdlp(self, id:str="", option:dict={}) -> YTDLPExtractor:
+    def _add_ftdlp(self, id:str="", option:dict={}) -> "YTDLPExtractor":
+        from pi_yo_8.extractor.yt_dlp.unit import YTDLPExtractor
+        
         is_special = bool(option)
         ftdlp = YTDLPExtractor(option)
         if is_special:
@@ -38,3 +46,6 @@ class YTDLPManager:
         else:
             self.free_ftdlp.append(ftdlp)
         return ftdlp
+    
+
+YT_DLP = YTDLPManager()

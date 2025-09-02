@@ -1,4 +1,24 @@
+import copy
+from dataclasses import dataclass
 import random
+from typing import Any, Callable
+
+@dataclass
+class Status:
+    loop: bool = False
+    loop_pl: bool = False
+    random_pl: bool = False
+    callback: Callable[..., Any] | None = None
+
+    def set(self, loop: bool | None = None, loop_pl: bool | None = None, random_pl: bool | None = None):
+        old = copy.copy(self)
+        if loop != None: self.loop = loop
+        if loop_pl != None: self.loop_pl = loop_pl
+        if random_pl != None: self.random_pl = random_pl
+
+        if self.callback and self != old:
+            self.callback(old=old, new=copy.copy(self))
+
 
 
 class PlaylistRandom:

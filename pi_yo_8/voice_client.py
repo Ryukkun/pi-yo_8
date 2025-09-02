@@ -6,7 +6,7 @@ from collections import deque
 from math import sqrt
 from discord import SpeakingState, opus, Guild, FFmpegPCMAudio, FFmpegOpusAudio
 from discord.ext import commands
-from typing import TYPE_CHECKING, Any, Callable, Generic, Union, Optional
+from typing import TYPE_CHECKING, Any, Callable, Generic, Union
 
 from pi_yo_8.type import T
 from pi_yo_8.utils import run_check_storage
@@ -104,7 +104,7 @@ class MultiAudioVoiceClient:
     独自で Playerを作成 
     self.run は制御方法知らんから、常にループしてる 0.02秒(20ms) 間隔で 
     """
-    def __init__(self, guild:Guild, client:commands.Bot, info:DataInfo) -> None:
+    def __init__(self, guild:Guild, client:commands.Bot, info:"DataInfo") -> None:
         self.enable_loop = True
         self.guild = guild
         self.vc = info.vc

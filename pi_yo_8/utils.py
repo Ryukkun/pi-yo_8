@@ -1,19 +1,17 @@
 from concurrent.futures import ThreadPoolExecutor
-import datetime
 import logging
 import asyncio
-from typing import Any, Callable, Generic, Self, TypeVar
+from typing import Any, Callable, Self
 import aiohttp
 import re
 import urllib.parse
 from discord.utils import _ColourFormatter
 
-from pi_yo_8.extractor.yt_dlp._manager import YTDLPManager
 
 
 
 FREE_THREADS = ThreadPoolExecutor(max_workers=50)
-YT_DLP = YTDLPManager()
+
 
 
 def set_logger():
@@ -26,6 +24,7 @@ def set_logger():
 
 
 class UrlAnalyzer:
+    RE_IS_YOUTUBE = re.compile(r'^(.*?(youtube\.com|youtube-nocookie\.com)|youtu\.be)$')
     def __init__(self, arg:str):
         self.url_parse = urllib.parse.urlparse(arg)
         self.url_query:dict = {}
@@ -39,7 +38,7 @@ class UrlAnalyzer:
 
         self.is_url = bool(self.url_parse.hostname)
         if self.is_url:
-            self.is_yt = re.match(r'^(.*?(youtube\.com|youtube-nocookie\.com)|youtu\.be)$',self.url_parse.hostname)
+            self.is_yt = self.RE_IS_YOUTUBE.match(self.url_parse.hostname) if self.url_parse.hostname else False
             if self.is_yt:
                 self.list_id = self.url_query.get('list', [None])[0]
                 self.video_id = self.url_query.get('v', [None])[0]
@@ -184,6 +183,7 @@ class TaskRunningWrapper(WrapperAbstract):
 
     def create_task(self, *args:Any, **kwargs:Any):
         if not self.is_running():
+            args = (self._class,) + args
             self.task = asyncio.get_event_loop().create_task(self.func(*args, **kwargs))
 
     async def wait(self):
@@ -195,7 +195,7 @@ class TaskRunningWrapper(WrapperAbstract):
         if self.is_running():
             return await self.wait()
         self.create_task(*args, **kwargs)
-        return await self.task() # type: ignore
+        return await self.wait() # type: ignore
     
     def is_running(self) -> bool:
         if self.task is None:

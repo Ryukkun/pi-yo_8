@@ -4,20 +4,20 @@ from typing import TYPE_CHECKING
 
 from discord.interactions import Interaction
 
-from pi_yo_8.gui import EmbedTemplates
+from pi_yo_8.gui.utils import EmbedTemplates
 from pi_yo_8.type import SendableChannels
 
 
 if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
-    from pi_yo_8.music_control import MusicQueue
-    from pi_yo_8.extractor.yt_dlp import YTDLPAudioData
+    from pi_yo_8.music_control.controller import MusicQueue
+    from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
     from pi_yo_8.voice_client import AudioTrack
 
 
 # Button
 class CreateButton(discord.ui.View):
-    def __init__(self, info:DataInfo):
+    def __init__(self, info:"DataInfo"):
         super().__init__(timeout=None)
         self.info = info
         self.select_opt:list[discord.SelectOption] = []
@@ -52,7 +52,7 @@ class CreateButton(discord.ui.View):
 
 
 class Button2(discord.ui.Button):
-    def __init__(self, info:DataInfo):
+    def __init__(self, info:"DataInfo"):
         _label = '▶' if info.music.player_track.is_paused() else 'II'
         super().__init__(label=_label,style=discord.ButtonStyle.blurple,row=2)
         self.info = info
@@ -68,7 +68,7 @@ class Button2(discord.ui.Button):
 
 
 class Button3(discord.ui.Button):
-    def __init__(self, info:DataInfo):
+    def __init__(self, info:"DataInfo"):
         super().__init__(label="↪︎10",row=2)
         self.info = info
 
@@ -78,7 +78,7 @@ class Button3(discord.ui.Button):
         self.info.music.player_track.skip_time(10*50)
 
 class Button4(discord.ui.Button):
-    def __init__(self, info:DataInfo):
+    def __init__(self, info:"DataInfo"):
         super().__init__(label=">",row=2)
         self.info = info
 
@@ -89,7 +89,7 @@ class Button4(discord.ui.Button):
 
 
 class Button5(discord.ui.Button):
-    def __init__(self, info:DataInfo):
+    def __init__(self, info:"DataInfo"):
         super().__init__(label="⚙️",row=3)
         self.info = info
 
@@ -131,7 +131,7 @@ class Button5(discord.ui.Button):
         
 
 class Button7(discord.ui.Button):
-    def __init__(self, info:DataInfo):
+    def __init__(self, info:"DataInfo"):
         super().__init__(label="切断",row=3, style=discord.ButtonStyle.red)
         self.info = info
 
@@ -166,7 +166,7 @@ class CreateStatusButton(discord.ui.Button):
 
 
 class CreateSelect(discord.ui.Select):
-    def __init__(self, parent:'CreateButton', queue:MusicQueue) -> None:
+    def __init__(self, parent:'CreateButton', queue:"MusicQueue") -> None:
         self.view_parent = parent
         select_opt = []
         _audio: YTDLPAudioData
@@ -195,14 +195,14 @@ class CreateSelect(discord.ui.Select):
         #print(f'{interaction.user.name}は{self.values[0]}を選択しました')
 
 
-async def playoptionmessage(channel:discord.abc.Messageable, info:DataInfo) -> discord.Message:
+async def playoptionmessage(channel:discord.abc.Messageable, info:"DataInfo") -> discord.Message:
     return await channel.send(
         embed= PlayConfigEmbed(info.music.player_track),
         view= PlayConfigView(info)
         )
 
 
-def PlayConfigEmbed(audio_track:AudioTrack):
+def PlayConfigEmbed(audio_track:"AudioTrack"):
     embed = discord.Embed(colour=EmbedTemplates.dont_replace_color())
     embed.add_field(name='テンポ (x0.1 ~ x3.0)', value=f'x{round(audio_track.speed.get(),2)}', inline=True)
     embed.add_field(name='キー', value=f'{audio_track.pitch.get()}', inline=True)
@@ -211,7 +211,7 @@ def PlayConfigEmbed(audio_track:AudioTrack):
 
 
 class PlayConfigView(discord.ui.View):
-    def __init__(self, info:DataInfo):
+    def __init__(self, info:"DataInfo"):
         super().__init__(timeout=None)
         self.info = info
         self.player_track = info.music.player_track
