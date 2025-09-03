@@ -130,5 +130,23 @@ def extract():
 
 
 
+def extract_generator():
+    # lazy_playlist なんか動かんくて残念
+    arg = "https://www.youtube.com/watch?v=cQKGUgOfD8U&list=PLB02wINShjkBKnLfufaEPnCupGO-SK6e4&index=4"
+    arg = "https://www.youtube.com/playlist?&list=PLB02wINShjkBKnLfufaEPnCupGO-SK6e4&index=4"
+    #arg = "https://www.youtube.com/watch?v=Y1Nip-y0BcQ&list=PLYITQsyLyAGkqp1e18fF22RbsisWzXazN" #再生不可能なものが入っている
+    now = time.perf_counter()
+
+    _ = yt_dlp.YoutubeDL({"default_search":"ytsearch30", 'format':'bestaudio/worst', 'extract_flat': "in_playlist", 'skip_download': True})
+    supported_url(_, arg)
+    print(time.perf_counter() - now)
+    __ = _.extract_info(arg, download=False, process=False)
+    ___ = next(__["entries"])
+    print(time.perf_counter() - now)
+    print(__)
+    with open("./test/video_info.json", "w", encoding="utf-8") as f:
+        json.dump(__, f, ensure_ascii=False, indent=2)
+
+
 if __name__ == "__main__":
-    extract()
+    extract_generator()

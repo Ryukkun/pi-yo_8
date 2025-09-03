@@ -62,10 +62,13 @@ class MusicQueue:
             return False
 
         if isinstance(self.play_queue[0], Playlist) and not ignore_playlist:
-            if await self.play_queue[0].next(count):
-                return True
+            if 0 < count:
+                if await self.play_queue[0].next(count):
+                    return True
+                else:
+                    count = 1
             else:
-                count = 1
+                if await self.play_queue[0].rewind(abs(count))
 
         while 0 < count and self.play_queue:
             count -= 1
