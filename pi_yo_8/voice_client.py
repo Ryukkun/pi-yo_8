@@ -45,7 +45,7 @@ class StreamAudioData:
 
     async def get_ffmpegaudio(self, opus:bool, sec:float=0.0, speed:float=1.0, pitch:int=0) -> Union[FFmpegOpusAudio, FFmpegPCMAudio]:
         before_options = []
-        options = ['-vn', '-application', 'lowdelay', '-loglevel', 'quiet']
+        options = ['-vn', '-application', 'audio', '-loglevel', 'quiet']
         #options = ['-vn', '-application', 'lowdelay']
         af = []
 

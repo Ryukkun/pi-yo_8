@@ -4,10 +4,9 @@ import tabulate
 import asyncio
 import logging
 import copy
-from typing import Any, Callable, List,  TYPE_CHECKING
+from typing import List,  TYPE_CHECKING
 from discord import Embed
 from discord.ext.commands import Context
-from dataclasses import dataclass
 
 
 
@@ -44,12 +43,26 @@ class MusicQueue:
         self.play_queue:List["YTDLPAudioData | Playlist"] = []
 
 
-    def next(self, count:int=1, ignore_playlist:bool=False) -> bool:
+    async def next(self, count:int=1, ignore_playlist:bool=False) -> bool:
+        """音楽キューを進める
+
+        Parameters
+        ----------
+        count : int, optional
+            飛ばす曲の個数 負の数も対応, by default 1
+        ignore_playlist : bool, optional
+            プレイリストを無視して飛ばすか, by default False
+
+        Returns
+        -------
+        bool
+            続きの曲があるか
+        """
         if not self.play_queue:
             return False
 
         if isinstance(self.play_queue[0], Playlist) and not ignore_playlist:
-            if self.play_queue[0].next(count):
+            if await self.play_queue[0].next(count):
                 return True
             else:
                 count = 1
@@ -147,7 +160,7 @@ class MusicController():
         if not res: return
 
         if self.queue.play_queue:
-            self.queue.next(ignore_playlist=True)
+            await self.queue.next(ignore_playlist=True)
         self.queue.play_queue.insert(0,res)
 
         if isinstance(res, Playlist):
@@ -218,7 +231,7 @@ class MusicController():
     async def skip_music(self, count:int=1):
         if count == 0: return
 
-        res:bool = self.queue.next(count, ignore_playlist=True)
+        res:bool = await self.queue.next(count)
         if not res: return
         _log.info(f'{self.guild.name} : #{abs(count)}曲{"前へ prev" if count < 0 else "次へ skip"}')
 
@@ -337,12 +350,12 @@ class MusicController():
         audio_data = await self.queue.get_item0()
         if audio_data:
             if self.status.loop == False and audio_data.stream_url == played or (time.time() - did_time) <= 0.2:
-                self.queue.next(ignore_playlist=True)
+                await self.queue.next()
 
         # 再生
         if audio_data := await self.queue.get_item0():
             played_time = time.time()
-            _log.info(f"{self.guild.name} : Play {audio_data.web_url()}  volume:{audio_data.volume}  [Now len: {str(len(self.queue.play_queue))}]")
+            _log.info(f"{self.guild.name} : Play {audio_data.web_url()}  volume:{audio_data.get_volume()}  [Now len: {str(len(self.queue.play_queue))}]")
 
             await self.player_track.play(audio_data,after=lambda : loop.create_task(self.play_loop(audio_data.stream_url,played_time)))
 
