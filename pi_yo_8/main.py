@@ -182,9 +182,8 @@ class DataInfo():
         self.music = MusicController(self)
         self.embed = EmbedController(self)
         self.loop_5.start()
-        vc = guild.voice_channels
-        if isinstance(vc, discord.VoiceClient):
-            self.vc:discord.VoiceClient = vc
+        if isinstance(guild.voice_client, discord.VoiceClient):
+            self.vc:discord.VoiceClient = guild.voice_client
         else:
             _log.error("vcがVoiceClientじゃない")
             asyncio.get_event_loop().create_task(self.bye())
