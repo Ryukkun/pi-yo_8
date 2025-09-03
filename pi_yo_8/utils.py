@@ -162,9 +162,6 @@ class RunCheckStorageWrapper(WrapperAbstract):
             if self.check_fin:
                 self.is_running = False
 
-    def set_running(self, status: bool):
-        self.is_running = status
-
     def _new_instance(self, obj) -> 'RunCheckStorageWrapper':
         return RunCheckStorageWrapper(self.func, self.check_fin, _class=obj)
 
