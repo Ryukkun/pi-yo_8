@@ -29,12 +29,10 @@ class YTDLPExtractor:
         self.opts.update(self.YTDLP_PARAMS)
         self.is_running:bool = False
         self._latest_accessed:float = time.time()
+        self.ydl = self._get_ytdlp()
 
 
-
-
-
-    def _get_ytdlp(self, opts:dict={}) -> YoutubeDL:
+    def _get_ytdlp(self) -> YoutubeDL:
         ydl = YoutubeDL(self.opts)
         ydl.add_info_extractor(YoutubeIE())
         return ydl
@@ -93,7 +91,7 @@ class YTDLPExtractor:
         """
         def main():
             try:
-                return self._get_ytdlp().extract_info(url, download=False, process=process)
+                return self.ydl.extract_info(url, download=False, process=process)
             except:
                 return None
         return await asyncio.get_event_loop().run_in_executor(FREE_THREADS, main)
