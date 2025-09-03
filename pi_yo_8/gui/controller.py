@@ -3,7 +3,6 @@ import time
 from typing import TYPE_CHECKING, Any
 from discord import ActionRow, Button, Embed, Message, NotFound, SelectMenu
 
-
 from pi_yo_8.type import SendableChannels
 from pi_yo_8.utils import run_check_storage
 from pi_yo_8.gui.view import CreateButton, playoptionmessage
@@ -14,6 +13,8 @@ if TYPE_CHECKING:
 
 
 _log = logging.getLogger(__name__)
+
+
 
 class EmbedController:
     def __init__(self, info: "DataInfo") -> None:
@@ -52,7 +53,7 @@ class EmbedController:
 
                     #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
         except Exception as e:
-            _log.info("", exc_info=True)
+            _log.info(f"Embed.send_new_main_display - {self.info.guild.name}", exc_info=True)
 
 
     async def update_main_display(self):
@@ -129,7 +130,7 @@ class EmbedController:
 
             # Progress Bar
             i_length = 16
-            play_time = int(self.info.music.player_track.timer) // 50
+            play_time = int(self.info.music.player_track.timer)
             unit_time = audio_data.duration / i_length
             Progress = ''
             text_list = ['　','▏','▎','▍','▌','▋','▋','▊','▉','█']
@@ -167,4 +168,4 @@ class EmbedController:
                 if 0 <= (now % 20) < 5:
                     await self.update_main_display()
         except Exception as e:
-            print(e.)
+            _log.info(f"EmbedController.task_loop - {self.info.guild.name}", exc_info=True)

@@ -33,7 +33,7 @@ class PlaylistRandom:
     @range.setter
     def range(self, value:int):
         self._range = value
-        max_value = max(self.cooldowns)
+        max_value = max(self.cooldowns) if self.cooldowns else 0
         for _ in range(value - len(self.cooldowns)):
             self.cooldowns.append(max_value)
 

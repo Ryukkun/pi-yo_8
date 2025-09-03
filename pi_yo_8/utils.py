@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import asyncio
+import threading
 from typing import Any, Callable, Self
 import aiohttp
 import re
@@ -139,6 +140,8 @@ class RunCheckStorageWrapper(WrapperAbstract):
         self.is_running = False
         self.check_fin = check_fin
         self.is_coroutine = asyncio.iscoroutinefunction(func)
+        self.exe = None
+        self.lock = threading.Lock()
 
     def __call__(self, *args:Any, **kwargs:Any):
         if self.is_running:
@@ -146,16 +149,28 @@ class RunCheckStorageWrapper(WrapperAbstract):
         self.is_running = True
         if self._class:
             args = (self._class,) + args
-        return self.async_run(*args, **kwargs) if self.is_coroutine else self.sync_run(*args, **kwargs)
+        return self._async_run(*args, **kwargs) if self.is_coroutine else self._sync_run(*args, **kwargs)
 
-    def sync_run(self, *args:Any, **kwargs:Any):
+    def run_in_thread(self, *args:Any, **kwargs:Any):
+        with self.lock:
+            if self.is_running:
+                raise Exception(f'{self.func.__name__} is already running')
+            self.is_running = True
+        if self._class:
+            args = (self._class,) + args
+        if not self.exe:
+            self.exe = ThreadPoolExecutor(max_workers=1)
+        self.exe.submit(self._sync_run, *args, **kwargs)
+
+
+    def _sync_run(self, *args:Any, **kwargs:Any):
         try:
             return self.func(*args, **kwargs)
         finally:
             if self.check_fin:
                 self.is_running = False
 
-    async def async_run(self, *args:Any, **kwargs:Any):
+    async def _async_run(self, *args:Any, **kwargs:Any):
         try:
             return await self.func(*args, **kwargs)
         finally:

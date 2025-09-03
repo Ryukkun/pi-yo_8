@@ -33,7 +33,7 @@ class Playlist:
                 playing_index = self.next_indexes[0]
                 self.next_indexes.clear()
                 self.next_indexes.append(playing_index)
-            if self._status.random_pl:
+            if new.random_pl:
                 self.random.range = len(self.entries)
                 self.random.cooldowns = self.cooldowns.copy()
             asyncio.get_event_loop().create_task(self.update_next_indexies())
@@ -109,12 +109,12 @@ class GeneratorPlaylist(Playlist):
                         self.entries.append(YTDLPAudioData(info))
             except:
                 pass
-        with ThreadPoolExecutor(max_workers=1) as exe:
-            self.decompres_task = exe.submit(task)
+        exe = ThreadPoolExecutor(max_workers=1)
+        self.decompres_task = exe.submit(task)
 
 
     async def _wait_load_entry(self, i:int):
-        while i >= len(self.entries) and self.decompres_task.running():
+        while len(self.entries) <= i and self.decompres_task.running():
             await asyncio.sleep(0.05)
 
 
@@ -153,18 +153,22 @@ class GeneratorPlaylist(Playlist):
         if self.decompres_task.done():
             return await super().next(count)
         if self.status.random_pl:
-            self.random.range = len(self.entries)
-            i = self.random.next()
-            self.next_indexes.clear()
-            self.next_indexes.append(i)
-            self.entries[i].check_streaming_data.create_task()
+            #get_now_entryが呼び出されたときにrandomでチョイスする
             return True
         
-        i = self.next_indexes[0] + count + 1
-        await self._wait_load_entry(i)
-        return await super().next(count)        
+        else:
+            i = self.next_indexes[0] + count + 1
+            await self._wait_load_entry(i)
+            return await super().next(count)        
     
 
     async def get_now_entry(self) -> "YTDLPAudioData | None":
+        if (not self.decompres_task.done() and self.status.random_pl):
+            await self._wait_load_entry(10)
+            self.random.range = len(self.entries)
+            print(f"len:{len(self.entries)}")
+            i = self.random.next()
+            self.next_indexes.clear()
+            self.next_indexes.append(i)
         await self._wait_load_entry(self.next_indexes[0])
         return await super().get_now_entry()

@@ -137,9 +137,8 @@ class MultiAudioVoiceClient:
         if status:
             if playing == 1:
                 self.__speak(SpeakingState.voice)
-                with lock:
-                    if not self.run_loop.is_running:
-                        threading.Thread(target=self.run_loop,daemon=True).start()
+                if not self.run_loop.is_running:
+                    self.run_loop.run_in_thread()
         else:
             if playing == 0:
                 self.__speak(SpeakingState.none)
@@ -217,22 +216,22 @@ class AudioTrack:
     FRAME_PER_SEC = 1000 / opus.Encoder.FRAME_LENGTH
 
     def __init__(self ,rwd_buffer_size_sec:float ,opus ,vc:'MultiAudioVoiceClient'):
-        self.ffmpeg_audio = None
-        self.audio_data = None
-        self.Pausing = True
+        self.ffmpeg_audio:FFmpegOpusAudio | FFmpegPCMAudio | None = None
+        self.audio_data:StreamAudioData | None = None
+        self.Pausing:bool = True
         self.vc = vc
         self.rwd_buffer_size = int(rwd_buffer_size_sec * self.FRAME_PER_SEC)
         self.timer:float = 0.0
         self.pitch = _Attribute[int](init=0, min=-60, max=60, update_asource=self.update_asouce_sec)
         self.speed = _Attribute[float](init=1.0, min=0.1, max=3.0, update_asource=self.update_asouce_sec)
-        self.read_fin = False
-        self.After = None
-        self.opus = opus
+        self.read_fin:bool = False
+        self.After:Callable[[], Any] | None = None
+        self.opus:bool = opus
         self.QBytes = deque()
         self.RBytes = deque()
     
 
-    async def play(self,sad:StreamAudioData,after):
+    async def play(self, sad:StreamAudioData, after:Callable[[], Any]):
         self.audio_data = sad
         self.ffmpeg_audio = await sad.get_ffmpegaudio(self.opus, speed=self.speed.value, pitch=self.pitch.value)
         # 最初のロードは少し時間かかるから先にロード
@@ -248,6 +247,7 @@ class AudioTrack:
     def stop(self):
         if self.ffmpeg_audio:
             self.pause()
+            self.ffmpeg_audio.cleanup()
         self.ffmpeg_audio = None
         self.audio_data = None
 
@@ -356,8 +356,9 @@ class AudioTrack:
 
 
     def _read_bytes(self):
-        if self.read_fin or self.read_bytes_loop.is_running: return
-        threading.Thread(target=self.read_bytes_loop, daemon=True).start()
+        if self.read_fin or self.read_bytes_loop.is_running:
+            return
+        self.read_bytes_loop.run_in_thread()
 
 
     @run_check_storage()

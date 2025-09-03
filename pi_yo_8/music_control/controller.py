@@ -85,7 +85,7 @@ class MusicQueue:
         if not self.play_queue:
             return []
         items = []
-        for queue_index in range(count):
+        for queue_index in range(min(count, len(self.play_queue))):
             item = self.play_queue[queue_index]
             if isinstance(item, Playlist):
                 for entry in [item.entries[i] for i in item.next_indexes]:
@@ -218,7 +218,7 @@ class MusicController():
     async def skip_music(self, count:int=1):
         if count == 0: return
 
-        res:bool = self.queue.next(count)
+        res:bool = self.queue.next(count, ignore_playlist=True)
         if not res: return
         _log.info(f'{self.guild.name} : #{abs(count)}曲{"前へ prev" if count < 0 else "次へ skip"}')
 
@@ -330,7 +330,6 @@ class MusicController():
         再生後に実行される
         """
 
-        # あなたは用済みよ
         if not self.guild.voice_client: return
         loop = asyncio.get_event_loop()
 
@@ -338,7 +337,7 @@ class MusicController():
         audio_data = await self.queue.get_item0()
         if audio_data:
             if self.status.loop == False and audio_data.stream_url == played or (time.time() - did_time) <= 0.2:
-                self.queue.next()
+                self.queue.next(ignore_playlist=True)
 
         # 再生
         if audio_data := await self.queue.get_item0():
