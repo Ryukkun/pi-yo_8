@@ -9,12 +9,12 @@ class YTDLPAudioData(StreamAudioData):
     def __init__(self, info:dict[str, Any]):
         self.info = info
         self._ch_icon: str | None = None
-        super().__init__(info['url'], self.volume(), self.get_duration())
+        super().__init__(info['url'], self.get_volume(), self.get_duration())
 
     def web_url(self) -> str:
         ret = self.info.get("webpage_url", None)
         if not ret:
-            ret = self.info.get("original_url", "")
+            ret = self.info.get("original_url", self.info["url"])
         return ret
 
     def title(self) -> str:
@@ -23,7 +23,7 @@ class YTDLPAudioData(StreamAudioData):
             ret = self.web_url()
         return ret
 
-    def volume(self) -> float | None:
+    def get_volume(self) -> float | None:
         if (volume := self.info.get('volume_data', {}).get('perceptualLoudnessDb', None)) is not None:
             return -14.0 - float(volume)
 
@@ -72,7 +72,7 @@ class YTDLPAudioData(StreamAudioData):
         利用可能か利用可能かどうかをチェックする
         最悪5秒程度かかる
         """
-        if self.stream_url:
+        if self.formats():
             return await is_url_accessible(self.stream_url)
         return False
     
@@ -91,3 +91,5 @@ class YTDLPAudioData(StreamAudioData):
         if info:
             self.info = info
             self.stream_url = info['url']
+            self.duration = self.get_duration()
+            self.volume = self.get_volume()
