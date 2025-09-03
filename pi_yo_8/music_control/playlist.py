@@ -17,6 +17,7 @@ class Playlist:
         self.entries: list["YTDLPAudioData"] = [YTDLPAudioData(_) for _ in info['entries']]
         # 0 再生中, 1~ 次に再生
         self.next_indexes: deque[int] = deque()
+        self.play_history: deque[int] = deque()
         self.cooldowns: list[int] = [0] * len(self.entries)
         # statusはMusicControllerと同期させる
         self._status = Status(loop=False, loop_pl=True, random_pl=False, callback=self.status_callback)
@@ -62,14 +63,39 @@ class Playlist:
                 break
 
 
+    async def rewind(self, count:int = 1) -> int:
+        """再生済みのindexを巻き戻す
+
+        Parameters
+        ----------
+        count : int, optional
+            正の数のみ対応, by default 1
+
+        Returns
+        -------
+        int
+            巻き戻しても余った個数
+        """
+        rewind_count = min(len(self.play_history), count)
+        for _ in range(rewind_count):
+            self.next_indexes.appendleft( self.play_history.pop())
+        return count - rewind_count
+
+
+
     async def next(self, count:int = 1) -> bool:
         """
         indexを進める 動画のロードはしない
+
+        Parameters
+        ----------
+        count : int
+            飛ばす数 正の値のみ対応
         """
         for _ in range(count):
             await self.update_next_indexies()
             if not self.next_indexes: return False
-            self.next_indexes.popleft()
+            self.play_history.append(self.next_indexes.popleft())
             if not self.next_indexes: return False
 
         for _ in range(len(self.cooldowns)):
@@ -84,6 +110,8 @@ class Playlist:
     
 
     async def get_now_entry(self) -> "YTDLPAudioData | None":
+        if not self.next_indexes:
+            await self.update_next_indexies()
         if self.next_indexes:
             now_entry = self.entries[self.next_indexes[0]]
             await now_entry.check_streaming_data.run()
@@ -93,6 +121,19 @@ class Playlist:
 
 
 class GeneratorPlaylist(Playlist):
+    """ジェネレーターを対応させて無駄な処理を省く
+
+    ジェネレーター解答タスクが動いている間:
+        random_pl = True:
+            get_now_entryが呼び出されるときに次の曲を決める
+            next_indexies[0]に格納しておく lenは1
+
+
+    Parameters
+    ----------
+    Playlist : _type_
+        _description_
+    """
     def __init__(self, info:dict[str, Any]):
         from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
         generator : Generator[dict[str, Any] | None] = info['entries']
@@ -153,7 +194,8 @@ class GeneratorPlaylist(Playlist):
         if self.decompres_task.done():
             return await super().next(count)
         if self.status.random_pl:
-            #get_now_entryが呼び出されたときにrandomでチョイスする
+            #空っぽにしといてget_now_entryが呼び出されたときにrandomでチョイスする
+            self.next_indexes.clear()
             return True
         
         else:
@@ -163,12 +205,10 @@ class GeneratorPlaylist(Playlist):
     
 
     async def get_now_entry(self) -> "YTDLPAudioData | None":
-        if (not self.decompres_task.done() and self.status.random_pl):
+        if (not self.decompres_task.done() and self.status.random_pl and not self.next_indexes):
             await self._wait_load_entry(10)
             self.random.range = len(self.entries)
-            print(f"len:{len(self.entries)}")
             i = self.random.next()
-            self.next_indexes.clear()
             self.next_indexes.append(i)
         await self._wait_load_entry(self.next_indexes[0])
         return await super().get_now_entry()
