@@ -139,7 +139,6 @@ class MultiAudioVoiceClient:
                 self.__speak(SpeakingState.voice)
                 with lock:
                     if not self.run_loop.is_running:
-                        self.run_loop.set_running(True)
                         threading.Thread(target=self.run_loop,daemon=True).start()
         else:
             if playing == 0:
@@ -358,7 +357,6 @@ class AudioTrack:
 
     def _read_bytes(self):
         if self.read_fin or self.read_bytes_loop.is_running: return
-        self.read_bytes_loop.set_running(True)
         threading.Thread(target=self.read_bytes_loop, daemon=True).start()
 
 
