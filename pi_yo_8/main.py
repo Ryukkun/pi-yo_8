@@ -174,6 +174,11 @@ async def play(ctx:commands.Context, *args):
 
 class DataInfo():
     def __init__(self, guild:discord.Guild):
+        if isinstance(guild.voice_client, discord.VoiceClient):
+            self.vc:discord.VoiceClient = guild.voice_client
+        else:
+            _log.error("vcがVoiceClientじゃない")
+            asyncio.get_event_loop().create_task(self.bye())
         self.guild = guild
         self.client = client
         self.client_user_id = client.user.id if client.user else -1
@@ -182,11 +187,6 @@ class DataInfo():
         self.music = MusicController(self)
         self.embed = EmbedController(self)
         self.loop_5.start()
-        if isinstance(guild.voice_client, discord.VoiceClient):
-            self.vc:discord.VoiceClient = guild.voice_client
-        else:
-            _log.error("vcがVoiceClientじゃない")
-            asyncio.get_event_loop().create_task(self.bye())
             
 
 
