@@ -3,8 +3,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Generator
 
-from pi_yo_8.music_control.utils import Status
-from pi_yo_8.music_control.utils import PlaylistRandom
+from pi_yo_8.music_control.utils import Status, PlaylistRandom
 
 if TYPE_CHECKING:
     from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData

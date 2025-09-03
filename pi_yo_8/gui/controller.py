@@ -1,3 +1,4 @@
+import logging
 import time
 from typing import TYPE_CHECKING, Any
 from discord import ActionRow, Button, Embed, Message, NotFound, SelectMenu
@@ -11,6 +12,8 @@ from pi_yo_8.gui.utils import EmbedTemplates, int_analysis, date_difference, cal
 if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
 
+
+_log = logging.getLogger(__name__)
 
 class EmbedController:
     def __init__(self, info: "DataInfo") -> None:
@@ -49,7 +52,7 @@ class EmbedController:
 
                     #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
         except Exception as e:
-            print(e)
+            _log.info("", exc_info=True)
 
 
     async def update_main_display(self):

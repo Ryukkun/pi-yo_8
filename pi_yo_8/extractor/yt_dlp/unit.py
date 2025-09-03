@@ -1,6 +1,5 @@
 import asyncio
 import time
-from types import TracebackType
 from yt_dlp import YoutubeDL
 from typing import TYPE_CHECKING, Any
 
@@ -32,16 +31,7 @@ class YTDLPExtractor:
         self._latest_accessed:float = time.time()
 
 
-    def __enter__(self):
-        if self.is_running:
-            raise RuntimeError("This yt_dlp extractor is already running")
-        self.is_running = True
-        self.latest_accessed = time.time()
-        return self
-    
 
-    def __exit__(self, exc_type: type, exc_value: Exception, traceback: TracebackType) -> None:
-        self.is_running = False
 
 
     def _get_ytdlp(self, opts:dict={}) -> YoutubeDL:
