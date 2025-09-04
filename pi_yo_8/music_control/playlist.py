@@ -79,11 +79,15 @@ class Playlist:
         rewind_count = min(len(self.play_history), count)
         for _ in range(rewind_count):
             self.next_indexes.appendleft( self.play_history.pop())
+
+        self._update_cooldowns()
+        for i in range(min(2, len(self.next_indexes))):
+            self.entries[self.next_indexes[i]].check_streaming_data.create_task()
         return count - rewind_count
 
 
 
-    async def next(self, count:int = 1) -> bool:
+    async def next(self, count:int = 1) -> int:
         """
         indexを進める 動画のロードはしない
 
@@ -91,23 +95,32 @@ class Playlist:
         ----------
         count : int
             飛ばす数 正の値のみ対応
+
+        Returns
+        -------
+        int
+            スキップしても余った数
         """
         for _ in range(count):
             await self.update_next_indexies()
-            if not self.next_indexes: return False
+            if not self.next_indexes: return count - _
             self.play_history.append(self.next_indexes.popleft())
-            if not self.next_indexes: return False
+            if not self.next_indexes: return count - _
 
-        for _ in range(len(self.cooldowns)):
-            if _ == self.next_indexes[0]:
-                self.cooldowns[_] = 0
-            else:
-                self.cooldowns[_] += 1
-
+        self._update_cooldowns()
         for i in range(min(2, len(self.next_indexes))):
             self.entries[self.next_indexes[i]].check_streaming_data.create_task()
-        return True
+        return 0
     
+    
+    def _update_cooldowns(self):
+        if self.next_indexes:
+            for _ in range(len(self.cooldowns)):
+                if _ == self.next_indexes[0]:
+                    self.cooldowns[_] = 0
+                else:
+                    self.cooldowns[_] += 1
+
 
     async def get_now_entry(self) -> "YTDLPAudioData | None":
         if not self.next_indexes:
@@ -190,7 +203,7 @@ class GeneratorPlaylist(Playlist):
             i += 1
 
 
-    async def next(self, count:int = 1) -> bool:
+    async def next(self, count:int = 1) -> int:
         if self.decompres_task.done():
             return await super().next(count)
         if self.status.random_pl:

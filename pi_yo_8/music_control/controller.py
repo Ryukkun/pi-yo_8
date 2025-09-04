@@ -1,3 +1,4 @@
+from collections import deque
 import re
 import time
 import tabulate
@@ -39,8 +40,8 @@ _log = logging.getLogger(__name__)
 
 class MusicQueue:
     def __init__(self):
-        self.play_history:List["YTDLPAudioData | Playlist"] = []
-        self.play_queue:List["YTDLPAudioData | Playlist"] = []
+        self.play_history:deque["YTDLPAudioData | Playlist"] = deque()
+        self.play_queue:deque["YTDLPAudioData | Playlist"] = deque()
 
 
     async def next(self, count:int=1, ignore_playlist:bool=False) -> bool:
@@ -58,25 +59,28 @@ class MusicQueue:
         bool
             続きの曲があるか
         """
-        if not self.play_queue:
-            return False
-
-        if isinstance(self.play_queue[0], Playlist) and not ignore_playlist:
-            if 0 < count:
-                if await self.play_queue[0].next(count):
-                    return True
-                else:
-                    count = 1
-            else:
-                if await self.play_queue[0].rewind(abs(count))
-
+        #次へ
         while 0 < count and self.play_queue:
-            count -= 1
-            self.play_history.append(self.play_queue.pop(0))
+            # プレイリスト再生中の場合
+            if isinstance(self.play_queue[0], Playlist) and not ignore_playlist:
+                count = await self.play_queue[0].next(count)
+                if count == 0:
+                    break
+            self.play_history.append(self.play_queue.popleft())
+            count -= 1   
             
-        while count < 0 and self.play_history:
-            count += 1
-            self.play_queue.insert(0, self.play_history.pop(-1))
+        #前へ
+        while count < 0:
+            if self.play_queue and isinstance(self.play_queue[0], Playlist):
+                count = - await self.play_queue[0].rewind(abs(count))
+                if count == 0:
+                    break
+
+            if self.play_history:
+                count += 1
+                self.play_queue.appendleft(self.play_history.pop())
+            else:
+                break
 
         return bool(self.play_queue)
 
