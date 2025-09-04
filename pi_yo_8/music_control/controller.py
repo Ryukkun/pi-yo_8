@@ -219,16 +219,16 @@ class MusicController():
                         sec = int(res.group(3))
                         sec += int(res.group(2)) * 60
                         sec += int(res.group(1)) * 3600
-                        self.player_track.skip_time((sec * 50) - int(self.player_track.timer))
+                        self.player_track.skip_time((sec) - int(self.player_track.timer))
                         return
 
                     elif res := re_skip_set_m.match(sec):
                         sec = int(res.group(2))
                         sec += int(res.group(1)) * 60
-                        self.player_track.skip_time((sec * 50) - int(self.player_track.timer))
+                        self.player_track.skip_time((sec) - int(self.player_track.timer))
                         return
 
-                self.player_track.skip_time(int(sec) * 50)
+                self.player_track.skip_time(int(sec))
 
             else:
                 await self.skip_music()
