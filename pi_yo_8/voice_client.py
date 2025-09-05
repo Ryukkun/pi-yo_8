@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
 
 
-lock = threading.Lock()
+
 
 
 
@@ -229,6 +229,7 @@ class AudioTrack:
         self.opus:bool = opus
         self.QBytes = deque()
         self.RBytes = deque()
+        self._lock = threading.Lock()
     
 
     async def play(self, sad:StreamAudioData, after:Callable[[], Any]):
@@ -287,7 +288,7 @@ class AudioTrack:
                 loop.create_task(self.update_asouce_sec(sec=target_sec))
 
             else:
-                with lock:
+                with self._lock:
                     self.timer += skip_len * self.FRAME_LENGTH * self.speed.get()
                     for _ in range(skip_len):
                         self.RBytes.append(self.QBytes.popleft())
@@ -303,7 +304,7 @@ class AudioTrack:
                 loop.create_task(self.update_asouce_sec(sec=target_sec))
 
             else:
-                with lock:
+                with self._lock:
                     self.timer += -rwd_len * self.FRAME_LENGTH * self.speed.get()
                     for _ in range(rwd_len):
                         self.QBytes.appendleft(self.RBytes.pop())
@@ -325,7 +326,7 @@ class AudioTrack:
                         self._finish()
                         return
 
-                    with lock:
+                    with self._lock:
                         self.timer += (self.FRAME_LENGTH * self.speed.get())
                         if self.rwd_buffer_size != 0:
                             self.RBytes.append(_byte)
