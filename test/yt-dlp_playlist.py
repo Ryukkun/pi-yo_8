@@ -138,7 +138,7 @@ def extract_generator():
     now = time.perf_counter()
 
     _ = yt_dlp.YoutubeDL({"default_search":"ytsearch30", 'format':'bestaudio/worst', 'extract_flat': "in_playlist", 'skip_download': True})
-    supported_url(_, arg)
+    #supported_url(_, arg)
     print(time.perf_counter() - now)
     __ = _.extract_info(arg, download=False, process=False)
     ___ = next(__["entries"])
