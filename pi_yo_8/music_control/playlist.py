@@ -6,14 +6,14 @@ from typing import TYPE_CHECKING, Any, Generator
 from pi_yo_8.music_control.utils import Status, PlaylistRandom
 
 if TYPE_CHECKING:
-    from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
+    from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 class Playlist:
     def __init__(self, info:dict[str, Any]):
         """
         entriesは常に1つ以上ある
         """
-        from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
+        from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
         self.entries: list["YTDLPAudioData"] = [YTDLPAudioData(_) for _ in info['entries']]
         # 0 再生中, 1~ 次に再生
         self.next_indexes: deque[int] = deque()

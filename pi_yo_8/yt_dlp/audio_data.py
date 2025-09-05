@@ -1,7 +1,7 @@
 from typing import Any
 from pi_yo_8.utils import is_url_accessible, task_running_wrapper
 from pi_yo_8.voice_client import StreamAudioData
-from pi_yo_8.extractor.yt_dlp.manager import YT_DLP
+from pi_yo_8.yt_dlp.manager import YT_DLP
 
 
 

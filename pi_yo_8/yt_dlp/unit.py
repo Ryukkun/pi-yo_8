@@ -8,7 +8,7 @@ from pi_yo_8.music_control.playlist import GeneratorPlaylist, Playlist
 from pi_yo_8.utils import FREE_THREADS
 
 if TYPE_CHECKING:
-    from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
+    from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 class YTDLPExtractor:
     YTDLP_PARAMS = {
@@ -42,7 +42,7 @@ class YTDLPExtractor:
         """
         yt-dlpで動画を解析。Youtube以外も想定
         """
-        from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
+        from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
         info = await self._extract_info(url)
 
         if info:

@@ -3,7 +3,7 @@ import time
 from types import TracebackType
 from typing import TYPE_CHECKING
 
-from pi_yo_8.extractor.yt_dlp.unit import YTDLPExtractor
+from pi_yo_8.yt_dlp.unit import YTDLPExtractor
 
 
 

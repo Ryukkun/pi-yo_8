@@ -15,11 +15,11 @@ from pi_yo_8.gui.utils import EmbedTemplates, calc_time
 from pi_yo_8.music_control.playlist import Playlist, GeneratorPlaylist
 from pi_yo_8.music_control.utils import Status
 from pi_yo_8.utils import UrlAnalyzer
-from pi_yo_8.extractor.yt_dlp.manager import YT_DLP
+from pi_yo_8.yt_dlp.manager import YT_DLP
 
 if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
-    from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
+    from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 
 re_skip = re.compile(r'^((-|)\d+)([hms])$')
