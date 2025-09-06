@@ -11,7 +11,7 @@ from pi_yo_8.type import SendableChannels
 if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
     from pi_yo_8.music_control.controller import MusicQueue
-    from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
+    from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
     from pi_yo_8.voice_client import AudioTrack
 
 

@@ -148,7 +148,7 @@ class GeneratorPlaylist(Playlist):
         _description_
     """
     def __init__(self, info:dict[str, Any]):
-        from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
+        from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
         generator : Generator[dict[str, Any] | None] = info['entries']
         info['entries'] = []
         super().__init__(info)

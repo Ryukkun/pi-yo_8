@@ -111,7 +111,7 @@ class EmbedController:
     async def generate_main_display(self):
         audio_data = self.info.music.player_track.audio_data
 
-        from pi_yo_8.extractor.yt_dlp.audio_data import YTDLPAudioData
+        from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
         if isinstance(audio_data, YTDLPAudioData) and audio_data.duration:
             embed=Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.player_color())
             if thumbnail := audio_data.get_thumbnail():
