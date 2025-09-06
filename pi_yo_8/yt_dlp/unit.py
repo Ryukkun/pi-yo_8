@@ -11,13 +11,9 @@ if TYPE_CHECKING:
     from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 class YTDLPExtractor:
-    YTDLP_PARAMS = {
-        'format':'bestaudio/worst',
-        "default_search":"ytsearch30",
-        'extract_flat':"in_playlist",
-        'quiet':True,
-        'skip_download': True
-    }
+    YTDLP_GENERAL_PARAMS = ['yt-dlp', '--skip-download', '--format', '"bestaudio/worst"', '--default-search', '"ytsearch30"', '--flat-playlist', '--lazy-playlist', '-j']
+    YTDLP_VIDEO_PARAMS = ['yt-dlp', '--skip-download', '--format', '"bestaudio/worst"', '--default-search', '"ytsearch30"', '--flat-playlist', '--no-playlist', '-J']
+    YTDLP_CHANNEL_PARAMS = ['yt-dlp', '--skip-download', '--flat-playlist', '--no-playlist', '-J']
     def __init__(self, opts:dict={}) -> None:
         """
         Parameters
@@ -25,17 +21,9 @@ class YTDLPExtractor:
         opts : dict
             yt-dlp に渡すオプション ログイン情報の想定
         """
-        self.opts: dict = opts
-        self.opts.update(self.YTDLP_PARAMS)
         self.is_running:bool = False
         self._latest_accessed:float = time.time()
-        self.ydl = self._get_ytdlp()
 
-
-    def _get_ytdlp(self) -> YoutubeDL:
-        ydl = YoutubeDL(self.opts)
-        ydl.add_info_extractor(YoutubeIE())
-        return ydl
 
 
     async def extract_info(self, url: str) -> "YTDLPAudioData | Playlist | None":
@@ -89,6 +77,7 @@ class YTDLPExtractor:
         yt-dlp対応サイトの解析情報を出力
         youtubeのplaylistを解析するときはprocess=False かつ URLが...youtube.com/playlist?list...であるとジェネレーターになる。
         """
+        asyncio.create_subprocess_exec
         def main():
             try:
                 return self.ydl.extract_info(url, download=False, process=process)
