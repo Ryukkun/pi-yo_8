@@ -131,16 +131,17 @@ def extract():
 
 
 def extract_generator():
+    from yt_dlp.utils import POSTPROCESS_WHEN
     # lazy_playlist なんか動かんくて残念
     arg = "https://www.youtube.com/watch?v=cQKGUgOfD8U&list=PLB02wINShjkBKnLfufaEPnCupGO-SK6e4&index=4"
     arg = "https://www.youtube.com/playlist?&list=PLB02wINShjkBKnLfufaEPnCupGO-SK6e4&index=4"
     #arg = "https://www.youtube.com/watch?v=Y1Nip-y0BcQ&list=PLYITQsyLyAGkqp1e18fF22RbsisWzXazN" #再生不可能なものが入っている
     now = time.perf_counter()
 
-    _ = yt_dlp.YoutubeDL({"default_search":"ytsearch30", 'format':'bestaudio/worst', 'extract_flat': "in_playlist", 'skip_download': True})
+    _ = yt_dlp.YoutubeDL({"default_search":"ytsearch30", 'format':'bestaudio/worst', 'extract_flat': "in_playlist", 'skip_download': True, "lazy_playlist": True, "forcejson":True})
     #supported_url(_, arg)
     print(time.perf_counter() - now)
-    __ = _.extract_info(arg, download=False, process=False)
+    __ = _.extract_info(arg, download=False, process=True)
     ___ = next(__["entries"])
     print(time.perf_counter() - now)
     print(__)
