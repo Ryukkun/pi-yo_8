@@ -1,7 +1,7 @@
 import asyncio
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, Generator
+from concurrent.futures import Future
+from typing import TYPE_CHECKING, Any
 
 from pi_yo_8.music_control.utils import Status, PlaylistRandom
 
@@ -13,8 +13,8 @@ class Playlist:
         """
         entriesは常に1つ以上ある
         """
-        from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
-        self.entries: list["YTDLPAudioData"] = [YTDLPAudioData(_) for _ in info['entries']]
+        self.info = info
+        self.entries: list["YTDLPAudioData"] = []
         # 0 再生中, 1~ 次に再生
         self.next_indexes: deque[int] = deque()
         self.play_history: deque[int] = deque()
@@ -133,8 +133,8 @@ class Playlist:
         return None
 
 
-class GeneratorPlaylist(Playlist):
-    """ジェネレーターを対応させて無駄な処理を省く
+class LazyPlaylist(Playlist):
+    """動的にplaylistのentryを読み込み
 
     ジェネレーター解答タスクが動いている間:
         random_pl = True:
@@ -147,24 +147,10 @@ class GeneratorPlaylist(Playlist):
     Playlist : _type_
         _description_
     """
-    def __init__(self, info:dict[str, Any]):
-        from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
-        generator : Generator[dict[str, Any] | None] = info['entries']
-        info['entries'] = []
+    def __init__(self, info:dict[str, Any], entries:list[YTDLPAudioData], decompres_task:Future):
         super().__init__(info)
-
-        def task():
-            try:
-                while True:
-                    info:dict | None = next(generator)
-                    if not info:
-                        break
-                    if info.get("channel", None):
-                        self.entries.append(YTDLPAudioData(info))
-            except:
-                pass
-        exe = ThreadPoolExecutor(max_workers=1)
-        self.decompres_task = exe.submit(task)
+        self.entries = entries
+        self.decompres_task = decompres_task
 
 
     async def _wait_load_entry(self, i:int):

@@ -12,7 +12,7 @@ from discord.ext.commands import Context
 
 
 from pi_yo_8.gui.utils import EmbedTemplates, calc_time
-from pi_yo_8.music_control.playlist import Playlist, GeneratorPlaylist
+from pi_yo_8.music_control.playlist import Playlist, LazyPlaylist
 from pi_yo_8.music_control.utils import Status
 from pi_yo_8.utils import UrlAnalyzer
 from pi_yo_8.yt_dlp.manager import YT_DLP
@@ -111,7 +111,7 @@ class MusicQueue:
                 for entry in [item.entries[i] for i in item.next_indexes]:
                     items.append(entry)
                     if count <= len(items): break
-                if isinstance(item, GeneratorPlaylist) and not item.decompres_task.done():
+                if isinstance(item, LazyPlaylist) and not item.decompres_task.done():
                     return items
             else:
                 items.append(item)
