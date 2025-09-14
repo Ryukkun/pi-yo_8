@@ -104,11 +104,11 @@ class MultiAudioVoiceClient:
     独自で Playerを作成 
     self.run は制御方法知らんから、常にループしてる 0.02秒(20ms) 間隔で 
     """
-    def __init__(self, guild:Guild, client:commands.Bot, info:"DataInfo") -> None:
+    def __init__(self, guild:Guild, info:"DataInfo") -> None:
         self.enable_loop = True
         self.guild = guild
         self.vc = info.vc
-        self.loop = client.loop
+        self.loop = info.bot.loop
         self.info = info
         self.players:list['AudioTrack'] = []
         self.pLen = 0

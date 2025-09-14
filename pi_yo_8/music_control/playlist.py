@@ -147,7 +147,7 @@ class LazyPlaylist(Playlist):
     Playlist : _type_
         _description_
     """
-    def __init__(self, info:dict[str, Any], entries:list[YTDLPAudioData], decompres_task:Future):
+    def __init__(self, info:dict[str, Any], entries:"list[YTDLPAudioData]", decompres_task:Future):
         super().__init__(info)
         self.entries = entries
         self.decompres_task = decompres_task

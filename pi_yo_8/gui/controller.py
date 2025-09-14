@@ -61,7 +61,7 @@ class EmbedController:
         if not self.lastest_action_ch: return
 
         if last_message := self.lastest_action_ch.last_message:
-            if self.info.client.user and self.info.client.user.id == last_message.author.id:
+            if self.info.bot.user and self.info.bot.user.id == last_message.author.id:
                 if last_message.embeds:
                     if em_color := last_message.embeds[0].colour:
                         if em_color.value == EmbedTemplates.dont_replace_color().value and self.main_display:

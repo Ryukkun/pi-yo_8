@@ -1,121 +1,100 @@
-from calendar import c
-import shutil
 import discord
-import os
 import asyncio
 import logging
 from discord.ext import commands, tasks
-from typing import Dict, overload
 
+from pi_yo_8 import config
 from pi_yo_8.type import SendableChannels
-
-
-#os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
-
-####  Config
-try: from pi_yo_8 import config
-except Exception:
-    shutil.copy("./pi_yo_8/resources/config_template.py", "./pi_yo_8/config.py")
-    raise Exception('Config ファイルを生成しました')
-
-
 from pi_yo_8.gui.controller import EmbedController
 from pi_yo_8.voice_client import MultiAudioVoiceClient
 from pi_yo_8.music_control.controller import MusicController
 from pi_yo_8.utils import set_logger
+from pi_yo_8.yt_dlp.manager import YTDLPManager
 
+#os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 set_logger()
 _log = logging.getLogger(__name__)
 
 
-####  起動準備 And 初期設定
-intents = discord.Intents.default()
-intents.message_content = True
-intents.reactions = True
-intents.voice_states = True
-client = commands.Bot(command_prefix=config.Prefix,intents=intents)
-g_opts:Dict[int, 'DataInfo'] = {}
 
 
 
 
 
-tree = client.tree
+class MyCog(commands.Cog):
+    def __init__(self, bot:commands.Bot) -> None:
+        self.bot = bot
+        self.g_opts:dict[int, 'DataInfo'] = {}
 
-@tree.command(description="年中無休でカラオケ生活 のど自慢系ぴーよ")
-@discord.app_commands.describe(arg='URL or 検索したい文字')
-async def download(interaction:discord.Interaction, arg:str): # type: ignore
-    await interaction.response.defer(thinking=True)
-    if embeds := await MusicController.download(arg):
-        for em in embeds:
-            await interaction.followup.send(embed=em, ephemeral=True)
+    @discord.app_commands.command(name="download", description='URL or 検索したい文字')
+    async def download(self, interaction:discord.Interaction, arg:str): # type: ignore
+        await interaction.response.defer(thinking=True)
+        if embeds := await MusicController.download(arg):
+            for em in embeds:
+                await interaction.followup.send(embed=em, ephemeral=True)
 
 
-####  基本的コマンド
-@client.event
-async def on_ready():
-    _log.info('Logged in')
-    _log.info(client.user.name if client.user else "error")
-    _log.info(client.user.id if client.user else -1)
-    print('--------------------------')
-    await tree.sync()
+    ####  基本的コマンド
+    @commands.Cog.listener()
+    async def on_ready(self):
+        _log.info('Logged in')
+        _log.info(self.bot.user.name if self.bot.user else "error")
+        _log.info(self.bot.user.id if self.bot.user else -1)
+        print('--------------------------')
 
-    activity = discord.Activity(name='華麗なる美声', type=discord.ActivityType.listening)
-    await client.change_presence(activity=activity)
-    # Bot Activity
-    # while True:
-    #     mem = psutil.virtual_memory()
-    #     detail = f'CPU: {psutil.cpu_percent()}%   Mem: {mem.used//100000000/10}/{mem.total//100000000/10}'
-    #     activity = discord.Activity(name='華麗なる美声', type=discord.ActivityType.listening)
-    #     await client.change_presence(activity=activity)
-    #     await asyncio.sleep(60)
+        activity = discord.Activity(name='華麗なる美声', type=discord.ActivityType.listening)
+        await self.bot.change_presence(activity=activity)
+        # Bot Activity
+        # while True:
+        #     mem = psutil.virtual_memory()
+        #     detail = f'CPU: {psutil.cpu_percent()}%   Mem: {mem.used//100000000/10}/{mem.total//100000000/10}'
+        #     activity = discord.Activity(name='華麗なる美声', type=discord.ActivityType.listening)
+        #     await client.change_presence(activity=activity)
+        #     await asyncio.sleep(60)
     
 
 
-@client.command()
-async def join(ctx:commands.Context):
-    
-    if ctx.guild and not g_opts.get(ctx.guild.id):
-        try: 
-            if isinstance(ctx.author, discord.Member) and ctx.author.voice and ctx.author.voice.channel:
-                await ctx.author.voice.channel.connect(self_deaf=True)
-                _log.info(f'{ctx.guild.name} : #join')
-                g_opts[ctx.guild.id] = DataInfo(ctx.guild)
-                return True
-        except Exception as e:
-            print(e)
+    @commands.command()
+    async def join(self, ctx:commands.Context):
+        if ctx.guild and not self.g_opts.get(ctx.guild.id):
+            try: 
+                if isinstance(ctx.author, discord.Member) and ctx.author.voice and ctx.author.voice.channel:
+                    await ctx.author.voice.channel.connect(self_deaf=True)
+                    _log.info(f'{ctx.guild.name} : #join')
+                    self.g_opts[ctx.guild.id] = DataInfo(ctx.guild, self)
+                    return True
+            except Exception as e:
+                print(e)
 
 
-@client.command()
-async def bye(ctx:commands.Context):
-    if ctx.guild and (info := g_opts.get(ctx.guild.id)):
-        await info.bye()
+    @commands.command()
+    async def bye(self, ctx:commands.Context):
+        if ctx.guild and (info := self.g_opts.get(ctx.guild.id)):
+            await info.bye()
 
-    
+        
+    @commands.command()
+    async def speed(self, ctx:commands.Context, arg:float):
+        if ctx.guild and (data := self.g_opts.get(ctx.guild.id)):
+            await data.music.player_track.speed.set(arg)
 
-@client.command()
-async def speed(ctx:commands.Context, arg:float):
-    if ctx.guild and (data := g_opts.get(ctx.guild.id)):
-        await data.music.player_track.speed.set(arg)
 
-
-@client.command()
-async def pitch(ctx:commands.Context, arg:int):
-    if ctx.guild and (data := g_opts.get(ctx.guild.id)):
-        await data.music.player_track.pitch.set(arg)
+    @commands.command()
+    async def pitch(self, ctx:commands.Context, arg:int):
+        if ctx.guild and (data := self.g_opts.get(ctx.guild.id)):
+            await data.music.player_track.pitch.set(arg)
 
 
 #--------------------------------------------------
 # GUI操作
 #--------------------------------------------------
-@client.command()
-async def playing(ctx:commands.Context):
-    if ctx.guild and (info := g_opts.get(ctx.guild.id)):
-        if isinstance(ctx.channel, SendableChannels):
-            info.embed.lastest_action_ch = ctx.channel
-        await info.embed.generate_main_display()
+    @commands.command()
+    async def playing(self, ctx:commands.Context):
+        if ctx.guild and (info := self.g_opts.get(ctx.guild.id)):
+            if isinstance(ctx.channel, SendableChannels):
+                info.embed.lastest_action_ch = ctx.channel
+            await info.embed.generate_main_display()
 
 
 
@@ -123,25 +102,25 @@ async def playing(ctx:commands.Context):
 #   Skip
 #---------------------------------------------------------------------------------------------------
 
-@client.command(aliases=['s'])
-async def skip(ctx:commands.Context, arg:str | None):
-    if ctx.guild:
-        if arg:
-            arg = arg[0]
-        else: arg = None
-        try:
-            await g_opts[ctx.guild.id].music.skip(arg)
-        except KeyError:pass
+    @commands.command(aliases=['s'])
+    async def skip(self, ctx:commands.Context, arg:str | None):
+        if ctx.guild:
+            if arg:
+                arg = arg[0]
+            else: arg = None
+            try:
+                await self.g_opts[ctx.guild.id].music.skip(arg)
+            except KeyError:pass
 
 
 #---------------------------------------------------------------------------------------
 #   Download
 #---------------------------------------------------------------------------------------
-@client.command(aliases=['dl'])
-async def download(ctx:commands.Context, arg):
-    if embeds := await MusicController.download(arg):
-        for em in embeds:
-            await ctx.send(embed=em)
+    @commands.command(aliases=['dl'])
+    async def download(self, ctx:commands.Context, arg):
+        if embeds := await MusicController.download(arg):
+            for em in embeds:
+                await ctx.send(embed=em)
 
 
 
@@ -149,21 +128,21 @@ async def download(ctx:commands.Context, arg):
 # Play & Queue
 ##############################################################################
 
-@client.command(aliases=['q'])
-async def queue(ctx:commands.Context, *args):
-    if ctx.guild:
-        await join(ctx)
-        if g_opts.get(ctx.guild.id):
-            await g_opts[ctx.guild.id].music.def_queue(ctx,args)
+    @commands.command(aliases=['q'])
+    async def queue(self, ctx:commands.Context, *args):
+        if ctx.guild:
+            await self.join(ctx)
+            if self.g_opts.get(ctx.guild.id):
+                await self.g_opts[ctx.guild.id].music.def_queue(ctx,args)
 
 
 
-@client.command(aliases=['p','pl'])
-async def play(ctx:commands.Context, *args):
-    if ctx.guild:
-        await join(ctx)
-        if g_opts.get(ctx.guild.id):
-            await g_opts[ctx.guild.id].music.play(ctx,args)
+    @commands.command(aliases=['p','pl'])
+    async def play(self, ctx:commands.Context, *args):
+        if ctx.guild:
+            await self.join(ctx)
+            if self.g_opts.get(ctx.guild.id):
+                await self.g_opts[ctx.guild.id].music.play(ctx,args)
 
 
 
@@ -173,17 +152,18 @@ async def play(ctx:commands.Context, *args):
 
 
 class DataInfo():
-    def __init__(self, guild:discord.Guild):
+    def __init__(self, guild:discord.Guild, cog:MyCog):
         if isinstance(guild.voice_client, discord.VoiceClient):
             self.vc:discord.VoiceClient = guild.voice_client
         else:
             _log.error("vcがVoiceClientじゃない")
             asyncio.get_event_loop().create_task(self.bye())
         self.guild = guild
-        self.client = client
-        self.client_user_id = client.user.id if client.user else -1
+        self.bot = cog.bot
+        self.g_opts = cog.g_opts
+        self.client_user_id = self.bot.user.id if self.bot.user else -1
         self.config = config
-        self.MA = MultiAudioVoiceClient(guild, client, self)
+        self.MA = MultiAudioVoiceClient(guild, self)
         self.music = MusicController(self)
         self.embed = EmbedController(self)
         self.loop_5.start()
@@ -197,7 +177,7 @@ class DataInfo():
 
     async def _bye(self, text:str):
         self.MA.kill()
-        del g_opts[self.guild.id]
+        del self.g_opts[self.guild.id]
 
         _log.info(f'{self.guild.name} : #{text}')
         await asyncio.sleep(0.02)
@@ -214,7 +194,7 @@ class DataInfo():
 
     @tasks.loop(seconds=5.0)
     async def loop_5(self):
-        if not g_opts.get(self.guild.id):
+        if not self.guild.id in self.g_opts:
             return
 
         # 強制切断検知
@@ -235,6 +215,3 @@ class DataInfo():
 
         # Music Embed
         await self.embed.task_loop()
-
-
-client.run(config.Token, log_level=logging.WARNING)
