@@ -1,7 +1,8 @@
 from typing import Any
 from pi_yo_8.utils import is_url_accessible, task_running_wrapper
 from pi_yo_8.voice_client import StreamAudioData
-from pi_yo_8.yt_dlp.manager import YT_DLP
+from pi_yo_8.yt_dlp.manager import YTDLPManager
+from pi_yo_8.yt_dlp.unit import YTDLP_VIDEO_PARAMS
 
 
 
@@ -9,7 +10,8 @@ class YTDLPAudioData(StreamAudioData):
     def __init__(self, info:dict[str, Any]):
         self.info = info
         self._ch_icon: str | None = None
-        super().__init__(info['url'], self.get_volume(), self.get_duration())
+        if "url" in info:
+            super().__init__(info['url'], self.get_volume(), self.get_duration())
 
     def web_url(self) -> str:
         ret = self.info.get("webpage_url", None)
@@ -56,12 +58,11 @@ class YTDLPAudioData(StreamAudioData):
     def formats(self) -> list[dict[str, Any]]:
         return self.info.get("formats", [])
 
-
     async def ch_icon(self) -> str | None:
         if self._ch_icon is None and (ch_url := self.ch_url()) is not None:
-            with YT_DLP.get() as ydl:
-                result = await ydl._extract_info(ch_url, process=False)
-            self._ch_icon = result.get("thumbnails", [{"url":None}])[0]["url"] if result else None
+            with YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS) as ydl:
+                result = await ydl.extract_info(ch_url)
+            self._ch_icon = result.get_thumbnail() if (result and isinstance(result, YTDLPAudioData)) else None
         return self._ch_icon
     
     def get_thumbnail(self) -> str | None:
@@ -86,10 +87,10 @@ class YTDLPAudioData(StreamAudioData):
         if await self.is_available():
             return
         
-        with YT_DLP.get() as ydl:
-            info = await ydl._extract_info(self.web_url())
-        if info:
-            self.info = info
-            self.stream_url = info['url']
+        with YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS) as ydl:
+            result = await ydl.extract_info(self.web_url())
+        if result and isinstance(result, YTDLPAudioData):
+            self.info = result.info
+            self.stream_url = self.info['url']
             self.duration = self.get_duration()
             self.volume = self.get_volume()

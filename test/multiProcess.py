@@ -1,23 +1,34 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import io
+import itertools
 from threading import Lock
 import time
 
 from yt_dlp import YoutubeDL
 from multiprocessing import Pipe, Process, connection
 
+
+YTDLP_GENERAL_PARAMS = {
+    'format':'bestaudio/worst',
+    "default_search":"ytsearch30",
+    'extract_flat':"in_playlist",
+    'quiet':True,
+    'skip_download': True,
+    "lazy_playlist": True,
+    "forcejson":True
+}
+YTDLP_VIDEO_PARAMS = {
+    'format':'bestaudio/worst',
+    "default_search":"ytsearch30",
+    'extract_flat':"in_playlist",
+    'quiet':True,
+    'skip_download': True,
+    "noplaylist": True,
+}
+
 class YTDLPExtractor:
-    YTDLP_PARAMS = {
-        'format':'bestaudio/worst',
-        "default_search":"ytsearch30",
-        'extract_flat':"in_playlist",
-        'quiet':True,
-        'skip_download': True,
-        "lazy_playlist": True,
-        "forcejson":True
-    }
-    def __init__(self) -> None:
+    def __init__(self, opts) -> None:
         """
         Parameters
         ----------
@@ -25,11 +36,11 @@ class YTDLPExtractor:
             yt-dlp に渡すオプション ログイン情報の想定
         """
         self.connection, child = Pipe()
-        self.process = Process(target=YTDLPExtractor._extract_info, args=(child, YTDLPExtractor.YTDLP_PARAMS))
+        self.process = Process(target=YTDLPExtractor._extract_info, args=(child, opts))
         self.process.start()
         
 
-    async def extract_info(self, url:str, process=True):
+    async def extract_info(self, url:str):
         self.connection.send(url)
         def io():
             while True:
@@ -62,6 +73,7 @@ class YTDLPExtractor:
         exe = ThreadPoolExecutor(max_workers=1)
         while url := connection.recv():
             future = exe.submit(ydl.extract_info, url, download=False, process=True)
+            send_count = 0
             while True:
                 line = buffer.readline()
                 if line == '':
@@ -71,9 +83,10 @@ class YTDLPExtractor:
                         time.sleep(0.01)
                         continue
                 connection.send(line)
+                send_count += 1
 
             # プレイリストの場合戻り値要らない
-            if (result := future.result()) and not "entries" in result:
+            if (result := future.result()) and (not "entries" in result or send_count == 0):
                 connection.send(result)
             buffer.clean()
             connection.send('')
@@ -119,7 +132,7 @@ class ModdedBuffer(io.StringIO):
 
 
 if __name__ == "__main__":
-    y = YTDLPExtractor()
+    y = YTDLPExtractor(YTDLP_VIDEO_PARAMS)
     while True:
         url = input("in >> ")
         asyncio.run(y.extract_info(url))

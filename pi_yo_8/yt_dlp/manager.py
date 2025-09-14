@@ -1,9 +1,7 @@
-import asyncio
 import time
 from types import TracebackType
-from typing import TYPE_CHECKING
 
-from pi_yo_8.yt_dlp.unit import YTDLPExtractor
+from pi_yo_8.yt_dlp.unit import YTDLP_GENERAL_PARAMS, YTDLP_VIDEO_PARAMS, YTDLPExtractor
 
 
 
@@ -24,44 +22,31 @@ class YTDLPWith:
 
 
 class YTDLPManager:
+    YT_DLP:"YTDLPManager" = None # type: ignore
     def __init__(self):
-
-        self.free_ftdlp: list[YTDLPWith] = [YTDLPWith() for _ in range(2)]
-        self.special_ftdlp: dict[str, YTDLPWith] = {}
-
-
-    def get(self, id:str ="") -> "YTDLPWith":
-        if id:
-            return self._get_special_ftdlp(id)
-        return self._get_free_ftdlp()
-    
-
-    def _get_free_ftdlp(self):
-        from pi_yo_8.utils import FREE_THREADS
-    
-        for ytdlp in self.free_ftdlp:
-            if not ytdlp.is_running:
-                if ytdlp == self.free_ftdlp[-1]:
-                    asyncio.get_event_loop().run_in_executor(FREE_THREADS, self._add_ftdlp)
-                return ytdlp
-        return self._add_ftdlp()
+        self.ytdlp: dict[str, list[YTDLPWith]] = {
+            str(YTDLP_GENERAL_PARAMS): [YTDLPWith(YTDLP_GENERAL_PARAMS) for _ in range(6)],
+            str(YTDLP_VIDEO_PARAMS): [YTDLPWith(YTDLP_VIDEO_PARAMS) for _ in range(6)],
+        }
 
 
-    def _get_special_ftdlp(self, id:str) -> "YTDLPWith":
-        if id in self.special_ftdlp:
-            return self.special_ftdlp[id]
-        return self._add_ftdlp(id, option={}) 
+    @classmethod
+    def initiallize(cls):
+        c = cls()
+        YTDLPManager.YT_DLP = c
 
 
-    def _add_ftdlp(self, id:str="", option:dict={}) -> "YTDLPWith":
-        
-        is_special = bool(option)
-        ftdlp = YTDLPWith(option)
-        if is_special:
-            self.special_ftdlp[id] = ftdlp
+    def get(self, opts:dict) -> "YTDLPWith":
+        _key = str(opts)
+        if _key in self.ytdlp:
+            for ytdlp in self.ytdlp[_key]:
+                if not ytdlp.is_running:
+                    return ytdlp
         else:
-            self.free_ftdlp.append(ftdlp)
-        return ftdlp
+            self.ytdlp[_key] = []
+
+        new_ytdlp = YTDLPWith(opts)
+        self.ytdlp[_key].append(new_ytdlp)
+        return new_ytdlp
     
 
-YT_DLP = YTDLPManager()

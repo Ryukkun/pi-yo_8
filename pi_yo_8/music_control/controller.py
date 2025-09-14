@@ -11,11 +11,12 @@ from discord.ext.commands import Context
 
 
 
+from pi_yo_8.yt_dlp.manager import YTDLPManager
 from pi_yo_8.gui.utils import EmbedTemplates, calc_time
 from pi_yo_8.music_control.playlist import Playlist, LazyPlaylist
 from pi_yo_8.music_control.utils import Status
 from pi_yo_8.utils import UrlAnalyzer
-from pi_yo_8.yt_dlp.manager import YT_DLP
+from pi_yo_8.yt_dlp.unit import YTDLP_GENERAL_PARAMS, YTDLP_VIDEO_PARAMS
 
 if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
@@ -168,7 +169,7 @@ class MusicController():
 
         if self.queue.play_queue:
             await self.queue.next(ignore_playlist=True)
-        self.queue.play_queue.insert(0,res)
+        self.queue.play_queue.appendleft(res)
 
         if isinstance(res, Playlist):
             self.status = res.status
@@ -183,19 +184,16 @@ class MusicController():
     async def _analysis_input(self, arg:str) -> "Playlist | YTDLPAudioData | None":
         analysis = UrlAnalyzer(arg)
 
-        with YT_DLP.get() as ydl:
-            if analysis.is_yt and analysis.list_id:
-                if pl := await ydl.extract_yt_playlist_info(analysis.list_id):
-                    if analysis.video_id:
-                        pl.status.set(loop=False, loop_pl=True, random_pl=False)
-                        await pl.set_next_index_from_videoID(analysis.video_id)
-                    else:
-                        pl.status.set(loop=False, loop_pl=True, random_pl=True)
-                return pl
-
+        with YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS) as ydl:
             result = await ydl.extract_info(arg)
+
+        print(type(result))
         if isinstance(result, Playlist):
-            result.status.set(loop=False, loop_pl=True, random_pl=False)
+            if analysis.is_yt and analysis.list_id and analysis.video_id:
+                result.status.set(loop=False, loop_pl=True, random_pl=False)
+                await result.set_next_index_from_videoID(analysis.video_id)
+            else:
+                result.status.set(loop=False, loop_pl=True, random_pl=True)
         return result
     
 
@@ -265,7 +263,7 @@ class MusicController():
 
         # Download Embed
         url = UrlAnalyzer(arg)
-        with YT_DLP.get() as ydl:
+        with YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS) as ydl:
             result = await ydl.extract_info(arg)
         if result is None:
             return
