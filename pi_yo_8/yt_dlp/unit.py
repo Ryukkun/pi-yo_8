@@ -104,7 +104,7 @@ class YTDLPExtractor:
         if info_entries:
             info = info_entries[0].info
             #Playlist
-            if "playlist" in info:
+            if info.get("playlist"):
                 exe = ThreadPoolExecutor(max_workers=1)
                 future = exe.submit(io)
                 return LazyPlaylist(info, info_entries, future)
