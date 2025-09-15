@@ -195,7 +195,7 @@ class LazyPlaylist(Playlist):
         if self.status.random_pl:
             #空っぽにしといてget_now_entryが呼び出されたときにrandomでチョイスする
             self.next_indexes.clear()
-            return True
+            return 0
         
         else:
             i = self.next_indexes[0] + count + 1
@@ -209,5 +209,6 @@ class LazyPlaylist(Playlist):
             self.random.range = len(self.entries)
             i = self.random.next()
             self.next_indexes.append(i)
-        await self._wait_load_entry(self.next_indexes[0])
+        if self.next_indexes:
+            await self._wait_load_entry(self.next_indexes[0])
         return await super().get_now_entry()
