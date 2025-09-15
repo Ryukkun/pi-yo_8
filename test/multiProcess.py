@@ -2,6 +2,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import io
 import itertools
+import json
 from threading import Lock
 import time
 
@@ -36,7 +37,7 @@ class YTDLPExtractor:
             yt-dlp に渡すオプション ログイン情報の想定
         """
         self.connection, child = Pipe()
-        self.process = Process(target=YTDLPExtractor._extract_info, args=(child, opts))
+        self.process = Process(target=YTDLPExtractor._extract_info, args=(child, opts), name="YTDLPExtractor")
         self.process.start()
         
 
@@ -47,9 +48,10 @@ class YTDLPExtractor:
                 info_str:str|dict = self.connection.recv()
                 if info_str == '':
                     return
-                print(info_str)
-                #info = json.loads(info_str)
-                #print(info['title'])
+                info = json.loads(info_str) if isinstance(info_str, str) else info_str
+                print(info)
+                with(open("./test.json", "w", encoding="utf-8")) as f:
+                    json.dump(info, f, indent=2)
         await asyncio.get_event_loop().run_in_executor(None, io)
 
 
