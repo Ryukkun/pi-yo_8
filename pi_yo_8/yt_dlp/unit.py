@@ -17,6 +17,9 @@ if TYPE_CHECKING:
 
 
 YTDLP_GENERAL_PARAMS = {
+    "http_headers": {
+        "Accept-Language": "ja-JP,ja;q=0.9",
+    },
     'format':'bestaudio/worst',
     "default_search":"ytsearch30",
     'extract_flat':"in_playlist",
@@ -26,6 +29,9 @@ YTDLP_GENERAL_PARAMS = {
     "forcejson":True
 }
 YTDLP_VIDEO_PARAMS = {
+    "http_headers": {
+        "Accept-Language": "ja-JP,ja;q=0.9",
+    },
     'format':'bestaudio/worst',
     "default_search":"ytsearch30",
     'extract_flat':"in_playlist",
@@ -76,7 +82,6 @@ class YTDLPExtractor:
         self.connection, child = Pipe()
         self.process = Process(target=YTDLPExtractor._extract_info, args=(child, parms))
         self.process.start()
-        self._latest_accessed:float = time.time()
 
     @staticmethod
     def get_ytdlp(parms:dict) -> YoutubeDL:
@@ -86,38 +91,44 @@ class YTDLPExtractor:
 
 
     async def extract_info(self, url:str) -> "YTDLPAudioData | Playlist | None":
+        self.is_running = True
+        print("extract_info", url)
         from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
         self.connection.send(url)
         info_entries:list["YTDLPAudioData"] = []
 
-        def io(limit = -1):
+        def read_from_pipe(limit = -1):
             for _ in itertools.count():
                 if _ == limit:
-                    return
+                    return True
                 _result:str|dict[str, Any] = self.connection.recv()
                 if _result == '':
-                    return
+                    self.is_running = False
+                    return False
                 info:dict = json.loads(_result) if isinstance(_result, str) else _result
                 info_entries.append(YTDLPAudioData(info))
 
-        await asyncio.to_thread(io, 1)
-        if info_entries:
-            info = info_entries[0].info
-            #Playlist
-            if info.get("playlist"):
-                exe = ThreadPoolExecutor(max_workers=1)
-                future = exe.submit(io)
-                return LazyPlaylist(info, info_entries, future)
-            
-            #その他 Video・Channel等
-            if (thmb := info.get('thumbnails')) and isinstance(thmb, list):
-                thmb.sort(key=lambda t:(
-                    t.get("preference", -100),
-                    t.get("width", 0) * t.get("height", 0)  #解像度
-                ), reverse=True)
-            return info_entries[0]
-            
-        return None
+        load_success = await asyncio.to_thread(read_from_pipe, 1)
+        if not load_success and not info_entries:
+            print("extract_info None", url)
+            return None
+        
+        future = ThreadPoolExecutor(max_workers=1).submit(read_from_pipe)
+        info = info_entries[0].info
+        #Playlist
+        if info.get("playlist"):
+            print("extract_info playlist", url)
+            return LazyPlaylist(info, info_entries, future)
+        
+        #その他 Video・Channel等
+        if (thmb := info.get('thumbnails')) and isinstance(thmb, list):
+            thmb.sort(key=lambda t:(
+                t.get("preference", -100),
+                t.get("width", 0) * t.get("height", 0)  #解像度
+            ), reverse=True)
+        print("extract_info video", url)
+        return info_entries[0]
+
 
     
 

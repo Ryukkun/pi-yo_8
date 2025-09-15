@@ -60,8 +60,7 @@ class YTDLPAudioData(StreamAudioData):
 
     async def ch_icon(self) -> str | None:
         if self._ch_icon is None and (ch_url := self.ch_url()) is not None:
-            with YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS) as ydl:
-                result = await ydl.extract_info(ch_url)
+            result = await YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_info(ch_url)
             self._ch_icon = result.get_thumbnail() if (result and isinstance(result, YTDLPAudioData)) else None
         return self._ch_icon
     
@@ -87,8 +86,7 @@ class YTDLPAudioData(StreamAudioData):
         if await self.is_available():
             return
         
-        with YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS) as ydl:
-            result = await ydl.extract_info(self.web_url())
+        result = await YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_info(self.web_url())
         if result and isinstance(result, YTDLPAudioData):
             self.info = result.info
             self.stream_url = self.info['url']

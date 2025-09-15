@@ -184,10 +184,7 @@ class MusicController():
     async def _analysis_input(self, arg:str) -> "Playlist | YTDLPAudioData | None":
         analysis = UrlAnalyzer(arg)
 
-        with YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS) as ydl:
-            result = await ydl.extract_info(arg)
-
-        print(type(result))
+        result = await YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS).extract_info(arg)
         if isinstance(result, Playlist):
             if analysis.is_yt and analysis.list_id and analysis.video_id:
                 result.status.set(loop=False, loop_pl=True, random_pl=False)
@@ -263,8 +260,7 @@ class MusicController():
 
         # Download Embed
         url = UrlAnalyzer(arg)
-        with YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS) as ydl:
-            result = await ydl.extract_info(arg)
+        result = await YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_info(arg)
         if result is None:
             return
         audio_data = result.entries[0] if isinstance(result, Playlist) else result
