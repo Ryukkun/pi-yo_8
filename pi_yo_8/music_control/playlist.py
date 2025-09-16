@@ -137,6 +137,9 @@ class Playlist:
             await now_entry.check_streaming_data.run()
             if await now_entry.is_available():
                 return now_entry
+            else:
+                await self.next()
+                return await self.get_now_entry()
         return None
 
 

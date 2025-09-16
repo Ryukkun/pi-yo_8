@@ -50,9 +50,9 @@ class MusicQueue:
 
         Parameters
         ----------
-        count : int, optional
+        count : int
             飛ばす曲の個数 負の数も対応, by default 1
-        ignore_playlist : bool, optional
+        ignore_playlist : bool
             プレイリストを無視して飛ばすか, by default False
 
         Returns
@@ -168,7 +168,7 @@ class MusicController():
         if not res: return
 
         if self.queue.play_queue:
-            await self.queue.next(ignore_playlist=True)
+            await self._skip_music(ignore_playlist=True)
         self.queue.play_queue.appendleft(res)
 
         if isinstance(res, Playlist):
@@ -186,11 +186,11 @@ class MusicController():
 
         result = await YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS).extract_info(arg)
         if isinstance(result, Playlist):
-            if analysis.is_yt and analysis.list_id and analysis.video_id:
-                result.status.set(loop=False, loop_pl=True, random_pl=False)
-                await result.set_next_index_from_videoID(analysis.video_id)
-            else:
-                result.status.set(loop=False, loop_pl=True, random_pl=True)
+            if analysis.is_yt and analysis.list_id:
+                if analysis.video_id:
+                    await result.set_next_index_from_videoID(analysis.video_id)
+                else:
+                    result.status.set(loop=False, loop_pl=True, random_pl=True)
         return result
     
 
@@ -230,11 +230,41 @@ class MusicController():
 
 
 
+    async def _skip_music(self, count:int=1, ignore_playlist:bool=False) -> bool:
+        '''
+        Parameters
+        ----------
+        count : int
+            countの数だけ曲をスキップ
+        ignore_playlist : bool
+            プレイリストを無視するかどうか
+
+        Returns
+        -------
+        bool
+            次の曲があるか
+        '''
+        if count == 0:
+            return bool(self.queue.play_queue)
+        res:bool = await self.queue.next(count, ignore_playlist)
+        if res:
+            data = self.queue.play_queue[0]
+            if isinstance(data, LazyPlaylist):
+                data.status.set(self.status.loop, self.status.loop_pl, self.status.random_pl)
+                self.status = data.status
+        return res
+
+
+
     async def skip_music(self, count:int=1):
         if count == 0: return
 
-        res:bool = await self.queue.next(count)
+        res:bool = await self._skip_music(count)
         if not res: return
+        data = self.queue.play_queue[0]
+        if isinstance(data, LazyPlaylist):
+            data.status.set(self.status.loop, self.status.loop_pl, self.status.random_pl)
+            self.status = data.status
         _log.info(f'{self.guild.name} : #{abs(count)}曲{"前へ prev" if count < 0 else "次へ skip"}')
 
         await self.play_loop()
@@ -351,7 +381,8 @@ class MusicController():
         audio_data = await self.queue.get_item0()
         if audio_data:
             if self.status.loop == False and audio_data.stream_url == played or (time.time() - did_time) <= 0.2:
-                await self.queue.next()
+                await self._skip_music()
+
 
         # 再生
         if audio_data := await self.queue.get_item0():
