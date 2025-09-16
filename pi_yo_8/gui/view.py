@@ -156,8 +156,8 @@ class CreateStatusButton(discord.ui.Button):
             return discord.ButtonStyle.red
     
     async def callback(self, interaction: discord.Interaction):
-        status = self.view_parent.info.music.status.__dict__
-        status[self.name] = not status[self.name]
+        status = self.view_parent.info.music.status
+        status.set(**{self.name: not status.__dict__[self.name]})
         self.style = self.style_check()
         self.view_parent.info.embed.update_action_time()
         await interaction.response.edit_message(view=self.view_parent)
