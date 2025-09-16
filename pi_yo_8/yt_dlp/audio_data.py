@@ -58,14 +58,20 @@ class YTDLPAudioData(StreamAudioData):
     def formats(self) -> list[dict[str, Any]]:
         return self.info.get("formats", [])
 
+    @task_running_wrapper()
     async def ch_icon(self) -> str | None:
-        if self._ch_icon is None and (ch_url := self.ch_url()) is not None:
+        if self._ch_icon:
+            return self._ch_icon
+        
+        if (ch_url := self.ch_url()) is not None:
             result = await YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_info(ch_url)
             self._ch_icon = result.get_thumbnail() if (result and isinstance(result, YTDLPAudioData)) else None
         return self._ch_icon
     
+
     def get_thumbnail(self) -> str | None:
         return self.info.get("thumbnails", [{"url":None}])[0]["url"]
+
 
     async def is_available(self) -> bool:
         """
@@ -83,6 +89,9 @@ class YTDLPAudioData(StreamAudioData):
         音声ファイル直のURLを取得する
         投げっぱなし可能
         """
+        if self._ch_icon == None and not self.ch_icon.is_running():
+            self.ch_icon.create_task()
+
         if await self.is_available():
             return
         

@@ -116,7 +116,7 @@ class EmbedController:
             embed=Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.player_color())
             if thumbnail := audio_data.get_thumbnail():
                 embed.set_thumbnail(url=thumbnail)
-            embed.set_author(name=audio_data.ch_name(), url=audio_data.ch_url(), icon_url=await audio_data.ch_icon())
+            embed.set_author(name=audio_data.ch_name(), url=audio_data.ch_url(), icon_url=audio_data._ch_icon)
             descriptions = []
             if (view_count := audio_data.view_count()):
                 descriptions.append(f'{int_analysis(view_count)} 回再生')
