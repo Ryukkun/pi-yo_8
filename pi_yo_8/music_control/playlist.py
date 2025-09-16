@@ -40,20 +40,25 @@ class Playlist:
             asyncio.get_event_loop().create_task(self.update_next_indexies())
 
 
-    async def update_next_indexies(self) -> None:
+    async def update_next_indexies(self, length:int=25) -> None:
         '''
-        next_indexesを25個まで補充する
-        再生可能なものがない場合は25以下になる
+        next_indexesをlength個まで補充する
+        再生可能なものがない場合はlength以下になる
         '''
         if self.status.random_pl:
-            while len(self.next_indexes) < 25:
+            while len(self.next_indexes) < length:
                 self.next_indexes.append(self.random.next())
+                
         else:
-            while len(self.next_indexes) < 25:
+            while len(self.next_indexes) < length:
                 i = (self.next_indexes[-1] + 1) if self.next_indexes else 0
                 if not self.status.loop_pl and len(self.entries) <= i:
-                    return
+                    break
                 self.next_indexes.append(i % len(self.entries))
+
+        # 先にロードしておく
+        for i in range(min(len(self.next_indexes), 3)):
+            self.entries[self.next_indexes[i]].check_streaming_data.create_task()
 
 
 
@@ -105,15 +110,13 @@ class Playlist:
         int
             スキップしても余った数
         """
+        await self.update_next_indexies(count + 25)
         for _ in range(count):
-            await self.update_next_indexies()
             if not self.next_indexes: return count - _
             self.play_history.append(self.next_indexes.popleft())
             if not self.next_indexes: return count - _
 
         self._update_cooldowns()
-        for i in range(min(2, len(self.next_indexes))):
-            self.entries[self.next_indexes[i]].check_streaming_data.create_task()
         return 0
     
     
@@ -156,34 +159,50 @@ class LazyPlaylist(Playlist):
         self.entries = entries
         self.decompres_task = decompres_task
 
+        loop = asyncio.get_event_loop()
+        async def callback():
+            self._adaptation()()
+            await self.update_next_indexies()
+        decompres_task.add_done_callback(lambda x : asyncio.run_coroutine_threadsafe(callback(), loop))
 
-    def _adaptation(func: Callable) -> Callable: # type: ignore
-        def wrapper(self: "LazyPlaylist", *args, **kwargs):
-            self.random.set_range(len(self.entries))
-            max_value = max(self.cooldowns) if self.cooldowns else 0
-            for _ in range(len(self.entries) - len(self.cooldowns)):
-                self.cooldowns.append(max_value)
-            return func(self, *args, **kwargs)
-        return wrapper
-    
+
+    def _adaptation(self: Callable|"LazyPlaylist") -> Callable:
+        def wrapper(_self: "LazyPlaylist", *args, **kwargs):
+            _self.random.set_range(len(_self.entries))
+            max_value = max(_self.cooldowns) if _self.cooldowns else 0
+            for _ in range(len(_self.entries) - len(_self.cooldowns)):
+                _self.cooldowns.append(max_value)
+            if isinstance(self, Callable):
+                return self(_self, *args, **kwargs)
+            
+        if isinstance(self, Callable):
+            return wrapper
+        else:
+            return lambda : wrapper(self)
+        
 
     async def _wait_load_entry(self, i:int):
         while len(self.entries) <= i and self.decompres_task.running():
             await asyncio.sleep(0.05)
 
 
-    async def update_next_indexies(self) -> None:
+    async def update_next_indexies(self, length:int=25) -> None:
         if self.decompres_task.done():
-            return await super().update_next_indexies()
+            return await super().update_next_indexies(length)
+        
         # ジェネレーターが解析し終わっていない状況でnext_indexies作成できない
         if self.status.random_pl:
             return
-        while len(self.next_indexes) < 25:
+        while len(self.next_indexes) < length:
             i = (self.next_indexes[-1] + 1) if self.next_indexes else 0
             await self._wait_load_entry(i)
             if not self.status.loop_pl and i >= len(self.entries):
-                return
+                break
             self.next_indexes.append(i % len(self.entries))
+        
+        # 先にロードしておく
+        for i in range(min(len(self.next_indexes), 3)):
+            self.entries[self.next_indexes[i]].check_streaming_data.create_task()
 
 
     async def set_next_index_from_videoID(self, video_id: str):
