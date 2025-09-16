@@ -98,6 +98,6 @@ class YTDLPAudioData(StreamAudioData):
         result = await YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_info(self.web_url())
         if result and isinstance(result, YTDLPAudioData):
             self.info = result.info
-            self.stream_url = self.info['url']
+            self.stream_url = self.info.get('url')
             self.duration = self.get_duration()
             self.volume = self.get_volume()

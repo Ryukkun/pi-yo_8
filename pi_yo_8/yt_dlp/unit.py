@@ -4,6 +4,7 @@ import json
 import time
 import io
 from threading import Lock
+import traceback
 from yt_dlp import YoutubeDL
 from typing import TYPE_CHECKING, Any
 from concurrent.futures import ThreadPoolExecutor
@@ -106,6 +107,9 @@ class YTDLPExtractor:
                     self.is_running = False
                     return False
                 info:dict = json.loads(_result) if isinstance(_result, str) else _result
+                if info.get("error"):
+                    # 何らかのメッセージを送ってもよい
+                    continue
                 info_entries.append(YTDLPAudioData(info))
 
         load_success = await asyncio.to_thread(read_from_pipe, 1)
@@ -119,7 +123,7 @@ class YTDLPExtractor:
         if info.get("playlist"):
             print("extract_info playlist", url)
             return LazyPlaylist(info, info_entries, future)
-        
+
         #その他 Video・Channel等
         if (thmb := info.get('thumbnails')) and isinstance(thmb, list):
             thmb.sort(key=lambda t:(
@@ -151,22 +155,29 @@ class YTDLPExtractor:
         ydl._out_files.__dict__["out"] = buffer
         exe = ThreadPoolExecutor(max_workers=1)
         while url := connection.recv():
-            future = exe.submit(ydl.extract_info, url, download=False, process=True)
-            send_count = 0
-            while True:
-                line = buffer.readline()
-                if line == '':
-                    if future.done():
-                        break
-                    else:
-                        time.sleep(0.01)
-                        continue
-                connection.send(line)
-                send_count += 1
+            try:
+                future = exe.submit(ydl.extract_info, url, download=False, process=True)
+                send_count = 0
+                while True:
+                    line = buffer.readline()
+                    if line == '':
+                        if future.done():
+                            break
+                        else:
+                            time.sleep(0.01)
+                            continue
+                    connection.send(line)
+                    send_count += 1
 
-            # プレイリストの場合戻り値要らない
-            if (result := future.result()) and (not "entries" in result or send_count == 0):
-                connection.send(result)
-            buffer.clean()
-            connection.send('')
+                # プレイリストの場合戻り値要らない
+                if (result := future.result()) and (not "entries" in result or send_count == 0):
+                    connection.send(result)
+            except Exception as e:
+                traceback.print_exc()
+                connection.send(json.dumps({
+                    "error": str(e)
+                }))
+            finally:
+                buffer.clean()
+                connection.send('')
         exe.shutdown()
