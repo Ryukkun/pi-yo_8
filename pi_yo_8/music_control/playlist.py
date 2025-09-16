@@ -1,7 +1,7 @@
 import asyncio
 from collections import deque
 from concurrent.futures import Future
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from pi_yo_8.music_control.utils import Status, PlaylistRandom
 
@@ -35,12 +35,16 @@ class Playlist:
                 self.next_indexes.clear()
                 self.next_indexes.append(playing_index)
             if new.random_pl:
-                self.random.range = len(self.entries)
+                self.random.set_range(len(self.entries))
                 self.random.cooldowns = self.cooldowns.copy()
             asyncio.get_event_loop().create_task(self.update_next_indexies())
 
 
     async def update_next_indexies(self) -> None:
+        '''
+        next_indexesを25個まで補充する
+        再生可能なものがない場合は25以下になる
+        '''
         if self.status.random_pl:
             while len(self.next_indexes) < 25:
                 self.next_indexes.append(self.random.next())
@@ -153,6 +157,16 @@ class LazyPlaylist(Playlist):
         self.decompres_task = decompres_task
 
 
+    def _adaptation(func: Callable) -> Callable: # type: ignore
+        def wrapper(self: "LazyPlaylist", *args, **kwargs):
+            self.random.set_range(len(self.entries))
+            max_value = max(self.cooldowns) if self.cooldowns else 0
+            for _ in range(len(self.entries) - len(self.cooldowns)):
+                self.cooldowns.append(max_value)
+            return func(self, *args, **kwargs)
+        return wrapper
+    
+
     async def _wait_load_entry(self, i:int):
         while len(self.entries) <= i and self.decompres_task.running():
             await asyncio.sleep(0.05)
@@ -189,24 +203,31 @@ class LazyPlaylist(Playlist):
             i += 1
 
 
+    @_adaptation
+    async def rewind(self, count:int = 1) -> int:
+        return await super().rewind(count)
+
+
+    @_adaptation
     async def next(self, count:int = 1) -> int:
         if self.decompres_task.done():
             return await super().next(count)
+        
         if self.status.random_pl:
             #空っぽにしといてget_now_entryが呼び出されたときにrandomでチョイスする
-            self.next_indexes.clear()
+            if self.next_indexes:
+                self.next_indexes.popleft()
             return 0
-        
         else:
             i = self.next_indexes[0] + count + 1
             await self._wait_load_entry(i)
             return await super().next(count)        
-    
 
+
+    @_adaptation
     async def get_now_entry(self) -> "YTDLPAudioData | None":
         if (not self.decompres_task.done() and self.status.random_pl and not self.next_indexes):
             await self._wait_load_entry(10)
-            self.random.range = len(self.entries)
             i = self.random.next()
             self.next_indexes.append(i)
         if self.next_indexes:

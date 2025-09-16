@@ -29,9 +29,8 @@ class PlaylistRandom:
     @property
     def range(self) -> int:
         return self._range
-
-    @range.setter
-    def range(self, value:int):
+    
+    def set_range(self, value:int):
         self._range = value
         max_value = max(self.cooldowns) if self.cooldowns else 0
         for _ in range(value - len(self.cooldowns)):
