@@ -65,7 +65,7 @@ def date_difference(arg:str) -> str:
 
 
 
-def calc_time(Time:int) -> str:
+def calc_time(Time:int|float) -> str:
     """秒から分と時間を計算
 
     Parameters
@@ -78,9 +78,9 @@ def calc_time(Time:int) -> str:
     str
         HH:MM:SS
     """
-    Sec = Time % 60
-    Min = Time // 60 % 60
-    Hour = Time // 3600
+    Sec = int(Time % 60)
+    Min = int(Time // 60 % 60)
+    Hour = int(Time // 3600)
     if Sec <= 9:
         Sec = f'0{Sec}'
     if Hour == 0:

@@ -55,9 +55,14 @@ class Playlist:
                 if not self.status.loop_pl and len(self.entries) <= i:
                     break
                 self.next_indexes.append(i % len(self.entries))
+        self._load_streaming_data()
+        
 
-        # 先にロードしておく
-        for i in range(min(len(self.next_indexes), 3)):
+    def _load_streaming_data(self, count = 3):
+        '''
+        先にロードしておく
+        '''
+        for i in range(min(len(self.next_indexes), count)):
             self.entries[self.next_indexes[i]].check_streaming_data.create_task()
 
 
@@ -116,6 +121,7 @@ class Playlist:
             self.play_history.append(self.next_indexes.popleft())
             if not self.next_indexes: return count - _
 
+        self._load_streaming_data()
         self._update_cooldowns()
         return 0
     
