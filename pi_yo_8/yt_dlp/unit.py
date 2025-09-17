@@ -4,7 +4,6 @@ import json
 import time
 import io
 from threading import Lock
-import traceback
 from yt_dlp import YoutubeDL
 from typing import TYPE_CHECKING, Any
 from concurrent.futures import ThreadPoolExecutor
@@ -138,7 +137,7 @@ class YTDLPExtractor:
     
 
     @staticmethod
-    def _extract_info(connection: connection.PipeConnection, opts:dict):
+    def _extract_info(connection: connection._ConnectionBase, opts:dict):
         '''
         別スレッドで実行しっぱなしを想定
         '''
