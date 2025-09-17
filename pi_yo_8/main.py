@@ -8,16 +8,11 @@ from pi_yo_8.type import SendableChannels
 from pi_yo_8.gui.controller import EmbedController
 from pi_yo_8.voice_client import MultiAudioVoiceClient
 from pi_yo_8.music_control.controller import MusicController
-from pi_yo_8.utils import set_logger
-from pi_yo_8.yt_dlp.manager import YTDLPManager
 
-#os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-set_logger()
+
+
 _log = logging.getLogger(__name__)
-
-
-
 
 
 
@@ -45,13 +40,6 @@ class MyCog(commands.Cog):
 
         activity = discord.Activity(name='華麗なる美声', type=discord.ActivityType.listening)
         await self.bot.change_presence(activity=activity)
-        # Bot Activity
-        # while True:
-        #     mem = psutil.virtual_memory()
-        #     detail = f'CPU: {psutil.cpu_percent()}%   Mem: {mem.used//100000000/10}/{mem.total//100000000/10}'
-        #     activity = discord.Activity(name='華麗なる美声', type=discord.ActivityType.listening)
-        #     await client.change_presence(activity=activity)
-        #     await asyncio.sleep(60)
     
 
 
@@ -101,13 +89,9 @@ class MyCog(commands.Cog):
 #---------------------------------------------------------------------------------------------------
 #   Skip
 #---------------------------------------------------------------------------------------------------
-
     @commands.command(aliases=['s'])
     async def skip(self, ctx:commands.Context, arg:str | None):
         if ctx.guild:
-            if arg:
-                arg = arg[0]
-            else: arg = None
             try:
                 await self.g_opts[ctx.guild.id].music.skip(arg)
             except KeyError:pass
@@ -162,7 +146,6 @@ class DataInfo():
         self.bot = cog.bot
         self.g_opts = cog.g_opts
         self.client_user_id = self.bot.user.id if self.bot.user else -1
-        self.config = config
         self.MA = MultiAudioVoiceClient(guild, self)
         self.music = MusicController(self)
         self.embed = EmbedController(self)
