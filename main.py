@@ -1,9 +1,7 @@
 import asyncio
 import shutil
 import discord
-import pi_yo_8.main
 from discord.ext import commands
-
 
 
 async def main():
@@ -12,6 +10,7 @@ async def main():
         shutil.copy("./pi_yo_8/resources/config_template.py", "./pi_yo_8/config.py")
         raise Exception('Config ファイルを生成しました')
     
+    import pi_yo_8.main
     from pi_yo_8.utils import set_logger
     from pi_yo_8.yt_dlp.manager import YTDLPManager
 
