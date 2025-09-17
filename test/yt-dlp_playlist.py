@@ -1,8 +1,7 @@
+import subprocess
 import json
-import pprint
 from typing import Any
 import yt_dlp
-from yt_dlp.utils import orderedSet
 from yt_dlp.extractor.youtube._tab import YoutubeTabIE, YoutubeTabBaseInfoExtractor
 import time
 
@@ -117,14 +116,15 @@ def extract():
     #arg = "ytsearch50:ジブリBGM playlist"
     #arg = "じぶりBGM playlist"
     #arg = "https://www.youtube.com/channel/UCGmO0S4S-AunjRdmxA6TQYg" # Channel
+    arg = "https://soundcloud.com/qnosc_a/depeche-mode-mountain-view?in=qnosc_a/sets/depeche-mode-world-violation&utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing"
     now = time.perf_counter()
 
     _ = yt_dlp.YoutubeDL({"default_search":"ytsearch30", 'format':'bestaudio/worst', 'extract_flat': "in_playlist", 'skip_download': True})
-    supported_url(_, arg)
+    #supported_url(_, arg)
     print(time.perf_counter() - now)
     __ = _.extract_info(arg, download=False, process=False)
     print(time.perf_counter() - now)
-    print(__)
+    #print(__)
     with open("./test/video_info.json", "w", encoding="utf-8") as f:
         json.dump(__, f, ensure_ascii=False, indent=2)
 
@@ -143,12 +143,39 @@ def extract_generator():
     #supported_url(_, arg)
     print(time.perf_counter() - now)
     __ = _.extract_info(arg, download=False, process=True)
-    ___ = next(__["entries"])
+    ___ = next(__["entries"]) # type: ignore
     print(time.perf_counter() - now)
     print(__)
     with open("./test/video_info.json", "w", encoding="utf-8") as f:
         json.dump(__, f, ensure_ascii=False, indent=2)
 
 
+
+def ffmpeg():
+    arg = "https://www.nicovideo.jp/watch/sm36999938"
+    _ = yt_dlp.YoutubeDL({"default_search":"ytsearch30", 'format':'bestaudio/worst', 'extract_flat': "in_playlist", 'skip_download': True, "lazy_playlist": True})
+    #supported_url(_, arg)
+    __ = _.extract_info(arg, download=False, process=True)
+    if __ == None:
+        return
+    before_options = []
+    options = []
+    if headers := __.get("http_headers"):
+        headers_list = []
+        for k, v in headers.items():
+            before_options.append('-headers')
+            before_options.append(f'"{k}: {v}"')
+        #before_options.append('"' + (r'\r\n'.join(headers_list)) + '"')
+    #cookies
+    if cookies := __.get("cookies"):
+        before_options.append('-headers')
+        before_options.append(f'"Cookie: {cookies}"')
+    cmd = f"ffmpeg {' '.join(before_options)} -i \"{__.get('url')}\" ./out.mp3"
+    print(cmd)
+    subprocess.run(cmd, shell=True)
+
+
+
+
 if __name__ == "__main__":
-    extract_generator()
+    extract()
