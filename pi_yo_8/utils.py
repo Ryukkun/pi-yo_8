@@ -174,6 +174,8 @@ class RunCheckStorageWrapper(WrapperAbstract):
     def _sync_run(self, *args:Any, **kwargs:Any):
         try:
             return self.func(*args, **kwargs)
+        except Exception as e:
+            traceback.print_exc()
         finally:
             if self.check_fin:
                 self.is_running = False
@@ -181,6 +183,8 @@ class RunCheckStorageWrapper(WrapperAbstract):
     async def _async_run(self, *args:Any, **kwargs:Any):
         try:
             return await self.func(*args, **kwargs)
+        except Exception as e:
+            traceback.print_exc()
         finally:
             if self.check_fin:
                 self.is_running = False
