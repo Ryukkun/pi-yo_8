@@ -1,7 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
+from http import cookies
 import logging
 import asyncio
 import threading
+import traceback
 from typing import Any, Callable, Self
 import aiohttp
 import re
@@ -47,7 +49,7 @@ class UrlAnalyzer:
                     self.video_id = self.url_parse.path[1:]
 
 
-async def is_url_accessible(url: str) -> bool:
+async def is_url_accessible(url: str, headers:dict|None = None, _cookies:str|None = None) -> bool:
     """
     指定したURLに接続可能かどうかを判定する
 
@@ -55,8 +57,6 @@ async def is_url_accessible(url: str) -> bool:
     ----------
     url : str
         チェックしたいURL
-    timeout : float
-        タイムアウト秒数（デフォルト5秒）
 
     Returns
     -------
@@ -64,10 +64,18 @@ async def is_url_accessible(url: str) -> bool:
         接続できればTrue、できなければFalse
     """
     try:
-        async with aiohttp.ClientSession() as session:
+        #cookies_dict = {k: v for k, v in (x.split('=') for x in cookies.split('; '))} if cookies else {}
+        cookies_dict = {}
+        if _cookies:
+            cookie_jar = cookies.SimpleCookie()
+            cookie_jar.load(_cookies)
+            for key, morsel in cookie_jar.items():
+                cookies_dict[key] = morsel.value
+        async with aiohttp.ClientSession(headers=headers, cookies=cookies_dict) as session:
             async with session.get(url) as response:
                 return response.status == 200
-    except Exception:
+    except Exception as e:
+        traceback.print_exc()
         return False
 
 

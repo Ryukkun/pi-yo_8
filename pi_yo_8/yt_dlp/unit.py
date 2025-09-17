@@ -107,18 +107,19 @@ class YTDLPExtractor:
                     self.is_running = False
                     return False
                 info:dict = json.loads(_result) if isinstance(_result, str) else _result
-                if info.get("error"):
-                    # 何らかのメッセージを送ってもよい
-                    continue
                 info_entries.append(YTDLPAudioData(info))
 
         load_success = await asyncio.to_thread(read_from_pipe, 1)
-        if not load_success and not info_entries:
+        if load_success and not info_entries:
             print("extract_info None", url)
             return None
         
         future = ThreadPoolExecutor(max_workers=1).submit(read_from_pipe)
         info = info_entries[0].info
+        if info.get("error"):
+            print(info.get("error"))
+            return None
+
         #Playlist
         if info.get("playlist"):
             print("extract_info playlist", url)
@@ -140,15 +141,6 @@ class YTDLPExtractor:
     def _extract_info(connection: connection.PipeConnection, opts:dict):
         '''
         別スレッドで実行しっぱなしを想定
-        ★ 動画+Playlist >> https://www.youtube.com/watch?v=mJ-4Iz506t0&list=PLbF1amD14adXEDu-U3fxYXEuytBfXvfjQ
-        - stdoutにentry+playlistの情報
-        {"_type": "url", "ie_key": "Youtube", "id": "mJ-4Iz506t0", "url": "https://www.youtube.com/watch?v=mJ-4Iz506t0", "title": "Test your bond with Paint by solving puzzles cooperatively, where gimmicks are activated when you...", "description": null, "duration": 1112, "channel_id": "UClNdVSK1uy2xFHTaXZYXopw", "channel": "\u3089\u3063\u3060\u3041", "channel_url": "https://www.youtube.com/channel/UClNdVSK1uy2xFHTaXZYXopw", "uploader": "\u3089\u3063\u3060\u3041", "uploader_id": "@radaooo", "uploader_url": "https://www.youtube.com/@radaooo", "thumbnails": [{"url": "https://i.ytimg.com/vi/mJ-4Iz506t0/hqdefault.jpg?sqp=-oaymwEbCKgBEF5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLAN-rlY9bMtmdcqJNdffAfRCN6Gzw", "height": 94, "width": 168}, {"url": "https://i.ytimg.com/vi/mJ-4Iz506t0/hqdefault.jpg?sqp=-oaymwEbCMQBEG5IVfKriqkDDggBFQAAiEIYAXABwAEG&rs=AOn4CLD0UbnOQebZUIAFN2fFr-bJ9LghQQ", "height": 110, "width": 196}, {"url": "https://i.ytimg.com/vi/mJ-4Iz506t0/hqdefault.jpg?sqp=-oaymwEcCPYBEIoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLArxtlEfuXrQEk9BcXThVIk4WqnnQ", "height": 138, "width": 246}, {"url": "https://i.ytimg.com/vi/mJ-4Iz506t0/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLA3cIfspsD51lmfiYBJ_jmbuJMTpQ", "height": 188, "width": 336}], "timestamp": null, "release_timestamp": null, "availability": null, "view_count": 468000, "live_status": null, "channel_is_verified": null, "__x_forwarded_for_ip": null, "webpage_url": "https://www.youtube.com/watch?v=mJ-4Iz506t0", "original_url": "https://www.youtube.com/watch?v=mJ-4Iz506t0", "webpage_url_basename": "watch", "webpage_url_domain": "youtube.com", "extractor": "youtube", "extractor_key": "Youtube", "playlist_count": 1, "playlist": "\u9b54\u773c\u306e\u5927\u8ff7\u5bae/\u8131\u51fa\u30de\u30c3\u30d7", "playlist_id": "PLbF1amD14adXEDu-U3fxYXEuytBfXvfjQ", "playlist_title": "\u9b54\u773c\u306e\u5927\u8ff7\u5bae/\u8131\u51fa\u30de\u30c3\u30d7", "playlist_uploader": "\u3089\u3063\u3060\u3041", "playlist_uploader_id": "@radaooo", "playlist_channel": "\u3089\u3063\u3060\u3041", "playlist_channel_id": "UClNdVSK1uy2xFHTaXZYXopw", "playlist_webpage_url": "https://www.youtube.com/playlist?list=PLbF1amD14adXEDu-U3fxYXEuytBfXvfjQ", "n_entries": null, "playlist_index": 1, "__last_playlist_index": 0, "playlist_autonumber": 1, "epoch": 1757671377, "duration_string": "18:32", "release_year": null, "_version": {"version": "2025.08.27", "current_git_head": null, "release_git_head": "8cd37b85d492edb56a4f7506ea05527b85a6b02b", "repository": "yt-dlp/yt-dlp"}}
-
-        - 戻り値にplaylistの情報 (entryの情報もついてくるから削除)
-        多分なくてもいい
-
-        ★ plyaylist >> https://www.youtube.com/playlist?list=PLbF1amD14adXEDu-U3fxYXEuytBfXvfjQ
-        上記と同じ
         '''
         ydl = YTDLPExtractor.get_ytdlp(opts)
         buffer = ModdedBuffer()
@@ -173,7 +165,6 @@ class YTDLPExtractor:
                 if (result := future.result()) and (not "entries" in result or send_count == 0):
                     connection.send(result)
             except Exception as e:
-                traceback.print_exc()
                 connection.send(json.dumps({
                     "error": str(e)
                 }))

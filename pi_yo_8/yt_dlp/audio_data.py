@@ -1,4 +1,6 @@
 from typing import Any
+
+from discord import FFmpegOpusAudio, FFmpegPCMAudio
 from pi_yo_8.utils import is_url_accessible, task_running_wrapper
 from pi_yo_8.voice_client import StreamAudioData
 from pi_yo_8.yt_dlp.manager import YTDLPManager
@@ -79,9 +81,9 @@ class YTDLPAudioData(StreamAudioData):
         最悪5秒程度かかる
         """
         if self.formats():
-            return await is_url_accessible(self.stream_url)
+            return await is_url_accessible(self.stream_url, self.info.get("http_headers"), self.info.get("cookies"))
         return False
-    
+
 
     @task_running_wrapper()
     async def check_streaming_data(self):
@@ -98,6 +100,20 @@ class YTDLPAudioData(StreamAudioData):
         result = await YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_info(self.web_url())
         if result and isinstance(result, YTDLPAudioData):
             self.info = result.info
-            self.stream_url = self.info.get('url')
+            self.stream_url = self.info['url']
             self.duration = self.get_duration()
             self.volume = self.get_volume()
+
+            
+    def _get_ffmpegaudio(self, opus: bool, before_options: list[str], options: list[str]) -> FFmpegOpusAudio | FFmpegPCMAudio:
+        if isinstance(self, YTDLPAudioData):
+            #headers
+            if headers := self.info.get("http_headers"):
+                for k, v in headers.items():
+                    before_options.append('-headers')
+                    before_options.append(f'"{k}: {v}"')
+            #cookies
+            if cookies := self.info.get("cookies"):
+                before_options.append('-headers')
+                before_options.append(f'"Cookie: {cookies}"')
+        return super()._get_ffmpegaudio(opus, before_options, options)
