@@ -12,14 +12,14 @@
 - `,playing` 再生中の曲のURL<br><br>
 
 - Play(,p ,pl)
-  - `,play(,p) 文字列` Youtubeから検索して即再生 例) `,p in love with a fox`
-  - `,play(,p) URL` URL先を即再生
-    - とりま いい感じに再生するから安心して
-    - [〇 Youtube , 〇 Twitter , × ニコニコ動画 , その他不明]<br><br>
+  - `,play(,p) 文字列` Youtubeから検索して再生 例) `,p in love with a fox`
+  - `,play(,p) URL` URL先を再生
+    - Youtube,Twitter,ニコニコ動画,SoundCloudは再生確認済み
+    - AppleMusic,Spotifyなどを除けばほとんど再生できると思う<br><br>
 
-- `,queue(,q)` 次に再生てきなやつ 即再生を除けば ',play' とほぼ同じことが可能 使わん デバックもそんなしてない 何なら使わんで 俺は完璧<br><br>
+- `,queue(,q) URL, 文字列` キューに追加する 使わん デバックもそんなしてない 何なら使わんで 俺は完璧<br><br>
     
-- `,download(,dl) URL or 文字列` URL先の動画 または ヒットした動画 から、'動画をダウンロードすることができるURL' を抽出し、表形式で表示する。
+- `,download(,dl) URL, 文字列` URL先の動画 または ヒットした動画 から、'ダウンロードURL' を抽出し、表形式で表示する。
 - `/download URL or 文字列` 他人に表示されない。機能は上記と同じ<br><br>
 
 
