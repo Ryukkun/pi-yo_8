@@ -1,6 +1,7 @@
 from collections import deque
 import re
 import time
+import traceback
 import tabulate
 import asyncio
 import logging
@@ -16,7 +17,7 @@ from pi_yo_8.gui.utils import EmbedTemplates, calc_time
 from pi_yo_8.music_control.playlist import Playlist, LazyPlaylist
 from pi_yo_8.music_control.utils import Status
 from pi_yo_8.utils import UrlAnalyzer
-from pi_yo_8.yt_dlp.unit import YTDLP_GENERAL_PARAMS, YTDLP_VIDEO_PARAMS
+from pi_yo_8.yt_dlp.unit import YTDLP_GENERAL_PARAMS
 
 if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
@@ -180,19 +181,36 @@ class MusicController():
         self.player_track.resume()
 
 
+    @staticmethod
+    async def _analysis_input(arg:str) -> "Playlist | YTDLPAudioData | None":
+        print("extract:", arg)
+        info_generator, load_all = YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS).extract_raw_info(arg)
+        try :
+            info = await anext(info_generator)
+        except:
+            traceback.print_exc()
+        else:
+            if info:
+                if info.get("playlist"):
+                    analysis = UrlAnalyzer(arg)
+                    res = LazyPlaylist(info, info_generator)
 
-    async def _analysis_input(self, arg:str) -> "Playlist | YTDLPAudioData | None":
-        analysis = UrlAnalyzer(arg)
+                    if analysis.is_yt and analysis.list_id:
+                        if analysis.video_id:
+                            await res.set_next_index_from_videoID(analysis.video_id)
+                        else:
+                            res.status.set(loop=False, loop_pl=True, random_pl=True)
+                    print("extract playlist:", arg)
+                    return res
 
-        result = await YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS).extract_info(arg)
-        if isinstance(result, Playlist):
-            if analysis.is_yt and analysis.list_id:
-                if analysis.video_id:
-                    await result.set_next_index_from_videoID(analysis.video_id)
-                else:
-                    result.status.set(loop=False, loop_pl=True, random_pl=True)
-        return result
-    
+                if info.get("formats") and info.get("url"):
+                    print("extract video", arg)
+                    load_all()
+                    return YTDLPAudioData(info)
+                
+        print("extract None:", arg)
+        load_all()
+        return None
 
 
     async def skip(self, sec_str:str | None):
@@ -290,7 +308,7 @@ class MusicController():
 
         # Download Embed
         url = UrlAnalyzer(arg)
-        result = await YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_info(arg)
+        result = await MusicController._analysis_input(arg)
         if result is None:
             return
         audio_data = result.entries[0] if isinstance(result, Playlist) else result

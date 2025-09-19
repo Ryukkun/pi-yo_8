@@ -1,15 +1,12 @@
 import asyncio
 from collections import deque
-from concurrent.futures import Future
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Any, AsyncGenerator, Callable
 
 from pi_yo_8.music_control.utils import Status, PlaylistRandom
-
-if TYPE_CHECKING:
-    from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
+from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 class Playlist:
-    def __init__(self, info:dict[str, Any]):
+    def __init__(self, info:dict[str, Any], loop=False, loop_pl=True, random_pl=False):
         """
         entriesは常に1つ以上ある
         """
@@ -20,7 +17,7 @@ class Playlist:
         self.play_history: deque[int] = deque()
         self.cooldowns: list[int] = [0] * len(self.entries)
         # statusはMusicControllerと同期させる
-        self._status = Status(loop=False, loop_pl=True, random_pl=False, callback=self.status_callback)
+        self._status = Status(loop, loop_pl, random_pl, callback=self.status_callback)
         self.random = PlaylistRandom(len(self.entries))
 
 
@@ -163,16 +160,21 @@ class LazyPlaylist(Playlist):
     Playlist : _type_
         _description_
     """
-    def __init__(self, info:dict[str, Any], entries:"list[YTDLPAudioData]", decompres_task:Future):
-        super().__init__(info)
-        self.entries = entries
-        self.decompres_task = decompres_task
+    def __init__(self, first_entry:dict[str, Any], generator: AsyncGenerator[dict[str, Any], None]):
+        super().__init__(first_entry)
+        self.entries.append(YTDLPAudioData(first_entry))
 
-        loop = asyncio.get_event_loop()
+        async def decompres_task_func():
+            async for entry in generator:
+                if entry.get("error") or (entry.get("duration") == None and entry.get("channel") == None and entry.get("view_count") == None):
+                    continue
+                self.entries.append(YTDLPAudioData(entry))
+        self.decompres_task = asyncio.create_task(decompres_task_func())
+
         async def callback():
             self._adaptation()()
             await self.update_next_indexies()
-        decompres_task.add_done_callback(lambda x : asyncio.run_coroutine_threadsafe(callback(), loop))
+        self.decompres_task.add_done_callback(lambda x : asyncio.create_task(callback()))
 
 
     def _adaptation(self: Callable|"LazyPlaylist") -> Callable:
@@ -191,7 +193,7 @@ class LazyPlaylist(Playlist):
         
 
     async def _wait_load_entry(self, i:int):
-        while len(self.entries) <= i and self.decompres_task.running():
+        while len(self.entries) <= i and not self.decompres_task.done():
             await asyncio.sleep(0.05)
 
 

@@ -1,19 +1,14 @@
 import asyncio
-import itertools
 import json
 import time
 import io
 from threading import Lock
 from yt_dlp import YoutubeDL
-from typing import TYPE_CHECKING, Any
+from typing import Any, AsyncGenerator, Callable
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Pipe, Process, connection
 
 from ._ie import YoutubeIE
-from pi_yo_8.music_control.playlist import LazyPlaylist, Playlist
-
-if TYPE_CHECKING:
-    from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 
 YTDLP_GENERAL_PARAMS = {
@@ -90,48 +85,53 @@ class YTDLPExtractor:
         return ydl
 
 
-    async def extract_info(self, url:str) -> "YTDLPAudioData | Playlist | None":
+    def extract_raw_info(self, url:str) -> "tuple[AsyncGenerator[dict[str, Any]], Callable[[], asyncio.Task]]":
         self.is_running = True
-        print("extract_info", url)
-        from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
         self.connection.send(url)
-        info_entries:list["YTDLPAudioData"] = []
+        async def generator():
+            with ThreadPoolExecutor(max_workers=1) as exe:
+                while True:
+                    _result:str|dict[str, Any] = await asyncio.get_event_loop().run_in_executor(exe, self.connection.recv)
+                    if _result == '':
+                        self.is_running = False
+                        break
+                    info:dict[str, Any] = json.loads(_result) if isinstance(_result, str) else _result
+                    if info.get("error"):
+                        print(info["error"])
+                        continue
+                    yield info
 
-        def read_from_pipe(limit = -1):
-            for _ in itertools.count():
-                if _ == limit:
-                    return True
-                _result:str|dict[str, Any] = self.connection.recv()
-                if _result == '':
-                    self.is_running = False
-                    return False
-                info:dict = json.loads(_result) if isinstance(_result, str) else _result
-                info_entries.append(YTDLPAudioData(info))
+        async def load_all_generator(generator: AsyncGenerator):
+            async for _ in generator:
+                pass
 
-        load_success = await asyncio.to_thread(read_from_pipe, 1)
-        if load_success and not info_entries:
-            print("extract_info None", url)
-            return None
+        gen = generator()
+        return gen, lambda: asyncio.create_task(load_all_generator(gen))
+
+    # async def extract_info(self, url:str) -> dict | LazyPlaylist | None:    
+    #     info_entries, future = await self.extract_raw_info(url)
+    #     if not info_entries and future == None:
+    #         print("extract_info None", url)
+    #         return None
         
-        future = ThreadPoolExecutor(max_workers=1).submit(read_from_pipe)
-        info = info_entries[0].info
-        if info.get("error"):
-            print(info.get("error"))
-            return None
+    #     info = info_entries[0]
+    #     if info.get("error"):
+    #         print(info.get("error"))
+    #         return None
 
-        #Playlist
-        if info.get("playlist"):
-            print("extract_info playlist", url)
-            return LazyPlaylist(info, info_entries, future)
+    #     #Playlist
+    #     if info.get("playlist"):
+    #         print("extract_info playlist", url)
+    #         return LazyPlaylist(info, info_entries, future)
 
-        #その他 Video・Channel等
-        if (thmb := info.get('thumbnails')) and isinstance(thmb, list):
-            thmb.sort(key=lambda t:(
-                t.get("preference", -100),
-                t.get("width", 0) * t.get("height", 0)  #解像度
-            ), reverse=True)
-        print("extract_info video", url)
-        return info_entries[0]
+    #     #その他 Video・Channel等
+    #     if (thmb := info.get('thumbnails')) and isinstance(thmb, list):
+    #         thmb.sort(key=lambda t:(
+    #             t.get("preference", -100),
+    #             t.get("width", 0) * t.get("height", 0)  #解像度
+    #         ), reverse=True)
+    #     print("extract_info video", url)
+    #     return info_entries[0]
 
 
     

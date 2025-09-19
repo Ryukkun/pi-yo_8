@@ -4,11 +4,13 @@ import logging
 import asyncio
 import threading
 import traceback
-from typing import Any, Callable, Self
+from typing import Any, Callable, Generic, Self
 import aiohttp
 import re
 import urllib.parse
 from discord.utils import _ColourFormatter
+
+from pi_yo_8.type import T
 
 
 
@@ -135,7 +137,7 @@ class WrapperAbstract:
         return wrapper  # type: ignore
 
 
-class RunCheckStorageWrapper(WrapperAbstract):
+class RunCheckStorageWrapper(WrapperAbstract, Generic[T]):
     """
     一度しか実行できないように
 
@@ -143,7 +145,8 @@ class RunCheckStorageWrapper(WrapperAbstract):
     実装クラスがimportで読み込まれた時点で_class=Noneのインスタンスが生成される
     実装クラスがインスタンス化された後、呼び出される際に __get__ , __call__ の順で呼び出される
     """
-    def __init__(self, func:Callable[..., Any], check_fin:bool, _class:object=None):
+    def __init__(self, func:Callable[..., T], check_fin:bool, _class:object=None):
+        self.func: Callable[..., T]
         super().__init__(func, _class)
         self.is_running = False
         self.check_fin = check_fin
@@ -151,13 +154,15 @@ class RunCheckStorageWrapper(WrapperAbstract):
         self.exe = None
         self.lock = threading.Lock()
 
-    def __call__(self, *args:Any, **kwargs:Any):
+
+    def __call__(self, *args:Any, **kwargs:Any) -> T:
         if self.is_running:
             raise Exception(f'{self.func.__name__} is already running')
         self.is_running = True
         if self._class:
             args = (self._class,) + args
-        return self._async_run(*args, **kwargs) if self.is_coroutine else self._sync_run(*args, **kwargs)
+        return self._run(*args, **kwargs)
+
 
     def run_in_thread(self, *args:Any, **kwargs:Any):
         with self.lock:
@@ -168,23 +173,12 @@ class RunCheckStorageWrapper(WrapperAbstract):
             args = (self._class,) + args
         if not self.exe:
             self.exe = ThreadPoolExecutor(max_workers=1)
-        self.exe.submit(self._sync_run, *args, **kwargs)
+        self.exe.submit(self._run, *args, **kwargs)
 
 
-    def _sync_run(self, *args:Any, **kwargs:Any):
+    def _run(self, *args:Any, **kwargs:Any):
         try:
             return self.func(*args, **kwargs)
-        except Exception as e:
-            traceback.print_exc()
-        finally:
-            if self.check_fin:
-                self.is_running = False
-
-    async def _async_run(self, *args:Any, **kwargs:Any):
-        try:
-            return await self.func(*args, **kwargs)
-        except Exception as e:
-            traceback.print_exc()
         finally:
             if self.check_fin:
                 self.is_running = False

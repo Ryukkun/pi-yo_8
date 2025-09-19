@@ -65,14 +65,21 @@ class YTDLPAudioData(StreamAudioData):
         if self._ch_icon:
             return self._ch_icon
         
-        if (ch_url := self.ch_url()) is not None:
-            result = await YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_info(ch_url)
-            self._ch_icon = result.get_thumbnail() if (result and isinstance(result, YTDLPAudioData)) else None
+        if (ch_url := self.ch_url()):
+            try:
+                info_generator, load_all = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(ch_url)
+                info = await anext(info_generator)
+                load_all()
+                if info:
+                    _ = YTDLPAudioData(info)
+                    self._ch_icon = _.get_thumbnail()
+            except:
+                pass
         return self._ch_icon
     
 
     def get_thumbnail(self) -> str | None:
-        return self.info.get("thumbnails", [{"url":None}])[0]["url"]
+        return self.info.get("thumbnails", [{"url":None}])[-1]["url"]
 
 
     async def is_available(self) -> bool:
@@ -97,9 +104,11 @@ class YTDLPAudioData(StreamAudioData):
         if await self.is_available():
             return
         
-        result = await YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_info(self.web_url())
-        if result and isinstance(result, YTDLPAudioData):
-            self.info = result.info
+        info_generator, load_all = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(self.web_url())
+        info = await anext(info_generator)
+        load_all()
+        if info and info.get("formats"):
+            self.info = info
             self.stream_url = self.info['url']
             self.duration = self.get_duration()
             self.volume = self.get_volume()
