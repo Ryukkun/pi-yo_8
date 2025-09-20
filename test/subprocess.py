@@ -7,7 +7,7 @@ class YTDLPExtractor:
     YTDLP_GENERAL_PARAMS = ['yt-dlp', '--skip-download', '-f', '"bestaudio/worst"', '--default-search', '"ytsearch30"', '--flat-playlist', '--lazy-playlist', '-j']
     YTDLP_VIDEO_PARAMS = ['yt-dlp', '--skip-download', '--format', '"bestaudio/worst"', '--default-search', '"ytsearch30"', '--flat-playlist', '--no-playlist', '-J']
     YTDLP_CHANNEL_PARAMS = ['yt-dlp', '--skip-download', '--flat-playlist', '--no-playlist', '-J']
-    def __init__(self) -> None:
+    def __init__(self):
         """
         Parameters
         ----------

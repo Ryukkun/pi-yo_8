@@ -131,7 +131,6 @@ def extract():
 
 
 def extract_generator():
-    from yt_dlp.utils import POSTPROCESS_WHEN
     # lazy_playlist なんか動かんくて残念
     arg = "https://www.youtube.com/watch?v=cQKGUgOfD8U&list=PLB02wINShjkBKnLfufaEPnCupGO-SK6e4&index=4"
     arg = "https://www.youtube.com/playlist?&list=PLB02wINShjkBKnLfufaEPnCupGO-SK6e4&index=4"

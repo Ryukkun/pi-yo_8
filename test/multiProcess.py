@@ -71,29 +71,28 @@ class YTDLPExtractor:
         '''
         ydl = YTDLPExtractor._get_ytdlp(opts)
         buffer = ModdedBuffer()
-        ydl._out_files.__dict__["out"] = buffer
-        exe = ThreadPoolExecutor(max_workers=1)
-        while url := connection.recv():
-            future = exe.submit(ydl.extract_info, url, download=False, process=True)
-            send_count = 0
-            while True:
-                line = buffer.readline()
-                if line == '':
-                    if future.done():
-                        break
-                    else:
-                        time.sleep(0.01)
-                        continue
-                connection.send(line)
-                send_count += 1
+        ydl._out_files.__dict__["out"] = buffer # type: ignore
+        with ThreadPoolExecutor(max_workers=1) as exe:
+            while url := connection.recv():
+                future = exe.submit(ydl.extract_info, url, download=False, process=True)
+                send_count = 0
+                while True:
+                    line = buffer.readline()
+                    if line == '':
+                        if future.done():
+                            break
+                        else:
+                            time.sleep(0.01)
+                            continue
+                    connection.send(line)
+                    send_count += 1
 
-            # プレイリストの場合戻り値要らない
-            if (result := future.result()) and (not "entries" in result or send_count == 0):
-                connection.send(result)
-            buffer.clean()
-            connection.send('')
-        print("Fin")
-        exe.shutdown()
+                # プレイリストの場合戻り値要らない
+                if (result := future.result()) and (not "entries" in result or send_count == 0):
+                    connection.send(result)
+                buffer.clean()
+                connection.send('')
+            print("Fin")
 
     @staticmethod
     def _get_ytdlp(opts) -> YoutubeDL:
