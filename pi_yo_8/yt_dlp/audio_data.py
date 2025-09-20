@@ -119,6 +119,10 @@ class YTDLPAudioData(StreamAudioData):
             self.stream_url = self.info['url']
             self.duration = self.get_duration()
             self.volume = self.get_volume()
+        
+        self.thumbnail = None
+        self.load_thumbnail.cancel()
+        self.load_thumbnail.create_task()
         print("check stream data fin:", self.web_url())
 
             

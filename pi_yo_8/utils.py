@@ -237,6 +237,11 @@ class TaskRunningWrapper(WrapperAbstract, Generic[T]):
         if self.task is None:
             return False
         return not self.task.done()
+    
+    def cancel(self):
+        if self.task and not self.task.done():
+            self.task.cancel()
+            self.task = None
 
     def _new_instance(self, obj:object):
         return TaskRunningWrapper(self.func, _class=obj)
