@@ -17,10 +17,10 @@ from pi_yo_8.music_control.playlist import Playlist, LazyPlaylist
 from pi_yo_8.music_control.utils import Status
 from pi_yo_8.utils import UrlAnalyzer
 from pi_yo_8.yt_dlp.unit import YTDLP_GENERAL_PARAMS
+from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
-    from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 
 re_skip = re.compile(r'^((-|)\d+)([hms])$')
@@ -199,7 +199,9 @@ class MusicController():
 
             if info.get("formats") and info.get("url"):
                 print("extract video", arg)
-                return YTDLPAudioData(info)
+                res = YTDLPAudioData(info)
+                res.load_ch_icon.create_task()
+                return res
                 
         print("extract None:", arg)
         return None
@@ -296,8 +298,7 @@ class MusicController():
 #   Download
 #---------------------------------------------------------------------------------------
     @staticmethod
-    async def download(arg:str):
-
+    async def download(arg:str) -> list[Embed] | None:
         # Download Embed
         url = UrlAnalyzer(arg)
         result = await MusicController._analysis_input(arg)
@@ -309,10 +310,10 @@ class MusicController():
             return
 
         embed=Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.main_color())
-        embed.set_thumbnail(url=audio_data.get_thumbnail())
+        embed.set_thumbnail(url=await audio_data.load_thumbnail.run())
         embed.set_author(name=audio_data.ch_name(), url=audio_data.ch_url(), icon_url=await audio_data.load_ch_icon.run())
             
-
+        print('1')
         if audio_data.duration:
             Duration = calc_time(audio_data.duration)
             embed.add_field(name="Length", value=Duration, inline=True)
@@ -333,15 +334,16 @@ class MusicController():
             ext = f.get('ext','')
             acodec = f.get('acodec','')
             vcodec = f.get('vcodec','')
-            abr = f.get('abr','?k')
+            abr = f"{f.get('abr','?')}k"
             protocol = f.get('protocol','')
 
-            if '3gpp' in ext or 'm3u8' in protocol:
+
+            if '3gpp' in ext:
                 continue
 
-            __list.append([_dl_string,ext,_res,vcodec,acodec,abr])
+            __list.append([_dl_string,ext,protocol,_res,acodec,abr])
 
-        headers = ['','EXT','RES','Video','Audio','ABR']
+        headers = ['','EXT','Protocol','RES','Audio','ABR']
         table = tabulate.tabulate(tabular_data=__list, headers=headers, tablefmt='github')
         table = re_space.sub(')`|',table)
         table = table.split('\n')

@@ -3,7 +3,6 @@ import asyncio
 import logging
 from discord.ext import commands, tasks
 
-from pi_yo_8 import config
 from pi_yo_8.type import SendableChannels
 from pi_yo_8.gui.controller import EmbedController
 from pi_yo_8.voice_client import MultiAudioVoiceClient
@@ -23,9 +22,10 @@ class MyCog(commands.Cog):
         self.g_opts:dict[int, 'DataInfo'] = {}
 
     @discord.app_commands.command(name="download", description='URL or 検索したい文字')
-    async def download(self, interaction:discord.Interaction, arg:str): # type: ignore
+    async def download_slash(self, interaction:discord.Interaction, arg:str):
+        task = asyncio.create_task(MusicController.download(arg))
         await interaction.response.defer(thinking=True)
-        if embeds := await MusicController.download(arg):
+        if embeds := await task:
             for em in embeds:
                 await interaction.followup.send(embed=em, ephemeral=True)
 

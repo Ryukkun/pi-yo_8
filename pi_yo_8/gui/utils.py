@@ -103,11 +103,11 @@ class EmbedTemplates:
         return Embed(title=f'権限がありません 🥲', colour=Colour.red())
 
     @staticmethod
-    def failed():
+    def failed(title:str = '失敗', description:str = '') -> Embed:
         '''
         失敗した時のEmbed
         '''
-        return Embed(title=f'失敗 🤯', colour=Colour.red())
+        return Embed(title=title, description=description, colour=Colour.red())
 
     @staticmethod
     def main_color():
