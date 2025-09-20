@@ -114,8 +114,8 @@ class EmbedController:
 
         if isinstance(audio_data, YTDLPAudioData) and audio_data.duration:
             embed=Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.player_color())
-            if thumbnail := audio_data.get_thumbnail():
-                embed.set_thumbnail(url=thumbnail)
+            if audio_data.thumbnail:
+                embed.set_thumbnail(url=audio_data.thumbnail)
             embed.set_author(name=audio_data.ch_name(), url=audio_data.ch_url(), icon_url=audio_data.ch_icon)
             descriptions = []
             if (view_count := audio_data.view_count()):

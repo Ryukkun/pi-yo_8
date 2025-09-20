@@ -1,6 +1,8 @@
+import asyncio
 from typing import Any
 
 from discord import FFmpegOpusAudio, FFmpegPCMAudio
+from pi_yo_8.type import Thumbnail
 from pi_yo_8.utils import is_url_accessible, task_running_wrapper
 from pi_yo_8.voice_client import StreamAudioData
 from pi_yo_8.yt_dlp.manager import YTDLPManager
@@ -12,6 +14,9 @@ class YTDLPAudioData(StreamAudioData):
     def __init__(self, info:dict[str, Any]):
         self.info = info
         self.ch_icon: str | None = None
+        self.thumbnail:str | None = None
+
+        self.load_thumbnail.create_task()
         if "url" in info:
             super().__init__(info['url'], self.get_volume(), self.get_duration())
 
@@ -68,12 +73,19 @@ class YTDLPAudioData(StreamAudioData):
                 info_generator = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(ch_url)
                 if info := await anext(info_generator, None):
                     _ = YTDLPAudioData(info)
-                    self.ch_icon = _.get_thumbnail()
+                    self.ch_icon = await _.load_thumbnail.run()
                 print("load ch icon fin:", ch_url)
         return self.ch_icon
     
-    def get_thumbnail(self) -> str | None:
-        return self.info.get("thumbnails", [{"url":None}])[-1]["url"]
+    @task_running_wrapper()
+    async def load_thumbnail(self) -> str | None:
+        if not self.thumbnail:
+            thumbnails:list[Thumbnail] = self.info.get("thumbnails", [{"url":None}])
+            for thumb in reversed(thumbnails):
+                if (url := thumb.get("url", None)) and await is_url_accessible(url):
+                    self.thumbnail = url
+                    break
+        return self.thumbnail
 
 
     async def is_available(self) -> bool:
@@ -92,11 +104,10 @@ class YTDLPAudioData(StreamAudioData):
         音声ファイル直のURLを取得する
         投げっぱなし可能
         """
-        if not self.ch_icon:
-            self.load_ch_icon.create_task()
-
         if await self.is_available():
             return
+        
+        self.load_ch_icon.create_task()
         
         print("check stream data:", self.web_url())
         info_generator = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(self.web_url())
