@@ -1,5 +1,4 @@
-import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from discord import FFmpegOpusAudio, FFmpegPCMAudio
 from pi_yo_8.type import Thumbnail
@@ -8,10 +7,13 @@ from pi_yo_8.voice_client import StreamAudioData
 from pi_yo_8.yt_dlp.manager import YTDLPManager
 from pi_yo_8.yt_dlp.unit import YTDLP_VIDEO_PARAMS
 
+if TYPE_CHECKING:
+    from pi_yo_8.music_control.playlist import LazyPlaylist
 
 
 class YTDLPAudioData(StreamAudioData):
-    def __init__(self, info:dict[str, Any]):
+    def __init__(self, info:dict[str, Any], playlist:"LazyPlaylist|None" = None):
+        self.playlist = playlist
         self.info = info
         self.ch_icon: str | None = None
         self.thumbnail:str | None = None

@@ -3,6 +3,7 @@ import time
 from typing import TYPE_CHECKING, Any
 from discord import ActionRow, Button, Embed, Message, NotFound, SelectMenu
 
+from pi_yo_8.music_control.playlist import Playlist
 from pi_yo_8.type import SendableChannels
 from pi_yo_8.utils import run_check_storage
 from pi_yo_8.gui.view import CreateButton, playoptionmessage
@@ -90,8 +91,9 @@ class EmbedController:
         if len(coms) >= 3:
             if isinstance(coms[0], ActionRow) and coms[0].children and isinstance(coms[0].children[0], SelectMenu):
                 old_select = coms[0].children[0]
-                if [temp.label for temp in view.select_opt] != [temp.label for temp in old_select.options]:
+                if [opt.to_dict() for opt in view.select_opt] != [opt.to_dict() for opt in old_select.options]:
                     change_view = True
+                    print("change_select")
             
             if isinstance(coms[2], ActionRow) and len(coms[2].children) >= 3 and isinstance(coms[2].children[2], Button):
                 old_pause_play = coms[2].children[2]
@@ -112,7 +114,7 @@ class EmbedController:
     async def generate_main_display(self):
         audio_data = self.info.music.player_track.audio_data
 
-        if isinstance(audio_data, YTDLPAudioData) and audio_data.duration:
+        if isinstance(audio_data, YTDLPAudioData):
             embed=Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.player_color())
             if audio_data.thumbnail:
                 embed.set_thumbnail(url=audio_data.thumbnail)
@@ -124,26 +126,32 @@ class EmbedController:
                 descriptions.append(date_difference(up_date))
                 descriptions.append(audio_data.upload_date())
             if descriptions:
-                embed.description = '　'.join(descriptions)
+                embed.description = '  '.join(descriptions) + "\n\u200B"
 
-            # Progress Bar
-            i_length = 16
-            play_time = int(self.info.music.player_track.timer)
-            unit_time = audio_data.duration / i_length
-            Progress = ''
-            text_list = ['　','▏','▎','▍','▌','▋','▋','▊','▉','█']
-            for i in range(i_length):
-                i = i * unit_time
-                if i <= play_time < (i + unit_time):
-                    level = int((play_time - i) / unit_time * 9)
-                    Progress += text_list[level]
-                elif i <= play_time:
-                    Progress += '█'
-                else:
-                    Progress += '　'
-            formatted_play_time = calc_time(play_time)
-            formatted_duration = calc_time(audio_data.duration)
-            embed.set_footer(text=f'{formatted_play_time} | {Progress} | {formatted_duration}')
+            if isinstance(audio_data.playlist, Playlist):
+                pl = audio_data.playlist
+                embed.add_field(name="Playlist", value=f"[{pl.title}]({pl.url})" if pl.url else pl.title, inline=True)
+                embed.add_field(name="Index", value=pl.next_indexes[0] if pl.next_indexes else '? ;w; ?')
+
+            if audio_data.duration:
+                # Progress Bar
+                i_length = 32
+                play_time = int(self.info.music.player_track.timer)
+                unit_time = audio_data.duration / i_length
+                Progress = ''
+                text_list = [' ','▏','▎','▍','▌','▋','▋','▊','▉','█']
+                for i in range(i_length):
+                    i = i * unit_time
+                    if i <= play_time < (i + unit_time):
+                        level = int((play_time - i) / unit_time * 9)
+                        Progress += text_list[level]
+                    elif i <= play_time:
+                        Progress += '█'
+                    else:
+                        Progress += ' '
+                formatted_play_time = calc_time(play_time)
+                formatted_duration = calc_time(audio_data.duration)
+                embed.add_field(name="\u200B", value=f'` {formatted_play_time} | {Progress} | {formatted_duration} `', inline=False)
         else:
             embed=Embed(title='N/A', colour=EmbedTemplates.player_color())
         

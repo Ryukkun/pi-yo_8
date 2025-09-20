@@ -86,7 +86,7 @@ class MusicQueue:
         return bool(self.play_queue)
 
 
-    async def get_item0(self):
+    async def get_item0(self) -> YTDLPAudioData | None:
         if not self.play_queue:
             return None
         item = self.play_queue[0]
@@ -101,8 +101,26 @@ class MusicQueue:
         item = self.play_queue[0]
         return isinstance(item, Playlist)
     
+    def get_prev_items(self, count:int = 25) -> "deque[YTDLPAudioData]":
+        return_items:"deque[YTDLPAudioData]" = deque()
+        prev_items = self.play_history.copy()
+        if self.play_queue and isinstance(self.play_queue[0], Playlist):
+            prev_items.append(self.play_queue[0])
+        
+        for item in reversed(prev_items):
+            if isinstance(item, Playlist):
+                for entry in reversed([item.entries[i] for i in item.play_history]):
+                    return_items.appendleft(entry)
+                    if count <= len(return_items):
+                        return return_items
+            else:
+                return_items.appendleft(item)
+                if count <= len(return_items):
+                    break
+        return return_items
 
-    def get_next_items(self, count:int = 25) -> List["YTDLPAudioData"]:
+
+    def get_next_items(self, count:int = 25) -> "list[YTDLPAudioData]":
         if not self.play_queue:
             return []
         items = []
@@ -313,7 +331,6 @@ class MusicController():
         embed.set_thumbnail(url=await audio_data.load_thumbnail.run())
         embed.set_author(name=audio_data.ch_name(), url=audio_data.ch_url(), icon_url=await audio_data.load_ch_icon.run())
             
-        print('1')
         if audio_data.duration:
             Duration = calc_time(audio_data.duration)
             embed.add_field(name="Length", value=Duration, inline=True)

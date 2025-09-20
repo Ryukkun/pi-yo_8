@@ -171,16 +171,15 @@ class CreateSelect(discord.ui.Select):
         select_opt = []
         _audio: YTDLPAudioData
         #print(args)
-        for i, _audio in enumerate(queue.get_next_items()):
-            title = _audio.title()
-            if i >= 25:
-                break
-            if len(title) >= 100:
-                title = title[0:100]
-            select_opt.append(discord.SelectOption(label=title,value=str(i),default=(select_opt == [])))
+        prev_items = queue.get_prev_items(4)
+        next_items = queue.get_next_items(25-len(prev_items))
+        for i in range(-len(prev_items), len(next_items)):
+            entry = prev_items[i] if i < 0 else next_items[i]
+            title = entry.title()[0:100] if len(entry.title()) >= 100 else entry.title()
+            select_opt.append(discord.SelectOption(label=title,value=str(i),default=(i == 0)))
 
         if not select_opt:
-            select_opt.append(discord.SelectOption(label='動画がないよぉ～ん',value='None',default=False))
+            select_opt.append(discord.SelectOption(label='動画がないよぉ～ん',value='',default=False))
         parent.select_opt = select_opt
         super().__init__(placeholder='キュー表示', options=select_opt, row=0)
 
@@ -188,7 +187,7 @@ class CreateSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         #await interaction.response.send_message(f'{interaction.user.name}は{self.values[0]}を選択しました')
         asyncio.get_event_loop().create_task(interaction.response.defer())
-        if self.values[0] == 'None': return
+        if self.values[0] == '': return
 
         self.view_parent.info.embed.update_action_time()
         await self.view_parent.info.music.skip_music(int(self.values[0]))

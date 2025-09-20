@@ -7,11 +7,12 @@ from pi_yo_8.utils import AsyncGenWrapper
 from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 class Playlist:
-    def __init__(self, info:dict[str, Any], loop=False, loop_pl=True, random_pl=False):
+    def __init__(self, playlist_title:str, playlist_url:str, loop=False, loop_pl=True, random_pl=False):
         """
         entriesは常に1つ以上ある
         """
-        self.info = info
+        self.title = playlist_title
+        self.url = playlist_url
         self.entries: list["YTDLPAudioData"] = []
         # 0 再生中, 1~ 次に再生
         self.next_indexes: deque[int] = deque()
@@ -56,7 +57,7 @@ class Playlist:
         self._load_streaming_data()
         
 
-    def _load_streaming_data(self, count = 3):
+    def _load_streaming_data(self, count = 2):
         '''
         先にロードしておく
         '''
@@ -162,14 +163,14 @@ class LazyPlaylist(Playlist):
         _description_
     """
     def __init__(self, first_entry:dict[str, Any], generator: AsyncGenWrapper):
-        super().__init__(first_entry)
-        self.entries.append(YTDLPAudioData(first_entry))
+        super().__init__(first_entry.get("playlist_title", "No Title"), first_entry.get("playlist_webpage_url", ""))
+        self.entries.append(YTDLPAudioData(first_entry, self))
 
         async def decompres_task_func():
             async for entry in generator:
                 if (entry.get("duration") == None and entry.get("channel") == None and entry.get("view_count") == None):
                     continue
-                self.entries.append(YTDLPAudioData(entry))
+                self.entries.append(YTDLPAudioData(entry, self))
         self.decompres_task = asyncio.create_task(decompres_task_func())
 
         async def callback():
