@@ -1,4 +1,8 @@
-from pi_yo_8.yt_dlp.unit import YTDLP_GENERAL_PARAMS, YTDLP_VIDEO_PARAMS, YTDLPExtractor
+from pi_yo_8.yt_dlp.unit import (
+    YTDLP_GENERAL_PARAMS,
+    YTDLP_VIDEO_PARAMS,
+    YTDLPExtractor
+)
 
 
 
@@ -13,8 +17,7 @@ class YTDLPManager:
 
     @classmethod
     def initiallize(cls):
-        c = cls()
-        YTDLPManager.YT_DLP = c
+        YTDLPManager.YT_DLP = cls()
 
 
     def get(self, opts:dict) -> "YTDLPExtractor":
@@ -29,5 +32,3 @@ class YTDLPManager:
         new_ytdlp = YTDLPExtractor(opts)
         self.ytdlp[_key].append(new_ytdlp)
         return new_ytdlp
-    
-

@@ -4,7 +4,7 @@ import logging
 import asyncio
 import threading
 import traceback
-from typing import Any, Callable, Generic, Self
+from typing import Any, AsyncGenerator, AsyncIterator, Callable, Generic, Self
 import aiohttp
 import re
 import urllib.parse
@@ -12,10 +12,6 @@ from discord.utils import _ColourFormatter
 
 from pi_yo_8.type import T
 
-
-
-
-FREE_THREADS = ThreadPoolExecutor(max_workers=50)
 
 
 
@@ -193,6 +189,11 @@ class RunCheckStorageWrapper(WrapperAbstract, Generic[T]):
         self.exe.submit(self._run, *args, **kwargs)
 
 
+    def __del__(self):
+        if self.exe:
+            self.exe.shutdown(wait=True)
+
+
     def _run(self, *args:Any, **kwargs:Any):
         try:
             return self.func(*args, **kwargs)
@@ -211,8 +212,8 @@ def run_check_storage(check_fin= True):
 
 
 
-class TaskRunningWrapper(WrapperAbstract):
-    def __init__(self, func:Callable[..., Any], _class:object=None):
+class TaskRunningWrapper(WrapperAbstract, Generic[T]):
+    def __init__(self, func:Callable[..., T], _class:object=None):
         super().__init__(func, _class)
         self.task: asyncio.Task | None = None
 
@@ -221,14 +222,14 @@ class TaskRunningWrapper(WrapperAbstract):
             args = (self._class,) + args
             self.task = asyncio.get_event_loop().create_task(self.func(*args, **kwargs))
 
-    async def wait(self):
+    async def wait(self) -> T | None:
         if self.is_running():
             return await self.task # type: ignore
         return 
     
-    async def run(self, *args:Any, **kwargs:Any):
-        if self.is_running():
-            return await self.wait()
+    async def run(self, *args:Any, **kwargs:Any) -> T:
+        if self.task and not self.task.done():
+            return await self.task
         self.create_task(*args, **kwargs)
         return await self.wait() # type: ignore
     
