@@ -125,7 +125,7 @@ class EmbedController:
                 descriptions.append(date_difference(up_date))
                 descriptions.append(audio_data.upload_date())
             if descriptions:
-                embed.description = '  '.join(descriptions) + "\n\u200B"
+                embed.description = '　'.join(descriptions) + "\n\u200B"
 
             if isinstance(audio_data.playlist, Playlist):
                 pl = audio_data.playlist
@@ -134,7 +134,7 @@ class EmbedController:
 
             if audio_data.duration:
                 # Progress Bar
-                i_length = 32
+                i_length = 28
                 play_time = int(self.info.music.player_track.timer)
                 unit_time = audio_data.duration / i_length
                 Progress = ''
