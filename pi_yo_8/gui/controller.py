@@ -93,7 +93,6 @@ class EmbedController:
                 old_select = coms[0].children[0]
                 if [opt.to_dict() for opt in view.select_opt] != [opt.to_dict() for opt in old_select.options]:
                     change_view = True
-                    print("change_select")
             
             if isinstance(coms[2], ActionRow) and len(coms[2].children) >= 3 and isinstance(coms[2].children[2], Button):
                 old_pause_play = coms[2].children[2]

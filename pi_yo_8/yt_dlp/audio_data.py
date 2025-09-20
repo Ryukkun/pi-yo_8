@@ -109,7 +109,7 @@ class YTDLPAudioData(StreamAudioData):
         if await self.is_available():
             return
         
-        self.load_ch_icon.create_task()
+        #self.load_ch_icon.create_task()
         
         print("check stream data:", self.web_url())
         info_generator = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(self.web_url())
