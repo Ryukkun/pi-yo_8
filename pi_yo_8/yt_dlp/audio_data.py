@@ -11,7 +11,7 @@ from pi_yo_8.yt_dlp.unit import YTDLP_VIDEO_PARAMS
 class YTDLPAudioData(StreamAudioData):
     def __init__(self, info:dict[str, Any]):
         self.info = info
-        self._ch_icon: str | None = None
+        self.ch_icon: str | None = None
         if "url" in info:
             super().__init__(info['url'], self.get_volume(), self.get_duration())
 
@@ -61,23 +61,17 @@ class YTDLPAudioData(StreamAudioData):
         return self.info.get("formats", [])
 
     @task_running_wrapper()
-    async def ch_icon(self) -> str | None:
-        if self._ch_icon:
-            return self._ch_icon
-        
-        if (ch_url := self.ch_url()):
-            try:
-                info_generator, load_all = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(ch_url)
-                info = await anext(info_generator)
-                load_all()
-                if info:
+    async def load_ch_icon(self) -> str | None:
+        if not self.ch_icon:
+            if (ch_url := self.ch_url()):
+                print("load ch icon:", ch_url)
+                info_generator = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(ch_url)
+                if info := await anext(info_generator, None):
                     _ = YTDLPAudioData(info)
-                    self._ch_icon = _.get_thumbnail()
-            except:
-                pass
-        return self._ch_icon
+                    self.ch_icon = _.get_thumbnail()
+                print("load ch icon fin:", ch_url)
+        return self.ch_icon
     
-
     def get_thumbnail(self) -> str | None:
         return self.info.get("thumbnails", [{"url":None}])[-1]["url"]
 
@@ -98,20 +92,21 @@ class YTDLPAudioData(StreamAudioData):
         音声ファイル直のURLを取得する
         投げっぱなし可能
         """
-        if self._ch_icon == None and not self.ch_icon.is_running():
-            self.ch_icon.create_task()
+        if not self.ch_icon:
+            self.load_ch_icon.create_task()
 
         if await self.is_available():
             return
         
-        info_generator, load_all = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(self.web_url())
-        info = await anext(info_generator)
-        load_all()
+        print("check stream data:", self.web_url())
+        info_generator = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(self.web_url())
+        info = await anext(info_generator, None)
         if info and info.get("formats"):
             self.info = info
             self.stream_url = self.info['url']
             self.duration = self.get_duration()
             self.volume = self.get_volume()
+        print("check stream data fin:", self.web_url())
 
             
     def _get_ffmpegaudio(self, opus: bool, before_options: list[str], options: list[str]) -> FFmpegOpusAudio | FFmpegPCMAudio:

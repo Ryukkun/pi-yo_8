@@ -1,8 +1,9 @@
 import asyncio
 from collections import deque
-from typing import Any, AsyncGenerator, Callable
+from typing import Any, Callable
 
 from pi_yo_8.music_control.utils import Status, PlaylistRandom
+from pi_yo_8.utils import AsyncGenWrapper
 from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 class Playlist:
@@ -160,13 +161,13 @@ class LazyPlaylist(Playlist):
     Playlist : _type_
         _description_
     """
-    def __init__(self, first_entry:dict[str, Any], generator: AsyncGenerator[dict[str, Any], None]):
+    def __init__(self, first_entry:dict[str, Any], generator: AsyncGenWrapper):
         super().__init__(first_entry)
         self.entries.append(YTDLPAudioData(first_entry))
 
         async def decompres_task_func():
             async for entry in generator:
-                if entry.get("error") or (entry.get("duration") == None and entry.get("channel") == None and entry.get("view_count") == None):
+                if (entry.get("duration") == None and entry.get("channel") == None and entry.get("view_count") == None):
                     continue
                 self.entries.append(YTDLPAudioData(entry))
         self.decompres_task = asyncio.create_task(decompres_task_func())

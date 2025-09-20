@@ -7,6 +7,7 @@ from pi_yo_8.type import SendableChannels
 from pi_yo_8.utils import run_check_storage
 from pi_yo_8.gui.view import CreateButton, playoptionmessage
 from pi_yo_8.gui.utils import EmbedTemplates, int_analysis, date_difference, calc_time
+from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
@@ -111,20 +112,17 @@ class EmbedController:
     async def generate_main_display(self):
         audio_data = self.info.music.player_track.audio_data
 
-        from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
         if isinstance(audio_data, YTDLPAudioData) and audio_data.duration:
             embed=Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.player_color())
             if thumbnail := audio_data.get_thumbnail():
                 embed.set_thumbnail(url=thumbnail)
-            embed.set_author(name=audio_data.ch_name(), url=audio_data.ch_url(), icon_url=audio_data._ch_icon)
+            embed.set_author(name=audio_data.ch_name(), url=audio_data.ch_url(), icon_url=audio_data.ch_icon)
             descriptions = []
             if (view_count := audio_data.view_count()):
                 descriptions.append(f'{int_analysis(view_count)} 回再生')
             if (up_date := audio_data.upload_date()):
                 descriptions.append(date_difference(up_date))
                 descriptions.append(audio_data.upload_date())
-            # if _SAD.like_count:
-            #     des.append(f'\n👍{int_analysis(_SAD.like_count)}')
             if descriptions:
                 embed.description = '　'.join(descriptions)
 

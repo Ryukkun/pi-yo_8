@@ -81,6 +81,23 @@ async def is_url_accessible(url: str, headers:dict|None = None, _cookies:str|Non
         return False
 
 
+
+class AsyncGenWrapper():
+    def __init__(self, agen:AsyncGenerator[dict[str, Any], None], callback:Callable[[AsyncGenerator],Any]):
+        self._agen = agen
+        self._callback = callback
+
+    def __aiter__(self) -> AsyncIterator[dict[str, Any]]:
+        return self._agen.__aiter__()
+
+    async def __anext__(self) -> dict[str, Any]:
+        return await self._agen.__anext__()
+
+    def __del__(self):
+        self._callback(self._agen)
+
+
+
 class YoutubeUtil:
     @staticmethod
     def get_web_url(video_id: str) -> str:

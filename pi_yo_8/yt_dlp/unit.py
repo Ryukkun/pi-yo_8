@@ -4,9 +4,11 @@ import time
 import io
 from threading import Lock
 from yt_dlp import YoutubeDL
-from typing import Any, AsyncGenerator, Callable
+from typing import Any, AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Pipe, Process, connection
+
+from pi_yo_8.utils import AsyncGenWrapper
 
 from ._ie import YoutubeIE
 
@@ -80,18 +82,19 @@ class YTDLPExtractor:
 
     @staticmethod
     def get_ytdlp(parms:dict) -> YoutubeDL:
-        ydl = YoutubeDL(parms)
-        ydl.add_info_extractor(YoutubeIE())
+        ydl = YoutubeDL(parms) # type: ignore
+        ydl.add_info_extractor(YoutubeIE()) # type: ignore
         return ydl
 
 
-    def extract_raw_info(self, url:str) -> "tuple[AsyncGenerator[dict[str, Any]], Callable[[], asyncio.Task]]":
+    def extract_raw_info(self, url:str) -> AsyncGenWrapper:
         self.is_running = True
         self.connection.send(url)
+        loop = asyncio.get_event_loop()
         async def generator():
             with ThreadPoolExecutor(max_workers=1) as exe:
                 while True:
-                    _result:str|dict[str, Any] = await asyncio.get_event_loop().run_in_executor(exe, self.connection.recv)
+                    _result:str|dict[str, Any] = await loop.run_in_executor(exe, self.connection.recv)
                     if _result == '':
                         self.is_running = False
                         break
@@ -102,37 +105,11 @@ class YTDLPExtractor:
                     yield info
 
         async def load_all_generator(generator: AsyncGenerator):
+            print("raw finallize : ", url)
             async for _ in generator:
                 pass
-
         gen = generator()
-        return gen, lambda: asyncio.create_task(load_all_generator(gen))
-
-    # async def extract_info(self, url:str) -> dict | LazyPlaylist | None:    
-    #     info_entries, future = await self.extract_raw_info(url)
-    #     if not info_entries and future == None:
-    #         print("extract_info None", url)
-    #         return None
-        
-    #     info = info_entries[0]
-    #     if info.get("error"):
-    #         print(info.get("error"))
-    #         return None
-
-    #     #Playlist
-    #     if info.get("playlist"):
-    #         print("extract_info playlist", url)
-    #         return LazyPlaylist(info, info_entries, future)
-
-    #     #その他 Video・Channel等
-    #     if (thmb := info.get('thumbnails')) and isinstance(thmb, list):
-    #         thmb.sort(key=lambda t:(
-    #             t.get("preference", -100),
-    #             t.get("width", 0) * t.get("height", 0)  #解像度
-    #         ), reverse=True)
-    #     print("extract_info video", url)
-    #     return info_entries[0]
-
+        return AsyncGenWrapper(gen, lambda x: loop.create_task(load_all_generator(x)))
 
     
 
@@ -143,31 +120,30 @@ class YTDLPExtractor:
         '''
         ydl = YTDLPExtractor.get_ytdlp(opts)
         buffer = ModdedBuffer()
-        ydl._out_files.__dict__["out"] = buffer
-        exe = ThreadPoolExecutor(max_workers=1)
-        while url := connection.recv():
-            try:
-                future = exe.submit(ydl.extract_info, url, download=False, process=True)
-                send_count = 0
-                while True:
-                    line = buffer.readline()
-                    if line == '':
-                        if future.done():
-                            break
-                        else:
-                            time.sleep(0.01)
-                            continue
-                    connection.send(line)
-                    send_count += 1
+        ydl._out_files.__dict__["out"] = buffer # type: ignore
+        with ThreadPoolExecutor(max_workers=1) as exe:
+            while url := connection.recv():
+                try:
+                    future = exe.submit(ydl.extract_info, url, download=False, process=True)
+                    send_count = 0
+                    while True:
+                        line = buffer.readline()
+                        if line == '':
+                            if future.done():
+                                break
+                            else:
+                                time.sleep(0.01)
+                                continue
+                        connection.send(line)
+                        send_count += 1
 
-                # プレイリストの場合戻り値要らない
-                if (result := future.result()) and (not "entries" in result or send_count == 0):
-                    connection.send(result)
-            except Exception as e:
-                connection.send(json.dumps({
-                    "error": str(e)
-                }))
-            finally:
-                buffer.clean()
-                connection.send('')
-        exe.shutdown()
+                    # プレイリストの場合戻り値要らない
+                    if (result := future.result()) and (not "entries" in result or send_count == 0):
+                        connection.send(result)
+                except Exception as e:
+                    connection.send(json.dumps({
+                        "error": str(e)
+                    }))
+                finally:
+                    buffer.clean()
+                    connection.send('')

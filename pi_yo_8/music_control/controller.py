@@ -1,7 +1,6 @@
 from collections import deque
 import re
 import time
-import traceback
 import tabulate
 import asyncio
 import logging
@@ -184,32 +183,25 @@ class MusicController():
     @staticmethod
     async def _analysis_input(arg:str) -> "Playlist | YTDLPAudioData | None":
         print("extract:", arg)
-        info_generator, load_all = YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS).extract_raw_info(arg)
-        try :
-            info = await anext(info_generator)
-        except:
-            traceback.print_exc()
-        else:
-            if info:
-                if info.get("playlist"):
-                    analysis = UrlAnalyzer(arg)
-                    res = LazyPlaylist(info, info_generator)
+        info_generator = YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS).extract_raw_info(arg)
+        if info := await anext(info_generator, None):
+            if info.get("playlist"):
+                analysis = UrlAnalyzer(arg)
+                res = LazyPlaylist(info, info_generator)
 
-                    if analysis.is_yt and analysis.list_id:
-                        if analysis.video_id:
-                            await res.set_next_index_from_videoID(analysis.video_id)
-                        else:
-                            res.status.set(loop=False, loop_pl=True, random_pl=True)
-                    print("extract playlist:", arg)
-                    return res
+                if analysis.is_yt and analysis.list_id:
+                    if analysis.video_id:
+                        await res.set_next_index_from_videoID(analysis.video_id)
+                    else:
+                        res.status.set(loop=False, loop_pl=True, random_pl=True)
+                print("extract playlist:", arg)
+                return res
 
-                if info.get("formats") and info.get("url"):
-                    print("extract video", arg)
-                    load_all()
-                    return YTDLPAudioData(info)
+            if info.get("formats") and info.get("url"):
+                print("extract video", arg)
+                return YTDLPAudioData(info)
                 
         print("extract None:", arg)
-        load_all()
         return None
 
 
@@ -318,7 +310,7 @@ class MusicController():
 
         embed=Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.main_color())
         embed.set_thumbnail(url=audio_data.get_thumbnail())
-        embed.set_author(name=audio_data.ch_name(), url=audio_data.ch_url(), icon_url=await audio_data.ch_icon.run())
+        embed.set_author(name=audio_data.ch_name(), url=audio_data.ch_url(), icon_url=await audio_data.load_ch_icon.run())
             
 
         if audio_data.duration:
