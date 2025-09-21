@@ -166,7 +166,7 @@ class MusicController():
         self.queue.play_queue.append(result)
 
         # 再生されるまでループ
-        if not self.player_track.is_playing():
+        if not self.player_track.has_play_data():
             await self.play_loop(None,0)
         self.player_track.resume()
 
@@ -418,7 +418,7 @@ class MusicController():
             played_time = time.time()
             _log.info(f"{self.guild.name} : Play {audio_data.web_url()}  volume:{audio_data.get_volume()}  [Now len: {str(len(self.queue.play_queue))}]")
 
-            await self.player_track.play(audio_data,after=lambda : loop.create_task(self.play_loop(audio_data.stream_url,played_time)))
+            await self.player_track.play(audio_data,after=lambda : asyncio.run_coroutine_threadsafe(self.play_loop(audio_data.stream_url,played_time), loop))
 
 
     # async def task_loop(self):

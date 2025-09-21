@@ -1,5 +1,5 @@
 
-from typing import Generator, Type, TypeAlias, TypeVar, TypedDict, List, Dict, Optional, Union
+from typing import Generator, TypeAlias, TypeVar, TypedDict, List, Dict, Optional, Union
 from discord import StageChannel, TextChannel, Thread, VoiceChannel
 
 

@@ -63,7 +63,7 @@ class Button2(discord.ui.Button):
 
         if self.info.music.player_track.is_paused():
             self.info.music.player_track.resume()
-        elif self.info.music.player_track.is_playing():
+        elif self.info.music.player_track.has_play_data():
             self.info.music.player_track.pause()
 
 

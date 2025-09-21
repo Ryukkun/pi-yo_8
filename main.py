@@ -4,6 +4,8 @@ import discord
 from discord.ext import commands
 
 
+IS_MAIN_PROCESS = __name__ == "__main__"
+
 async def main():
     try: from pi_yo_8 import config
     except Exception:
@@ -28,5 +30,5 @@ async def main():
         await bot.add_cog(pi_yo_8.main.MyCog(bot))
         await bot.start(config.Token)
 
-if __name__ == "__main__":
+if IS_MAIN_PROCESS:
     asyncio.run(main())

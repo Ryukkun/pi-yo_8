@@ -1,7 +1,6 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import io
-import itertools
 import json
 from threading import Lock
 import time

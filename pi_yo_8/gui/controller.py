@@ -36,7 +36,7 @@ class EmbedController:
     @run_check_storage()
     async def send_new_main_display(self):
         try:
-            if self.info.music.player_track.is_playing() and self.lastest_action_ch:
+            if self.info.music.player_track.has_play_data() and self.lastest_action_ch:
                 # Get Embed
                 if embed := await self.generate_main_display():
                     play_option = False
