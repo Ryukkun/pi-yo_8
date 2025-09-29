@@ -4,6 +4,7 @@ from discord import FFmpegOpusAudio, FFmpegPCMAudio
 from pi_yo_8.type import Thumbnail
 from pi_yo_8.utils import is_url_accessible, task_running_wrapper
 from pi_yo_8.voice_client import StreamAudioData
+from pi_yo_8.yt_dlp.status_manager import YTDLPInfoType
 from pi_yo_8.yt_dlp.manager import YTDLPManager
 from pi_yo_8.yt_dlp.unit import YTDLP_VIDEO_PARAMS
 
@@ -72,7 +73,9 @@ class YTDLPAudioData(StreamAudioData):
         if not self.ch_icon:
             if (ch_url := self.ch_url()):
                 print("load ch icon:", ch_url)
-                info_generator = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(ch_url)
+                info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(ch_url)
+                status_manager._type = YTDLPInfoType.CHANNEL
+                status_manager.name = (self.ch_name() or '')
                 if info := await anext(info_generator, None):
                     _ = YTDLPAudioData(info)
                     self.ch_icon = await _.load_thumbnail.run()
@@ -109,10 +112,13 @@ class YTDLPAudioData(StreamAudioData):
         if await self.is_available():
             return
         
+        # チャンネルアイコンのロード
         #self.load_ch_icon.create_task()
         
         print("check stream data:", self.web_url())
-        info_generator = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(self.web_url())
+        info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(self.web_url())
+        status_manager._type = YTDLPInfoType.VIDEO
+        status_manager.name = self.title()
         info = await anext(info_generator, None)
         if info and info.get("formats"):
             self.info = info

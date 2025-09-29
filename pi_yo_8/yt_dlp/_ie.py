@@ -12,7 +12,7 @@ class YoutubeIE(OldYoutubeIE):
         音声データをwebpage_ytcfgに追記
         """
         webpage, webpage_ytcfg, initial_data, is_premium_subscriber, player_responses, player_url = super()._initial_extract(url, smuggled_data, webpage_url, webpage_client, video_id)
-        player_configs = traverse_obj(player_responses, (..., "playerConfig"), expected_type=dict)
+        player_configs = traverse_obj(player_responses, (..., "playerConfig"), expected_type=dict) # type: ignore
         
         def find(_:dict):
             return _.get("audioConfig", None)

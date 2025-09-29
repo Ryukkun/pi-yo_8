@@ -214,8 +214,7 @@ class LazyPlaylist(Playlist):
             self.next_indexes.append(i % len(self.entries))
         
         # 先にロードしておく
-        for i in range(min(len(self.next_indexes), 3)):
-            self.entries[self.next_indexes[i]].check_streaming_data.create_task()
+        self._load_streaming_data()
 
 
     async def set_next_index_from_videoID(self, video_id: str):

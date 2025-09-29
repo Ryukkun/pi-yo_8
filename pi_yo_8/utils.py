@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from http import cookies
+import io
 import logging
 import asyncio
 import threading
@@ -62,7 +63,6 @@ async def is_url_accessible(url: str, headers:dict|None = None, _cookies:str|Non
         接続できればTrue、できなければFalse
     """
     try:
-        #cookies_dict = {k: v for k, v in (x.split('=') for x in cookies.split('; '))} if cookies else {}
         cookies_dict = {}
         if _cookies:
             cookie_jar = cookies.SimpleCookie()
@@ -251,3 +251,33 @@ def task_running_wrapper():
     def wapper(func) -> TaskRunningWrapper:
         return TaskRunningWrapper(func)
     return wapper
+
+
+
+class ModdedBuffer(io.StringIO):
+    '''
+    readlineをするときは最初から読み込まれていく
+    readlineとwrite以外は使わない想定
+    '''
+    def __init__(self, initial_value: str | None = "", newline: str | None = "\n") -> None:
+        super().__init__(initial_value, newline)
+        self.read_pos = 0
+        self._lock = threading.Lock()
+
+    def readline(self, size: int = -1) -> str:
+        with self._lock:
+            self.seek(self.read_pos)
+            result = super().readline(size)
+            self.read_pos = self.tell()
+        return result
+        
+    def write(self, s: str) -> int:
+        with self._lock:
+            self.seek(0, 2)
+            result = super().write(s)
+        return result
+    
+    def clean(self) -> None:
+        self.seek(0)
+        self.truncate(0)
+        self.read_pos = 0

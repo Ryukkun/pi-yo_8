@@ -5,7 +5,7 @@ from discord import ActionRow, Button, Embed, Message, NotFound, SelectMenu
 
 from pi_yo_8.music_control.playlist import Playlist
 from pi_yo_8.type import SendableChannels
-from pi_yo_8.utils import run_check_storage
+from pi_yo_8.utils import UrlAnalyzer, run_check_storage
 from pi_yo_8.gui.view import CreateButton, playoptionmessage
 from pi_yo_8.gui.utils import EmbedTemplates, int_analysis, date_difference, calc_time
 from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
@@ -25,6 +25,8 @@ class EmbedController:
         self.lastest_action_ch: SendableChannels | None = None  # 最新のチャンネル
         self.main_display: Message | None = None  # 再生中のEmbed
         self.options_display: Message | None = None  # 再生中のオプションEmbed
+        
+
 
 
     def update_action_time(self, channel: Any | None = None):
@@ -36,7 +38,7 @@ class EmbedController:
     @run_check_storage()
     async def send_new_main_display(self):
         try:
-            if self.info.music.player_track.has_play_data() and self.lastest_action_ch:
+            if self.lastest_action_ch:
                 # Get Embed
                 if embed := await self.generate_main_display():
                     play_option = False
@@ -129,7 +131,9 @@ class EmbedController:
 
             if isinstance(audio_data.playlist, Playlist):
                 pl = audio_data.playlist
-                embed.add_field(name="Playlist", value=f"[{pl.title}]({pl.url})" if pl.url else pl.title, inline=True)
+                embed.add_field(name="Playlist",
+                                value=f"[{pl.title}]({pl.url})" if (pl.url and UrlAnalyzer(pl.url).is_url) else pl.title,
+                                inline=True)
                 embed.add_field(name="Index", value=pl.next_indexes[0] if pl.next_indexes else '? ;w; ?')
 
             if audio_data.duration:
@@ -152,8 +156,22 @@ class EmbedController:
                 formatted_duration = calc_time(audio_data.duration)
                 embed.add_field(name="\u200B", value=f'` {formatted_play_time} | {Progress} | {formatted_duration} `', inline=False)
         else:
-            embed=Embed(title='N/A', colour=EmbedTemplates.player_color())
-        
+            embed=Embed(title='`_(:3」∠)_`', colour=EmbedTemplates.player_color())
+
+        footer:list[str] = []
+        for status_manager in self.info.ytdlp_status_managers:
+            name = status_manager.name or status_manager._type.name
+            if len(name) >= 14:
+                name = name[:10]+".."
+            if status_manager.url:
+                name = f"[{name}]({status_manager.url})"
+
+            if status_manager.is_running:
+                footer.append(name)
+            if errors := status_manager.get_errors(seconds_ago=20):
+                embed.add_field(name=name, value="```"+"\n".join(map(lambda e: e.description, errors))+"```")
+
+        embed.set_footer(text="解析中... "+" ".join(footer))
         return embed
     
 

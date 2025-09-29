@@ -7,6 +7,7 @@ from pi_yo_8.type import SendableChannels
 from pi_yo_8.gui.controller import EmbedController
 from pi_yo_8.voice_client import MultiAudioVoiceClient
 from pi_yo_8.music_control.controller import MusicController
+from pi_yo_8.yt_dlp.status_manager import YTDLPStatusManager
 
 
 
@@ -135,7 +136,7 @@ class MyCog(commands.Cog):
 
 
 
-class DataInfo():
+class DataInfo:
     def __init__(self, guild:discord.Guild, cog:MyCog):
         if isinstance(guild.voice_client, discord.VoiceClient):
             self.vc:discord.VoiceClient = guild.voice_client
@@ -149,6 +150,7 @@ class DataInfo():
         self.MA = MultiAudioVoiceClient(guild, self)
         self.music = MusicController(self)
         self.embed = EmbedController(self)
+        self.ytdlp_status_managers: list[YTDLPStatusManager] = []
         self.loop_5.start()
             
 

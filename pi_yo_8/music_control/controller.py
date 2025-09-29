@@ -5,7 +5,7 @@ import tabulate
 import asyncio
 import logging
 import copy
-from typing import List,  TYPE_CHECKING
+from typing import TYPE_CHECKING
 from discord import Embed
 from discord.ext.commands import Context
 
@@ -16,6 +16,7 @@ from pi_yo_8.gui.utils import EmbedTemplates, calc_time
 from pi_yo_8.music_control.playlist import Playlist, LazyPlaylist
 from pi_yo_8.music_control.utils import Status
 from pi_yo_8.utils import UrlAnalyzer
+from pi_yo_8.yt_dlp.status_manager import YTDLPInfoType
 from pi_yo_8.yt_dlp.unit import YTDLP_GENERAL_PARAMS
 from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
@@ -201,11 +202,13 @@ class MusicController():
     @staticmethod
     async def _analysis_input(arg:str) -> "Playlist | YTDLPAudioData | None":
         print("extract:", arg)
-        info_generator = YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS).extract_raw_info(arg)
+        info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS).extract_raw_info(arg)
         if info := await anext(info_generator, None):
             if info.get("playlist"):
                 analysis = UrlAnalyzer(arg)
                 res = LazyPlaylist(info, info_generator)
+                status_manager._type = YTDLPInfoType.PLAYLIST
+                status_manager.name = res.title
 
                 if analysis.is_yt and analysis.list_id:
                     if analysis.video_id:
@@ -218,7 +221,8 @@ class MusicController():
             if info.get("formats") and info.get("url"):
                 print("extract video", arg)
                 res = YTDLPAudioData(info)
-                res.load_ch_icon.create_task()
+                status_manager._type = YTDLPInfoType.VIDEO
+                status_manager.name = res.title()
                 return res
                 
         print("extract None:", arg)
