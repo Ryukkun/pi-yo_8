@@ -1,18 +1,22 @@
 import asyncio
 from collections import deque
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from pi_yo_8.music_control.utils import Status, PlaylistRandom
 from pi_yo_8.utils import AsyncGenWrapper
 from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
+if TYPE_CHECKING:
+    from pi_yo_8.main import DataInfo
+
 class Playlist:
-    def __init__(self, playlist_title:str, playlist_url:str, loop=False, loop_pl=True, random_pl=False):
+    def __init__(self, playlist_title:str, playlist_url:str, guild_info:"DataInfo|None", loop=False, loop_pl=True, random_pl=False):
         """
         entriesは常に1つ以上ある
         """
         self.title = playlist_title
         self.url = playlist_url
+        self.guild_info = guild_info
         self.entries: list["YTDLPAudioData"] = []
         # 0 再生中, 1~ 次に再生
         self.next_indexes: deque[int] = deque()
@@ -162,15 +166,15 @@ class LazyPlaylist(Playlist):
     Playlist : _type_
         _description_
     """
-    def __init__(self, first_entry:dict[str, Any], generator: AsyncGenWrapper):
-        super().__init__(first_entry.get("playlist_title", "No Title"), first_entry.get("playlist_webpage_url", ""))
-        self.entries.append(YTDLPAudioData(first_entry, self))
+    def __init__(self, first_entry:dict[str, Any], generator:AsyncGenWrapper, guild_info:"DataInfo|None"):
+        super().__init__(first_entry.get("playlist_title", "No Title"), first_entry.get("playlist_webpage_url", ""), guild_info)
+        self.entries.append(YTDLPAudioData(first_entry, self.guild_info, self))
 
         async def decompres_task_func():
             async for entry in generator:
                 if (entry.get("duration") == None and entry.get("channel") == None and entry.get("view_count") == None):
                     continue
-                self.entries.append(YTDLPAudioData(entry, self))
+                self.entries.append(YTDLPAudioData(entry, self.guild_info, self))
         self.decompres_task = asyncio.create_task(decompres_task_func())
 
         async def callback():

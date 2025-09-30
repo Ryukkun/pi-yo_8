@@ -10,10 +10,12 @@ from pi_yo_8.yt_dlp.unit import YTDLP_VIDEO_PARAMS
 
 if TYPE_CHECKING:
     from pi_yo_8.music_control.playlist import LazyPlaylist
+    from pi_yo_8.main import DataInfo
 
 
 class YTDLPAudioData(StreamAudioData):
-    def __init__(self, info:dict[str, Any], playlist:"LazyPlaylist|None" = None):
+    def __init__(self, info:dict[str, Any], guild_data:"DataInfo|None", playlist:"LazyPlaylist|None"):
+        self.guild_data = guild_data
         self.playlist = playlist
         self.info = info
         self.ch_icon: str | None = None
@@ -73,11 +75,11 @@ class YTDLPAudioData(StreamAudioData):
         if not self.ch_icon:
             if (ch_url := self.ch_url()):
                 print("load ch icon:", ch_url)
-                info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(ch_url)
+                info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(ch_url, self.guild_data)
                 status_manager._type = YTDLPInfoType.CHANNEL
                 status_manager.name = (self.ch_name() or '')
                 if info := await anext(info_generator, None):
-                    _ = YTDLPAudioData(info)
+                    _ = YTDLPAudioData(info, None, None)
                     self.ch_icon = await _.load_thumbnail.run()
                 print("load ch icon fin:", ch_url)
         return self.ch_icon
@@ -116,7 +118,7 @@ class YTDLPAudioData(StreamAudioData):
         #self.load_ch_icon.create_task()
         
         print("check stream data:", self.web_url())
-        info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(self.web_url())
+        info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(self.web_url(), self.guild_data)
         status_manager._type = YTDLPInfoType.VIDEO
         status_manager.name = self.title()
         info = await anext(info_generator, None)

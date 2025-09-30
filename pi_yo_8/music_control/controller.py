@@ -160,7 +160,7 @@ class MusicController():
             self.player_track.resume()
             return
 
-        result = await self._analysis_input(arg)
+        result = await self._analysis_input(arg, self.info)
         if not result: return
 
         #Queueに登録
@@ -183,7 +183,7 @@ class MusicController():
             self.player_track.resume()
             return
 
-        res = await self._analysis_input(arg)
+        res = await self._analysis_input(arg, self.info)
         if not res: return
 
         if self.queue.play_queue:
@@ -200,13 +200,13 @@ class MusicController():
 
 
     @staticmethod
-    async def _analysis_input(arg:str) -> "Playlist | YTDLPAudioData | None":
+    async def _analysis_input(arg:str, dataInfo:"DataInfo|None") -> "Playlist | YTDLPAudioData | None":
         print("extract:", arg)
-        info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS).extract_raw_info(arg)
+        info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS).extract_raw_info(arg, dataInfo)
         if info := await anext(info_generator, None):
             if info.get("playlist"):
                 analysis = UrlAnalyzer(arg)
-                res = LazyPlaylist(info, info_generator)
+                res = LazyPlaylist(info, info_generator, dataInfo)
                 status_manager._type = YTDLPInfoType.PLAYLIST
                 status_manager.name = res.title
 
@@ -220,7 +220,7 @@ class MusicController():
 
             if info.get("formats") and info.get("url"):
                 print("extract video", arg)
-                res = YTDLPAudioData(info)
+                res = YTDLPAudioData(info, dataInfo, None)
                 status_manager._type = YTDLPInfoType.VIDEO
                 status_manager.name = res.title()
                 return res
@@ -322,8 +322,7 @@ class MusicController():
     @staticmethod
     async def download(arg:str) -> list[Embed] | None:
         # Download Embed
-        url = UrlAnalyzer(arg)
-        result = await MusicController._analysis_input(arg)
+        result = await MusicController._analysis_input(arg, None)
         if result is None:
             return
         audio_data = result.entries[0] if isinstance(result, Playlist) else result

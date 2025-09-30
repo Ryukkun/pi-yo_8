@@ -62,7 +62,7 @@ class YTDLPExtractor:
         return ydl
 
 
-    def extract_raw_info(self, url:str, data_info:"DataInfo|None" = None) -> tuple[AsyncGenWrapper, YTDLPStatusManager]:
+    def extract_raw_info(self, url:str, data_info:"DataInfo|None") -> tuple[AsyncGenWrapper, YTDLPStatusManager]:
         self.is_running = True
         self.connection.send(url)
         loop = asyncio.get_event_loop()
