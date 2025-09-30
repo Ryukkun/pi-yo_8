@@ -179,7 +179,7 @@ class CreateSelect(discord.ui.Select):
             select_opt.append(discord.SelectOption(label=title,value=str(i),default=(i == 0)))
 
         if not select_opt:
-            select_opt.append(discord.SelectOption(label='動画がないよぉ～ん',value='',default=False))
+            select_opt.append(discord.SelectOption(label='動画がないよぉ～ん',value='0',default=False))
         parent.select_opt = select_opt
         super().__init__(placeholder='キュー表示', options=select_opt, row=0)
 

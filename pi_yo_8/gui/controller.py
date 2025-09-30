@@ -40,22 +40,22 @@ class EmbedController:
         try:
             if self.lastest_action_ch:
                 # Get Embed
-                if embed := await self.generate_main_display():
-                    play_option = False
-                    # 古いEmbedを削除
-                    if self.main_display:
-                        try:
-                            await self.main_display.delete()
-                            if self.options_display:
-                                await self.options_display.delete()
-                                play_option = True
-                        except NotFound: pass
+                embed = await self.generate_main_display()
+                play_option = False
+                # 古いEmbedを削除
+                if self.main_display:
+                    try:
+                        await self.main_display.delete()
+                        if self.options_display:
+                            await self.options_display.delete()
+                            play_option = True
+                    except NotFound: pass
 
-                    # 新しいEmbed
-                    self.main_display = await self.lastest_action_ch.send(embed=embed,view=CreateButton(self.info))
-                    self.options_display = await playoptionmessage(self.lastest_action_ch, self.info) if play_option else None
+                # 新しいEmbed
+                self.main_display = await self.lastest_action_ch.send(embed=embed,view=CreateButton(self.info))
+                self.options_display = await playoptionmessage(self.lastest_action_ch, self.info) if play_option else None
 
-                    #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
+                #print(f"{guild.name} : #再生中の曲　<{g_opts[guild.id]['queue'][0][1]}>")
         except Exception as e:
             _log.info(f"Embed.send_new_main_display - {self.info.guild.name}", exc_info=True)
 
@@ -80,11 +80,6 @@ class EmbedController:
 
     async def _update_main_display(self, target_message:Message):
         embed = await self.generate_main_display()
-        # embedが無効だったら 古いEmbedを削除
-        if not embed:
-            try: await target_message.delete()
-            except NotFound: pass
-            return True
 
         # viewを変更する必要があるか
         view = CreateButton(self.info)
@@ -171,7 +166,8 @@ class EmbedController:
             if errors := status_manager.get_errors(seconds_ago=20):
                 embed.add_field(name=name, value="```"+"\n".join(map(lambda e: e.description, errors))+"```")
 
-        embed.set_footer(text="解析中... "+" ".join(footer))
+        if footer:
+            embed.set_footer(text="解析中... "+" ".join(footer))
         return embed
     
 

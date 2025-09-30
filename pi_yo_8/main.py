@@ -83,7 +83,7 @@ class MyCog(commands.Cog):
         if ctx.guild and (info := self.g_opts.get(ctx.guild.id)):
             if isinstance(ctx.channel, SendableChannels):
                 info.embed.lastest_action_ch = ctx.channel
-            await info.embed.generate_main_display()
+            await info.embed.update_main_display()
 
 
 
