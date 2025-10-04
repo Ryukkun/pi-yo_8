@@ -147,7 +147,7 @@ class DataInfo:
         self.bot = cog.bot
         self.g_opts = cog.g_opts
         self.client_user_id = self.bot.user.id if self.bot.user else -1
-        self.MA = MultiAudioVoiceClient(guild, self)
+        self.mavc = MultiAudioVoiceClient(guild, self)
         self.music = MusicController(self)
         self.embed = EmbedController(self)
         self.ytdlp_status_managers: list[YTDLPStatusManager] = []
@@ -161,7 +161,7 @@ class DataInfo:
 
 
     async def _bye(self, text:str):
-        self.MA.kill()
+        self.mavc.kill()
         del self.g_opts[self.guild.id]
 
         _log.info(f'{self.guild.name} : #{text}')

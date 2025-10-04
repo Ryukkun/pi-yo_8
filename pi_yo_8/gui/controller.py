@@ -171,13 +171,13 @@ class EmbedController:
 
 
         for status_manager in self.info.ytdlp_status_managers:
-            if status_manager.name:
-                _name = f"[{status_manager.name}]({status_manager.url})" if UrlAnalyzer(status_manager.url).is_url else status_manager.name
-                name = f"{status_manager._type.name}:{_name}"
-            else:
-                name = f"[{status_manager._type.name}]({status_manager.url})" if UrlAnalyzer(status_manager.url).is_url else status_manager._type.name
-
             if errors := status_manager.get_errors(seconds_ago=20):
+                if status_manager.name:
+                    _name = f"[{status_manager.name}]({status_manager.url})" if UrlAnalyzer(status_manager.url).is_url else status_manager.name
+                    name = f"{status_manager._type.name}:{_name}"
+                else:
+                    name = f"[{status_manager._type.name}]({status_manager.url})" if UrlAnalyzer(status_manager.url).is_url else status_manager._type.name
+
                 embed.add_field(name=name, value="```"+"\n".join(map(lambda e: e.description, errors))+"```")
 
 
