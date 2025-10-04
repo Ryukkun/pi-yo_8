@@ -6,11 +6,10 @@ import traceback
 import numpy as np
 from collections import deque
 from math import sqrt
-from discord import SpeakingState, opus, Guild, FFmpegPCMAudio, FFmpegOpusAudio
-from typing import TYPE_CHECKING, Any, Callable, Generic, Union
+from discord import FFmpegAudio, SpeakingState, opus, Guild, FFmpegPCMAudio, FFmpegOpusAudio
+from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar, Union
 
 from main import IS_MAIN_PROCESS
-from pi_yo_8.type import T
 from pi_yo_8.utils import run_check_storage
 
 
@@ -46,7 +45,7 @@ class StreamAudioData:
 
 
 
-    async def get_ffmpegaudio(self, opus:bool, sec:float=0.0, speed:float=1.0, pitch:int=0) -> tuple[bytes, FFmpegOpusAudio | FFmpegPCMAudio]:
+    def get_ffmpegaudio(self, opus:bool, sec:float=0.0, speed:float=1.0, pitch:int=0) -> 'FFmpegReader':
         before_options = []
         options = ['-vn', '-application', 'audio', '-loglevel', 'quiet']
         #options = ['-vn', '-application', 'lowdelay']
@@ -72,23 +71,68 @@ class StreamAudioData:
         if af:
             options.extend(('-af', ','.join(af) ))
 
-        def io() -> tuple[bytes, FFmpegOpusAudio | FFmpegPCMAudio]:
-            ffmpeg = self._get_ffmpegaudio(opus, before_options, options)
-            _byte = ffmpeg.read()
-            return _byte, ffmpeg
-        
-        return await asyncio.get_event_loop().run_in_executor(self.exe, io)
+        return FFmpegReader(self._get_ffmpegaudio(opus, before_options, options))
+
+
+class FFmpegReader():
+    """ffmpegのreadのブロックをなくすことを目的としている"""
+    def __init__(self, ffmpeg:FFmpegAudio) -> None:
+        self.ffmpeg = ffmpeg
+        self.next_q:deque[bytes] = deque() 
+        self.prev_q:deque[bytes] = deque()
+
+        def read_all():
+            while not self.stop_flag.is_set() and (data := ffmpeg.read()):
+                self.next_q.append(data)
+            self.exe.shutdown()
+
+        self.stop_flag = threading.Event()
+        self.exe = ThreadPoolExecutor(max_workers=1)
+        self.read_all_task = self.exe.submit(read_all)
+
+    def read(self) -> bytes|None:
+        """
+        Returns
+        -------
+        bytes|None
+            b''は読み込み終了を意味する。
+            Noneはまだ読み込みは終わっていないがreadが間に合っていない
+        """
+        if self.next_q:
+            data = self.next_q.popleft()
+            self.prev_q.append(data)
+            return data
+        if self.read_all_task.done():
+            return b''
+        return None
+    
+    def cleanup(self):
+        self.stop_flag.set()
+        self.ffmpeg.cleanup()
+        self.next_q.clear()
+        self.prev_q.clear()
+
+    def rewind(self, count:int):
+        while self.prev_q and count > 0:
+            self.next_q.appendleft(self.prev_q.pop())
+            count -= 1
+
+    def skip(self, count:int):
+        while self.next_q and count > 0:
+            self.prev_q.append(self.next_q.popleft())
+            count -= 1
 
 
 
-class _Attribute(Generic[T]):
-    def __init__(self, init:T, min:T, max:T, update_asource:Callable[..., Any]) -> None:
+V = TypeVar("V", int, float)
+class _Attribute(Generic[V]):
+    def __init__(self, init:V, min:V, max:V, update_asource:Callable[..., Any]) -> None:
         self.value = init
         self.update_asource = update_asource
         self.min = min
         self.max = max
     
-    def get(self) -> T:
+    def get(self) -> V:
         return self.value
 
     async def set(self, num) -> bool:
@@ -117,25 +161,23 @@ class MultiAudioVoiceClient:
         self.guild = guild
         self.loop = info.bot.loop
         self.info = info
-        self.players:list['AudioTrack'] = []
+        self.tracks:list['AudioTrack'] = []
         self.enc_bool = False
         self.info.vc.encoder = opus.Encoder()
         #self.vc.encoder.set_expected_packet_loss_percent(0.01)
 
-
     def kill(self):
         self.enable_loop = False
 
-
     def add_track(self ,RNum=0 ,opus=False) -> 'AudioTrack':
-        player = AudioTrack(RNum ,opus=opus ,vc=self)
-        self.players.append(player)
-        self.enc_bool = (len(self.players) != 1 or len(self.players) == 1 and opus == False)
+        player = AudioTrack(opus=opus ,vc=self)
+        self.tracks.append(player)
+        self.enc_bool = (len(self.tracks) != 1 or len(self.tracks) == 1 and opus == False)
         return player
 
     def _speaking(self,status: bool):
         playing = 0
-        for p in self.players:
+        for p in self.tracks:
             playing += not p.is_paused()
 
         if status:
@@ -171,7 +213,7 @@ class MultiAudioVoiceClient:
         while self.enable_loop:
             audio_bytes = None
             byte_list = []
-            for _ in self.players:
+            for _ in self.tracks:
                 if _byte := _.read_bytes():
                     byte_list.append(_byte)
                 
@@ -199,7 +241,7 @@ class MultiAudioVoiceClient:
             # thread fin
             else:
                 playing = 0
-                for p in self.players:
+                for p in self.tracks:
                     playing += not p.is_paused()
 
                 if playing == 0:
@@ -208,47 +250,31 @@ class MultiAudioVoiceClient:
                     break
 
 
-            
 
 class AudioTrack:
     FRAME_LENGTH = opus.Encoder.FRAME_LENGTH / 1000 #Second
     FRAME_PER_SEC = 1000 / opus.Encoder.FRAME_LENGTH
 
-    def __init__(self ,rwd_buffer_size_sec:float ,opus ,vc:'MultiAudioVoiceClient'):
-        self.ffmpeg_audio:FFmpegOpusAudio | FFmpegPCMAudio | None = None
+    def __init__(self ,opus ,vc:'MultiAudioVoiceClient'):
+        self.ffmpeg_audio:FFmpegReader | None = None
         self.audio_data:StreamAudioData | None = None
         self.Pausing:bool = True
         self.vc = vc
-        self.rwd_buffer_size = int(rwd_buffer_size_sec * self.FRAME_PER_SEC)
         self.timer:float = 0.0
         self.pitch = _Attribute[int](init=0, min=-60, max=60, update_asource=self.update_asouce_sec)
         self.speed = _Attribute[float](init=1.0, min=0.1, max=3.0, update_asource=self.update_asouce_sec)
         self.after:Callable[[], Any] | None = None
         self.opus:bool = opus
-        self.QBytes = deque()
-        self.RBytes = deque()
-        self._lock = threading.Lock()
-    
+        self._lock = threading.RLock()
 
     async def play(self, sad:StreamAudioData, after:Callable[[], Any]):
         self.audio_data = sad
-        _byte, self.ffmpeg_audio = await sad.get_ffmpegaudio(self.opus, speed=self.speed.value, pitch=self.pitch.value)
+        self.ffmpeg_audio = sad.get_ffmpegaudio(self.opus, speed=self.speed.value, pitch=self.pitch.value)
         # 最初のロードは少し時間かかるから先にロード
-        self.QBytes.clear()
-        self.QBytes.append(_byte)
-        self.RBytes.clear()
         self.timer = 0.0
         self.after = after
         self.Pausing = False
         self._speaking(True)
-
-
-    def stop(self):
-        if self.ffmpeg_audio:
-            self.pause()
-            self.ffmpeg_audio.cleanup()
-        self.ffmpeg_audio = None
-        self.audio_data = None
 
     def resume(self):
         if self.Pausing:
@@ -272,70 +298,64 @@ class AudioTrack:
         if self.audio_data and self.ffmpeg_audio:
             self.vc._speaking(status=status)
 
-    def skip_time(self, sec:float):
-        # n秒 進む
-        loop = asyncio.get_event_loop()
+    async def skip_time(self, sec:float):
         if self.audio_data == None or self.ffmpeg_audio == None:
             return
-        if 0 < sec:
-            skip_len = int(sec * self.FRAME_PER_SEC / self.speed.get())
-            if 300*self.FRAME_PER_SEC < skip_len:
+        
+        with self._lock:
+            # n秒 進む
+            if 0 < sec:
+                skip_data_len = int(sec * self.FRAME_PER_SEC / self.speed.get())
                 target_sec = self.timer + sec
                 if self.audio_data.duration != None and self.audio_data.duration < target_sec:
                     self._finish()
                     return
-                loop.create_task(self.update_asouce_sec(sec=target_sec))
+                
+                if len(self.ffmpeg_audio.next_q) + (AudioTrack.FRAME_PER_SEC*10) < skip_data_len:
+                    await self.update_asouce_sec(sec=target_sec)
+                    return
+                while len(self.ffmpeg_audio.next_q) < skip_data_len and not self.ffmpeg_audio.read_all_task.done():
+                    await asyncio.sleep(0.01)
+                self.ffmpeg_audio.skip(skip_data_len)
+                self.timer += skip_data_len * self.FRAME_LENGTH * self.speed.get()
 
-            else:
-                with self._lock:
-                    was_paused = self.is_paused()
-                    if not was_paused: self.pause()
-
-                    self.timer += skip_len * self.FRAME_LENGTH * self.speed.get()
-                    for _ in range(skip_len):
-                        _byte = self.QBytes.popleft() if self.QBytes else self.ffmpeg_audio.read()
-                        if not _byte:
-                            self._finish()
-                            break
-                        self.RBytes.append(_byte)
-                    if not was_paused: self.resume()
-
-        # n秒 前に戻る
-        elif sec < 0:
-            target_sec = self.timer + sec
-            if target_sec < 0:
-                target_sec = 0
-                sec = -self.timer
-            rwd_len = int(-sec * self.FRAME_PER_SEC / self.speed.get())
-            if len(self.RBytes) < rwd_len:
-                loop.create_task(self.update_asouce_sec(sec=target_sec))
-
-            else:
-                with self._lock:
-                    self.timer += -rwd_len * self.FRAME_LENGTH * self.speed.get()
-                    for _ in range(rwd_len):
-                        self.QBytes.appendleft(self.RBytes.pop())
+            # n秒 前に戻る
+            elif sec < 0:
+                target_sec = self.timer + sec
+                if target_sec < 0:
+                    target_sec = 0
+                    sec = -self.timer
+                rwd_data_len = int(-sec * self.FRAME_PER_SEC / self.speed.get())
+                self.ffmpeg_audio.rewind(rwd_data_len)
+                self.timer += -rwd_data_len * self.FRAME_LENGTH * self.speed.get()
 
 
+    def read_bytes(self) -> bytes:
+        """別スレッドからの呼び出しを想定
 
-    def read_bytes(self) -> bytes|None:
-        if self.ffmpeg_audio:            
+        Returns
+        -------
+        bytes
+            音声データ ない場合はb''
+        """
+        _byte = b''
+        if self.ffmpeg_audio and self.Pausing == False:            
             # Read Bytes
-            if self.Pausing == False:
-                with self._lock:
-                    _byte = self.QBytes.popleft() if self.QBytes else self.ffmpeg_audio.read()
-                    # 終了
-                    if not _byte:
-                        self._finish()
-                        return
-
+            if self._lock.acquire(blocking=False):
+                _byte = self.ffmpeg_audio.read()
+                # 終了
+                if _byte:
                     self.timer += (self.FRAME_LENGTH * self.speed.get())
-                    if self.rwd_buffer_size != 0:
-                        self.RBytes.append(_byte)
-                        while self.rwd_buffer_size < len(self.RBytes):
-                            self.RBytes.popleft()
-                return _byte
-
+                    self._lock.release()
+                    return _byte
+                
+                self._lock.release()
+                if _byte == None:
+                    _byte = b''
+                else:
+                    self._finish()
+        return _byte
+            
 
     async def update_asouce_sec(self, sec:float|None=None):
         if not self.audio_data:
@@ -343,11 +363,9 @@ class AudioTrack:
         if sec is None:
             sec = self.timer
 
-        _byte, self.ffmpeg_audio = await self.audio_data.get_ffmpegaudio(self.opus, sec, speed=self.speed.value, pitch=self.pitch.value)
-        self.timer = sec
-        self.QBytes.clear()
-        self.QBytes.append(_byte)
-        self.RBytes.clear()
+        with self._lock:
+            self.ffmpeg_audio = self.audio_data.get_ffmpegaudio(self.opus, sec, speed=self.speed.value, pitch=self.pitch.value)
+            self.timer = sec
 
 
     def _finish(self):

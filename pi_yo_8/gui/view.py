@@ -48,7 +48,7 @@ class CreateButton(discord.ui.View):
     async def def_button1(self, interaction:discord.Interaction, button):
         self.info.embed.update_action_time()
         asyncio.get_event_loop().create_task(interaction.response.defer())
-        self.info.music.player_track.skip_time(-10)
+        await self.info.music.player_track.skip_time(-10)
 
 
 class Button2(discord.ui.Button):
@@ -75,7 +75,7 @@ class Button3(discord.ui.Button):
     async def callback(self, interaction: Interaction):
         self.info.embed.update_action_time()
         asyncio.get_event_loop().create_task(interaction.response.defer())
-        self.info.music.player_track.skip_time(10)
+        await self.info.music.player_track.skip_time(10)
 
 class Button4(discord.ui.Button):
     def __init__(self, info:"DataInfo"):

@@ -142,7 +142,7 @@ class MusicQueue:
 class MusicController():
     def __init__(self, info:"DataInfo"):
         self.info = info
-        self.player_track = info.MA.add_track(RNum=30 ,opus=True)
+        self.player_track = info.mavc.add_track(RNum=30 ,opus=True)
         self.guild = info.guild
         self.queue:MusicQueue = MusicQueue()
         self.status = Status()
@@ -248,16 +248,16 @@ class MusicController():
                         sec = int(res.group(3))
                         sec += int(res.group(2)) * 60
                         sec += int(res.group(1)) * 3600
-                        self.player_track.skip_time((sec) - int(self.player_track.timer))
+                        await self.player_track.skip_time((sec) - int(self.player_track.timer))
                         return
 
                     elif res := re_skip_set_m.match(sec):
                         sec = int(res.group(2))
                         sec += int(res.group(1)) * 60
-                        self.player_track.skip_time((sec) - int(self.player_track.timer))
+                        await self.player_track.skip_time((sec) - int(self.player_track.timer))
                         return
 
-                self.player_track.skip_time(int(sec))
+                await self.player_track.skip_time(int(sec))
 
             else:
                 await self.skip_music()
