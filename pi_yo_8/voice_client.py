@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+import logging
 import threading
 import asyncio
 import time
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
     from pi_yo_8.main import DataInfo
 
 
-
+_log = logging.getLogger(__name__)
 
 
 
@@ -175,79 +176,73 @@ class MultiAudioVoiceClient:
         self.enc_bool = (len(self.tracks) != 1 or len(self.tracks) == 1 and opus == False)
         return player
 
-    def _speaking(self,status: bool):
+    def run_loop_check(self):
         playing = 0
         for p in self.tracks:
             playing += not p.is_paused()
 
-        if status:
-            if playing == 1:
-                self.__speak(SpeakingState.voice)
-                if not self.run_loop.is_running:
-                    self.run_loop.run_in_thread()
-        else:
-            if playing == 0:
-                self.__speak(SpeakingState.none)
+        if playing > 0 and not self._run_loop.is_running:
+            self._run_loop.run_in_thread()
 
 
     def __speak(self, speaking: SpeakingState) -> None:
         """
-        これ (self._speak) がないと謎にバグる ※botがjoinしたときに居たメンツにしか 音が聞こえない
-        友達が幻聴を聞いてたら怖いよね
+        音声ステータスを変えるやつ
+        これがないと botがjoinしたときに居たメンツにしか 音が聞こえない
         """
         try:
             asyncio.run_coroutine_threadsafe(self.info.vc.ws.speak(speaking), self.loop)
-        except Exception:
-            pass
+        except:
+            _log.exception(f"func:__speak  guild:{self.info.guild.name}")
 
     @run_check_storage()
-    def run_loop(self):
+    def _run_loop(self):
         """
-        音声データをを送る　別スレッドで動作する 
+        音声データをを送る 別スレッドで動作する 
         音声データ (Bytes) を取得し、必要があれば Numpy で読み込んで 合成しています
         最後に音声データ送信
         """
         send_audio = self.info.vc.send_audio_packet
+        self.__speak(SpeakingState.voice)
         _start = time.perf_counter()
-        fin_loop = 0
-        while self.enable_loop:
-            audio_bytes = None
-            byte_list = []
-            for _ in self.tracks:
-                if _byte := _.read_bytes():
-                    byte_list.append(_byte)
-                
-            active_track = len(byte_list)
-            if 1 <= active_track:
-                if self.enc_bool:
-                    adjast_vol = 1 / sqrt(active_track)
-                    audio_numpy:np.ndarray = np.sum([np.frombuffer(byte_list[i], dtype=np.int16) * adjast_vol for i in range(active_track)], axis=0)
-                    audio_bytes = audio_numpy.astype(np.int16).tobytes()
+        try:
+            while self.enable_loop:
+                audio_bytes:bytes = b''
+                byte_list:list[bytes] = []
+                for _ in self.tracks:
+                    if _byte := _.read_bytes():
+                        byte_list.append(_byte)
+                    
+                active_track = len(byte_list)
+                if 1 <= active_track:
+                    if self.enc_bool:
+                        adjast_vol = 1 / sqrt(active_track)
+                        audio_numpy:np.ndarray = np.sum([np.frombuffer(byte_list[i], dtype=np.int16) * adjast_vol for i in range(active_track)], axis=0)
+                        audio_bytes = audio_numpy.astype(np.int16).tobytes()
+                    else:
+                        audio_bytes = byte_list[0]
+
+                # Loop Delay
+                _start += 0.02
+                delay = max(0, _start - time.perf_counter())
+                time.sleep(delay)
+    
+                # Send Bytes
+                if audio_bytes:
+                    send_audio(audio_bytes, encode=self.enc_bool)
+
+                # thread fin
                 else:
-                    audio_bytes = byte_list[0]
+                    send_audio(opus.OPUS_SILENCE, encode=False)
 
-            # Loop Delay
-            _start += 0.02
-            delay = max(0, _start - time.perf_counter())
-            time.sleep(delay)
- 
-            # Send Bytes
-            if audio_bytes:
-                fin_loop = 0
-                try: send_audio(audio_bytes, encode=self.enc_bool)
-                except Exception as e:
-                    traceback.print_exc()
-                    break
-            # thread fin
-            else:
-                playing = 0
-                for p in self.tracks:
-                    playing += not p.is_paused()
-
-                if playing == 0:
-                    fin_loop += 1
-                if (AudioTrack.FRAME_PER_SEC * 0.1) < fin_loop:
-                    break
+                    playing = 0
+                    for p in self.tracks:
+                        playing += not p.is_paused()
+                    if playing == 0:
+                        self.__speak(SpeakingState.none)
+                        break
+        except:
+            _log.exception(f"func:_run_loop  guild:{self.info.guild.name}")
 
 
 
@@ -258,11 +253,11 @@ class AudioTrack:
     def __init__(self ,opus ,vc:'MultiAudioVoiceClient'):
         self.ffmpeg_audio:FFmpegReader | None = None
         self.audio_data:StreamAudioData | None = None
-        self.Pausing:bool = True
+        self.pausing:bool = True
         self.vc = vc
         self.timer:float = 0.0
-        self.pitch = _Attribute[int](init=0, min=-60, max=60, update_asource=self.update_asouce_sec)
-        self.speed = _Attribute[float](init=1.0, min=0.1, max=3.0, update_asource=self.update_asouce_sec)
+        self.pitch = _Attribute(init=0, min=-60, max=60, update_asource=self.update_asouce_sec)
+        self.speed = _Attribute(init=1.0, min=0.1, max=3.0, update_asource=self.update_asouce_sec)
         self.after:Callable[[], Any] | None = None
         self.opus:bool = opus
         self._lock = threading.RLock()
@@ -273,18 +268,17 @@ class AudioTrack:
         # 最初のロードは少し時間かかるから先にロード
         self.timer = 0.0
         self.after = after
-        self.Pausing = False
-        self._speaking(True)
+        self.pausing = False
+        self.vc.run_loop_check()
 
     def resume(self):
-        if self.Pausing:
-            self.Pausing = False
-            self._speaking(True)
+        if self.pausing:
+            self.pausing = False
+            self.vc.run_loop_check()
 
     def pause(self):
-        if not self.Pausing:
-            self.Pausing = True
-            self._speaking(False)
+        if not self.pausing:
+            self.pausing = True
 
     def has_play_data(self):
         if self.audio_data:
@@ -292,11 +286,7 @@ class AudioTrack:
         return False
 
     def is_paused(self):
-        return self.Pausing
-
-    def _speaking(self,status: bool):
-        if self.audio_data and self.ffmpeg_audio:
-            self.vc._speaking(status=status)
+        return self.pausing
 
     async def skip_time(self, sec:float):
         if self.audio_data == None or self.ffmpeg_audio == None:
@@ -339,7 +329,7 @@ class AudioTrack:
             音声データ ない場合はb''
         """
         _byte = b''
-        if self.ffmpeg_audio and self.Pausing == False:            
+        if self.ffmpeg_audio and self.pausing == False:            
             # Read Bytes
             if self._lock.acquire(blocking=False):
                 _byte = self.ffmpeg_audio.read()
@@ -371,6 +361,5 @@ class AudioTrack:
     def _finish(self):
         self.ffmpeg_audio = None
         self.audio_data = None
-        self._speaking(False)
         if self.after:
             self.after()
