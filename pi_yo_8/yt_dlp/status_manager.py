@@ -64,10 +64,6 @@ class YTDLPStatusManager:
             self._errors.append(error)
             self._sort_error()
 
-    def extend_error(self, manager:"YTDLPStatusManager"):
-        self._errors.extend(manager._errors)
-        self._sort_error()
-
     def _sort_error(self):
         self._errors.sort(key = lambda msg: msg.occurred_time)
 

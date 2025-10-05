@@ -53,8 +53,8 @@ class MyCog(commands.Cog):
                     _log.info(f'{ctx.guild.name} : #join')
                     self.g_opts[ctx.guild.id] = DataInfo(ctx.guild, self)
                     return True
-            except Exception as e:
-                print(e)
+            except:
+                _log.exception(f"func:join  guild:{ctx.guild.name}")
 
 
     @commands.command()
@@ -142,7 +142,7 @@ class DataInfo:
             self.vc:discord.VoiceClient = guild.voice_client
         else:
             _log.error("vcがVoiceClientじゃない")
-            asyncio.get_event_loop().create_task(self.bye())
+            asyncio.create_task(self.bye())
         self.guild = guild
         self.bot = cog.bot
         self.g_opts = cog.g_opts
@@ -156,7 +156,7 @@ class DataInfo:
 
 
     async def bye(self, text:str='切断'):
-        asyncio.get_event_loop().create_task(self._bye(text))
+        asyncio.create_task(self._bye(text))
         self.loop_5.stop()
 
 
