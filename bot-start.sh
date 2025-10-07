@@ -1,4 +1,4 @@
 #!/bin/sh
 cd `dirname $0`
-source ./venv/bin/activate
-python3 ./main.py
+. ./venv/bin/activate
+screen python3 ./main.py
