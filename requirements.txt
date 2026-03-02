@@ -1,8 +1,0 @@
-discord
-discord.py[voice]
-yt_dlp
-pytube
-ffmpeg
-bs4
-tabulate
-numpy
