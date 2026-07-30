@@ -41,13 +41,13 @@ class CreateButton(discord.ui.View):
     @discord.ui.button(label="<",row=2)
     async def def_button0(self, interaction:discord.Interaction, button):
         self.info.embed.update_action_time()
-        asyncio.get_event_loop().create_task(interaction.response.defer())
+        await interaction.response.defer()
         await self.info.music.skip_music(-1)
 
     @discord.ui.button(label="10↩︎",row=2)
     async def def_button1(self, interaction:discord.Interaction, button):
         self.info.embed.update_action_time()
-        asyncio.get_event_loop().create_task(interaction.response.defer())
+        await interaction.response.defer()
         await self.info.music.player_track.skip_time(-10)
 
 
@@ -59,7 +59,7 @@ class Button2(discord.ui.Button):
 
     async def callback(self, interaction: Interaction):
         self.info.embed.update_action_time()
-        asyncio.get_event_loop().create_task(interaction.response.defer())
+        await interaction.response.defer()
 
         if self.info.music.player_track.is_paused():
             self.info.music.player_track.resume()
@@ -74,7 +74,7 @@ class Button3(discord.ui.Button):
 
     async def callback(self, interaction: Interaction):
         self.info.embed.update_action_time()
-        asyncio.get_event_loop().create_task(interaction.response.defer())
+        await interaction.response.defer()
         await self.info.music.player_track.skip_time(10)
 
 class Button4(discord.ui.Button):
@@ -84,7 +84,7 @@ class Button4(discord.ui.Button):
 
     async def callback(self, interaction: Interaction):
         self.info.embed.update_action_time()
-        asyncio.get_event_loop().create_task(interaction.response.defer())
+        await interaction.response.defer()
         await self.info.music.skip(None)
 
 
@@ -95,8 +95,8 @@ class Button5(discord.ui.Button):
 
     async def callback(self, interaction: Interaction):
         self.info.embed.update_action_time()
-        self.info.embed.update_action_time()
-        asyncio.get_event_loop().create_task(interaction.response.defer())
+        await interaction.response.defer()
+
         if message := self.info.embed.options_display:
             if isinstance(message.channel, SendableChannels) and message.channel.last_message == message:
                 return
@@ -186,7 +186,7 @@ class CreateSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         #await interaction.response.send_message(f'{interaction.user.name}は{self.values[0]}を選択しました')
-        asyncio.get_event_loop().create_task(interaction.response.defer())
+        await interaction.response.defer()
         if self.values[0] == '': return
 
         self.view_parent.info.embed.update_action_time()
@@ -220,7 +220,7 @@ class PlayConfigView(discord.ui.View):
             await interaction.message.edit(embed=PlayConfigEmbed(self.player_track))
 
     async def edit_speed(self, interaction:discord.Interaction, num:float):
-        asyncio.get_event_loop().create_task(interaction.response.defer())
+        await interaction.response.defer()
         res = await self.player_track.speed.add(num)
         self.info.embed.update_action_time()
         if res:
@@ -228,7 +228,7 @@ class PlayConfigView(discord.ui.View):
 
 
     async def edit_pitch(self, interaction:discord.Interaction, num:int):
-        asyncio.get_event_loop().create_task(interaction.response.defer())
+        await interaction.response.defer()
         res = await self.player_track.pitch.add(num)
         self.info.embed.update_action_time()
         if res:
@@ -247,7 +247,7 @@ class PlayConfigView(discord.ui.View):
 
     @discord.ui.button(label="テンポリセット", row=0, style=discord.ButtonStyle.blurple)
     async def speed_reset(self, interaction:discord.Interaction, button):
-        asyncio.get_event_loop().create_task(interaction.response.defer())
+        await interaction.response.defer()
         res = await self.player_track.speed.set(1.0)
         if res:
             await self.edit_message(interaction)
@@ -275,10 +275,11 @@ class PlayConfigView(discord.ui.View):
 
     @discord.ui.button(label="キー　リセット", row=1, style=discord.ButtonStyle.blurple)
     async def pitch_reset(self, interaction:discord.Interaction, button):
-        asyncio.get_event_loop().create_task(interaction.response.defer())
+        await interaction.response.defer()
         res = await self.player_track.pitch.set(0)
         if res:
             await self.edit_message(interaction)
+
 
 
     @discord.ui.button(label="+ 1", row=1)

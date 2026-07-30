@@ -106,151 +106,125 @@ class YoutubeUtil:
 
 class WrapperAbstract:
     """
-    一度しか実行できないように
-
-    メソッドにデコレータを付与することで実装
-    実装クラスがimportで読み込まれた時点で_class=Noneのインスタンスが生成される
-    実装クラスがインスタンス化された後、呼び出される際に __get__ , __call__ の順で呼び出される
+    メソッドに付与するディザインパターンの基底クラス。
+    インスタンスバインド時にデスクリプタ(__get__)を介してラッパーを生成・キャッシュする。
     """
-    def __init__(self, func:Callable[..., Any], _class:object=None):
+    def __init__(self, func: Callable[..., Any], _class: object = None):
         self.func = func
         self._class = _class
 
-    def _new_instance(self, obj):
-        return WrapperAbstract(self.func, _class=obj)
+    def _new_instance(self, obj: object) -> Self:
+        return self.__class__(self.func, _class=obj) # type: ignore
 
-    def __get__(self, obj:object, objtype) -> Self:
-        """
-        このインスタンスが参照された場合に呼び出される
-
-        Parameters
-        ----------
-        obj : Any
-            参照元のオブジェクト(実装元のクラス)  クラスメソッドとして呼び出されたらNoneとなる 
-        objtype : type
-            参照元のオブジェクトのクラス
-
-        Returns
-        -------
-        RunCheckStorageWrapper
-            ラップされた関数
-        """
-        if obj is None:
-            # クラスメソッドとして呼び出されたため処理は不要
+    def __get__(self, obj: object, objtype: type = None) -> Self:
+        if obj is None or self._class is not None:
             return self
-        
-        if self._class is not None:
-            # _Classがあるってことは すでにラップされてる
-            return self
-        
-        # インスタンスメソッドとして呼び出されたため、新しいラッパーを上書きし返す
         wrapper = self._new_instance(obj)
-        # objの self.func.__name__[str] に wrapper をセットする
         setattr(obj, self.func.__name__, wrapper)
-        return wrapper  # type: ignore
+        return wrapper
 
 
 class RunCheckStorageWrapper(WrapperAbstract, Generic[T]):
     """
-    一度しか実行できないように
-
-    メソッドにデコレータを付与することで実装
-    実装クラスがimportで読み込まれた時点で_class=Noneのインスタンスが生成される
-    実装クラスがインスタンス化された後、呼び出される際に __get__ , __call__ の順で呼び出される
+    関数の二重実行を防止するラッパー
     """
-    def __init__(self, func:Callable[..., T], check_fin:bool, _class:object=None):
-        self.func: Callable[..., T]
+    def __init__(self, func: Callable[..., T], check_fin: bool = True, _class: object = None):
         super().__init__(func, _class)
         self.is_running = False
         self.check_fin = check_fin
-        self.is_coroutine = asyncio.iscoroutinefunction(func)
-        self.exe = None
+        self.exe: ThreadPoolExecutor | None = None
         self.lock = threading.Lock()
 
+    def __call__(self, *args: Any, **kwargs: Any) -> T:
+        with self.lock:
+            if self.is_running:
+                raise RuntimeError(f'{self.func.__name__} is already running')
+            self.is_running = True
 
-    def __call__(self, *args:Any, **kwargs:Any) -> T:
-        if self.is_running:
-            raise Exception(f'{self.func.__name__} is already running')
-        self.is_running = True
         if self._class:
             args = (self._class,) + args
         return self._run(*args, **kwargs)
 
-
-    def run_in_thread(self, *args:Any, **kwargs:Any):
+    def run_in_thread(self, *args: Any, **kwargs: Any):
         with self.lock:
             if self.is_running:
-                raise Exception(f'{self.func.__name__} is already running')
+                raise RuntimeError(f'{self.func.__name__} is already running')
             self.is_running = True
+
         if self._class:
             args = (self._class,) + args
         if not self.exe:
             self.exe = ThreadPoolExecutor(max_workers=1)
         self.exe.submit(self._run, *args, **kwargs)
 
-
     def __del__(self):
         if self.exe:
-            self.exe.shutdown(wait=True)
+            self.exe.shutdown(wait=False)
 
-
-    def _run(self, *args:Any, **kwargs:Any):
+    def _run(self, *args: Any, **kwargs: Any) -> T:
         try:
             return self.func(*args, **kwargs)
         finally:
             if self.check_fin:
-                self.is_running = False
+                with self.lock:
+                    self.is_running = False
 
-    def _new_instance(self, obj) -> 'RunCheckStorageWrapper':
+    def _new_instance(self, obj: object) -> 'RunCheckStorageWrapper[T]':
         return RunCheckStorageWrapper(self.func, self.check_fin, _class=obj)
 
 
-def run_check_storage(check_fin= True):
-    def wapper(func) -> RunCheckStorageWrapper:
+def run_check_storage(check_fin: bool = True):
+    def wrapper(func: Callable[..., T]) -> RunCheckStorageWrapper[T]:
         return RunCheckStorageWrapper(func, check_fin)
-    return wapper
-
+    return wrapper
 
 
 class TaskRunningWrapper(WrapperAbstract, Generic[T]):
-    def __init__(self, func:Callable[..., T], _class:object=None):
+    """
+    asyncio.Taskの重複作成を抑制し、単一タスクのライフサイクル（create/run/wait/cancel）を提供するラッパー
+    """
+    def __init__(self, func: Callable[..., T], _class: object = None):
         super().__init__(func, _class)
         self.task: asyncio.Task | None = None
 
-    def create_task(self, *args:Any, **kwargs:Any):
+    def create_task(self, *args: Any, **kwargs: Any):
         if not self.is_running():
-            args = (self._class,) + args
-            self.task = asyncio.get_event_loop().create_task(self.func(*args, **kwargs))
+            if self._class:
+                args = (self._class,) + args
+            try:
+                loop = asyncio.get_running_loop()
+                self.task = loop.create_task(self.func(*args, **kwargs))
+            except RuntimeError:
+                pass
 
     async def wait(self) -> T | None:
-        if self.is_running():
-            return await self.task # type: ignore
-        return 
-    
-    async def run(self, *args:Any, **kwargs:Any) -> T:
+        if self.task and not self.task.done():
+            return await self.task
+        return None
+
+    async def run(self, *args: Any, **kwargs: Any) -> T | None:
         if self.task and not self.task.done():
             return await self.task
         self.create_task(*args, **kwargs)
-        return await self.wait() # type: ignore
-    
+        return await self.wait()
+
     def is_running(self) -> bool:
-        if self.task is None:
-            return False
-        return not self.task.done()
-    
+        return self.task is not None and not self.task.done()
+
     def cancel(self):
         if self.task and not self.task.done():
             self.task.cancel()
-            self.task = None
+        self.task = None
 
-    def _new_instance(self, obj:object):
+    def _new_instance(self, obj: object) -> 'TaskRunningWrapper[T]':
         return TaskRunningWrapper(self.func, _class=obj)
-    
+
 
 def task_running_wrapper():
-    def wapper(func) -> TaskRunningWrapper:
+    def wrapper(func: Callable[..., T]) -> TaskRunningWrapper[T]:
         return TaskRunningWrapper(func)
-    return wapper
+    return wrapper
+
 
 
 

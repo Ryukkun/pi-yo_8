@@ -75,16 +75,12 @@ class MyCog(commands.Cog):
             await data.music.player_track.pitch.set(arg)
 
 
-#--------------------------------------------------
-# GUI操作
-#--------------------------------------------------
     @commands.command()
     async def playing(self, ctx:commands.Context):
         if ctx.guild and (info := self.g_opts.get(ctx.guild.id)):
             if isinstance(ctx.channel, SendableChannels):
-                info.embed.lastest_action_ch = ctx.channel
+                info.embed.update_action_time(ctx.channel)
             await info.embed.update_main_display()
-
 
 
 #---------------------------------------------------------------------------------------------------
@@ -92,17 +88,16 @@ class MyCog(commands.Cog):
 #---------------------------------------------------------------------------------------------------
     @commands.command(aliases=['s'])
     async def skip(self, ctx:commands.Context, arg:str | None):
-        if ctx.guild:
-            try:
-                await self.g_opts[ctx.guild.id].music.skip(arg)
-            except KeyError:pass
+        if ctx.guild and (info := self.g_opts.get(ctx.guild.id)):
+            info.embed.update_action_time(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
+            await info.music.skip(arg)
 
 
 #---------------------------------------------------------------------------------------
 #   Download
 #---------------------------------------------------------------------------------------
     @commands.command(aliases=['dl'])
-    async def download(self, ctx:commands.Context, arg):
+    async def download(self, ctx:commands.Context, arg:str):
         if embeds := await MusicController.download(arg):
             for em in embeds:
                 await ctx.send(embed=em)
@@ -117,8 +112,9 @@ class MyCog(commands.Cog):
     async def queue(self, ctx:commands.Context, *args):
         if ctx.guild:
             await self.join(ctx)
-            if self.g_opts.get(ctx.guild.id):
-                await self.g_opts[ctx.guild.id].music.def_queue(ctx,args)
+            if info := self.g_opts.get(ctx.guild.id):
+                info.embed.update_action_time(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
+                await info.music.def_queue(ctx, args)
 
 
 
@@ -126,8 +122,9 @@ class MyCog(commands.Cog):
     async def play(self, ctx:commands.Context, *args):
         if ctx.guild:
             await self.join(ctx)
-            if self.g_opts.get(ctx.guild.id):
-                await self.g_opts[ctx.guild.id].music.play(ctx,args)
+            if info := self.g_opts.get(ctx.guild.id):
+                info.embed.update_action_time(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
+                await info.music.play(ctx, args)
 
 
 
@@ -136,67 +133,86 @@ class MyCog(commands.Cog):
 
 
 
-class DataInfo:
-    def __init__(self, guild:discord.Guild, cog:MyCog):
+class GuildSession:
+    """
+    Guildごとの接続セッション・音楽コントローラー・UI表示・タスク状態を管理するクラス
+    """
+    def __init__(self, guild: discord.Guild, cog: MyCog):
         if isinstance(guild.voice_client, discord.VoiceClient):
-            self.vc:discord.VoiceClient = guild.voice_client
+            self.vc: discord.VoiceClient = guild.voice_client
         else:
-            _log.error("vcがVoiceClientじゃない")
+            _log.error("VoiceClientが見つからないか無効です")
             asyncio.create_task(self.bye())
+
         self.guild = guild
         self.bot = cog.bot
         self.g_opts = cog.g_opts
         self.client_user_id = self.bot.user.id if self.bot.user else -1
-        self.mavc = MultiAudioVoiceClient(guild, self)
-        self.music = MusicController(self)
-        self.embed = EmbedController(self)
+        self.count_loop = 0
+
+        self.mavc = MultiAudioVoiceClient(guild, self) # type: ignore
+        self.music = MusicController(self) # type: ignore
+        self.embed = EmbedController(self) # type: ignore
         self.ytdlp_status_managers: list[YTDLPStatusManager] = []
         self.loop_5.start()
-            
 
-
-    async def bye(self, text:str='切断'):
+    async def bye(self, text: str = '切断'):
         asyncio.create_task(self._bye(text))
         self.loop_5.stop()
 
-
-    async def _bye(self, text:str):
+    async def _bye(self, text: str):
         self.mavc.kill()
-        del self.g_opts[self.guild.id]
+        if self.guild.id in self.g_opts:
+            del self.g_opts[self.guild.id]
 
         _log.info(f'{self.guild.name} : #{text}')
         await asyncio.sleep(0.02)
-        try: await self.vc.disconnect()
-        except Exception: pass
+        try:
+            await self.vc.disconnect()
+        except Exception:
+            pass
 
         while self.loop_5.is_running():
             await asyncio.sleep(1)
-        if message := self.embed.main_display:
-            await message.delete()
-        if message := self.embed.options_display:
-            await message.delete()
 
+        if message := self.embed.main_display:
+            try:
+                await message.delete()
+            except Exception:
+                pass
+
+        if message := self.embed.options_display:
+            try:
+                await message.delete()
+            except Exception:
+                pass
 
     @tasks.loop(seconds=5.0)
     async def loop_5(self):
-        if not self.guild.id in self.g_opts:
+        if self.guild.id not in self.g_opts:
             return
 
         # 強制切断検知
+        if not self.vc.channel:
+            await self.bye('チャンネル未存在のため切断')
+            return
+
         mems = self.vc.channel.members
-        if not self.client_user_id in [_.id for _ in mems]:
-            await self.bye('強制切断')
+        if self.client_user_id not in [_.id for _ in mems]:
+            await self.bye('強制切断検知')
 
-        # voice channelに誰もいなくなったことを確認
-        elif not False in [_.bot for _ in mems]:
+        # voice channelにBot以外誰もいなくなったことを確認
+        elif not any(not _.bot for _ in mems):
             self.count_loop += 1
-            if 2 <= self.count_loop:
-                await self.bye('誰もいなくなったため 切断')
+            if self.count_loop >= 2:
+                await self.bye('誰もいなくなったため切断')
 
-        # Reset Count
         else:
             self.count_loop = 0
 
-
-        # Music Embed
+        # Embedの自動更新タスク
         await self.embed.task_loop()
+
+
+# 後方互換性保持のためのエイリアス
+DataInfo = GuildSession

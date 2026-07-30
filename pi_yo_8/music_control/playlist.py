@@ -40,10 +40,14 @@ class Playlist:
             if new.random_pl:
                 self.random.set_range(len(self.entries))
                 self.random.cooldowns = self.cooldowns.copy()
-            asyncio.get_event_loop().create_task(self.update_next_indexies())
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self.update_next_indexes())
+            except RuntimeError:
+                pass
 
 
-    async def update_next_indexies(self, length:int=25) -> None:
+    async def update_next_indexes(self, length:int=25) -> None:
         '''
         next_indexesをlength個まで補充する
         再生可能なものがない場合はlength以下になる
@@ -59,6 +63,7 @@ class Playlist:
                     break
                 self.next_indexes.append(i % len(self.entries))
         self._load_streaming_data()
+
         
 
     def _load_streaming_data(self, count = 2):
@@ -118,7 +123,7 @@ class Playlist:
         int
             スキップしても余った数
         """
-        await self.update_next_indexies(count + 25)
+        await self.update_next_indexes(count + 25)
         for _ in range(count):
             if not self.next_indexes: return count - _
             self.play_history.append(self.next_indexes.popleft())
@@ -140,7 +145,8 @@ class Playlist:
 
     async def get_now_entry(self) -> "YTDLPAudioData | None":
         if not self.next_indexes:
-            await self.update_next_indexies()
+            await self.update_next_indexes()
+
         if self.next_indexes:
             now_entry = self.entries[self.next_indexes[0]]
             await now_entry.check_streaming_data.run()
@@ -179,7 +185,7 @@ class LazyPlaylist(Playlist):
 
         async def callback():
             self._adaptation()()
-            await self.update_next_indexies()
+            await self.update_next_indexes()
         self.decompres_task.add_done_callback(lambda x : asyncio.create_task(callback()))
 
 
@@ -203,9 +209,10 @@ class LazyPlaylist(Playlist):
             await asyncio.sleep(0.05)
 
 
-    async def update_next_indexies(self, length:int=25) -> None:
+    async def update_next_indexes(self, length:int=25) -> None:
         if self.decompres_task.done():
-            return await super().update_next_indexies(length)
+            return await super().update_next_indexes(length)
+
         
         # ジェネレーターが解析し終わっていない状況でnext_indexies作成できない
         if self.status.random_pl:

@@ -109,9 +109,13 @@ class FFmpegReader():
     
     def cleanup(self):
         self.stop_flag.set()
-        self.ffmpeg.cleanup()
+        try:
+            self.ffmpeg.cleanup()
+        except Exception:
+            pass
         self.next_q.clear()
         self.prev_q.clear()
+
 
     def rewind(self, count:int):
         while self.prev_q and count > 0:
@@ -216,8 +220,8 @@ class MultiAudioVoiceClient:
                 active_track = len(byte_list)
                 if 1 <= active_track:
                     if self.enc_bool:
-                        adjast_vol = 1 / sqrt(active_track)
-                        audio_numpy:np.ndarray = np.sum([np.frombuffer(byte_list[i], dtype=np.int16) * adjast_vol for i in range(active_track)], axis=0)
+                        adjust_vol = 1 / sqrt(active_track)
+                        audio_numpy:np.ndarray = np.sum([np.frombuffer(byte_list[i], dtype=np.int16) * adjust_vol for i in range(active_track)], axis=0)
                         audio_bytes = audio_numpy.astype(np.int16).tobytes()
                     else:
                         audio_bytes = byte_list[0]
@@ -241,7 +245,7 @@ class MultiAudioVoiceClient:
                     if playing == 0:
                         self.__speak(SpeakingState.none)
                         break
-        except:
+        except Exception:
             _log.exception(f"func:_run_loop  guild:{self.info.guild.name}")
 
 
@@ -256,8 +260,8 @@ class AudioTrack:
         self.pausing:bool = True
         self.vc = vc
         self.timer:float = 0.0
-        self.pitch = _Attribute(init=0, min=-60, max=60, update_asource=self.update_asouce_sec)
-        self.speed = _Attribute(init=1.0, min=0.1, max=3.0, update_asource=self.update_asouce_sec)
+        self.pitch = _Attribute(init=0, min=-60, max=60, update_asource=self.update_asource_sec)
+        self.speed = _Attribute(init=1.0, min=0.1, max=3.0, update_asource=self.update_asource_sec)
         self.after:Callable[[], Any] | None = None
         self.opus:bool = opus
         self._lock = threading.RLock()
@@ -302,7 +306,7 @@ class AudioTrack:
                     return
                 
                 if len(self.ffmpeg_audio.next_q) + (AudioTrack.FRAME_PER_SEC*10) < skip_data_len:
-                    await self.update_asouce_sec(sec=target_sec)
+                    await self.update_asource_sec(sec=target_sec)
                     return
                 while len(self.ffmpeg_audio.next_q) < skip_data_len and not self.ffmpeg_audio.read_all_task.done():
                     await asyncio.sleep(0.01)
@@ -347,19 +351,23 @@ class AudioTrack:
         return _byte
             
 
-    async def update_asouce_sec(self, sec:float|None=None):
+    async def update_asource_sec(self, sec:float|None=None):
         if not self.audio_data:
             return
         if sec is None:
             sec = self.timer
 
         with self._lock:
+            if self.ffmpeg_audio:
+                self.ffmpeg_audio.cleanup()
             self.ffmpeg_audio = self.audio_data.get_ffmpegaudio(self.opus, sec, speed=self.speed.value, pitch=self.pitch.value)
             self.timer = sec
 
 
     def _finish(self):
+        if self.ffmpeg_audio:
+            self.ffmpeg_audio.cleanup()
         self.ffmpeg_audio = None
         self.audio_data = None
         if self.after:
-            self.after()
+            self.after()

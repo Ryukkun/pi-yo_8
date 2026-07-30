@@ -16,8 +16,12 @@ class YTDLPManager:
 
 
     @classmethod
-    def initiallize(cls):
+    def initialize(cls):
         YTDLPManager.YT_DLP = cls()
+
+    @classmethod
+    def initiallize(cls):
+        cls.initialize()
 
 
     def get(self, opts:dict) -> "YTDLPExtractor":

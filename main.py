@@ -23,7 +23,7 @@ async def main():
     intents.reactions = True
     intents.voice_states = True
     bot = commands.Bot(command_prefix=config.Prefix,intents=intents)
-    YTDLPManager.initiallize()
+    YTDLPManager.initialize()
     set_logger()
 
     async with bot:

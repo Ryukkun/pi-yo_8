@@ -151,7 +151,6 @@ class MusicController():
 
 
     async def def_queue(self, ctx:Context, args):
-        self.info.embed.update_action_time(ctx.channel)
         _log.info(f"{self.guild.name} : Command:queue {args}")
         # 一時停止していた場合再生 開始
         if args:
@@ -174,7 +173,6 @@ class MusicController():
 
 
     async def play(self, ctx:Context, args):
-        self.info.embed.update_action_time(ctx.channel)
         _log.info(f"{self.guild.name} : Command:play {' '.join(args)}")
         # 一時停止していた場合再生 開始
         if args:
@@ -182,6 +180,7 @@ class MusicController():
         else:
             self.player_track.resume()
             return
+
 
         res = await self._analysis_input(arg, self.info)
         if not res: return
@@ -231,8 +230,8 @@ class MusicController():
 
     async def skip(self, sec_str:str | None):
         if self.guild.voice_client:
-            self.info.embed.update_action_time()
             if sec_str:
+
                 try:sec = int(sec_str)
                 except Exception:
                     sec = sec_str.lower()
