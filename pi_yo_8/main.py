@@ -3,6 +3,7 @@ import asyncio
 import logging
 from discord.ext import commands, tasks
 
+from pi_yo_8.patch import patch
 from pi_yo_8.type import SendableChannels
 from pi_yo_8.gui.controller import EmbedController
 from pi_yo_8.voice_client import MultiAudioVoiceClient
@@ -11,7 +12,7 @@ from pi_yo_8.yt_dlp.status_manager import YTDLPStatusManager
 
 
 
-
+patch()
 _log = logging.getLogger(__name__)
 
 
@@ -215,4 +216,4 @@ class GuildSession:
 
 
 # 後方互換性保持のためのエイリアス
-DataInfo = GuildSession
+DataInfo = GuildSession

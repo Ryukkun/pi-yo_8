@@ -23,26 +23,52 @@ _log = logging.getLogger(__name__)
 
 
 class StreamAudioData:
-    exe:ThreadPoolExecutor = ThreadPoolExecutor(max_workers=2) if IS_MAIN_PROCESS else None # type: ignore
+    duration_regex = re.compile(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)")
     def __init__(self, 
                  st_url:str,
                  volume:float | None = None,
                  duration:int | None = None):
         self.stream_url = st_url
         self.volume = volume
-        self.duration = duration
+        self.duration: int | float | None = duration
 
 
-    def _get_ffmpegaudio(self, opus:bool, before_options:list[str], options:list[str]) -> Union[FFmpegOpusAudio, FFmpegPCMAudio]:
-        option:str = ' '.join(options)
-        before_option:str = ' '.join(before_options)
-        if opus:
-            #options.extend(('-c:a', 'libopus', '-ar', '48000'))
-            return FFmpegOpusAudio(self.stream_url, before_options=before_option, options=option)
+    async def set_duration_from_ffmpeg(self, duration_buffer: io.BytesIO) -> None:
+        """
+        ffmpegのstderrからdurationを取得する
+        """
+        last_pos = 0  # 前回の読み込み終了位置
 
-        else:
-            #options.extend(('-c:a', 'pcm_s16le', '-ar', '48000'))
-            return FFmpegPCMAudio(self.stream_url, before_options=before_option, options=option)
+        while True:
+            duration_buffer.seek(last_pos)       # 前回終わった位置へ移動
+            chunk = duration_buffer.read()       # 新しく追記された差分だけ読む
+            last_pos = duration_buffer.tell()    # 現在の末尾位置を記憶
+
+            if chunk:
+                text = chunk.decode('utf-8', errors='ignore')
+                if "Duration:" in text:
+                    match = StreamAudioData.duration_regex.search(text)
+                    if match:
+                        h, m, s = match.groups()
+                        self.duration = float(h) * 3600 + float(m) * 60 + float(s)
+                        return  # durationが取得できたら終了
+
+            await asyncio.sleep(0.1)
+
+
+    def _get_ffmpegaudio(self, opus: bool, before_options: list[str], options: list[str]) -> Union[FFmpegOpusAudio, FFmpegPCMAudio]:
+        ffmpeg_options: dict[str, Any] = {}
+
+        if (type(self.duration) != float):
+            duration_buffer = io.BytesIO()
+            ffmpeg_options["stderr"] = duration_buffer
+            options.append("-nostats")
+            options.append("-loglevel info")
+            asyncio.create_task(self.set_duration_from_ffmpeg(duration_buffer))
+            
+        ffmpeg_options["options"] = ' '.join(options)
+        ffmpeg_options["before_options"] = ' '.join(before_options)
+        return FFmpegOpusAudio(self.stream_url, **ffmpeg_options) if opus else FFmpegPCMAudio(self.stream_url, **ffmpeg_options)
 
 
 
@@ -370,4 +396,4 @@ class AudioTrack:
         self.ffmpeg_audio = None
         self.audio_data = None
         if self.after:
-            self.after()
+            self.after()
