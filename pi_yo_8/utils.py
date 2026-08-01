@@ -104,7 +104,12 @@ class YoutubeUtil:
         return f"https://www.youtube.com/channel/{ch_id}"
 
 
-class WrapperAbstract:
+
+# async 関数の型定義
+AsyncFunc = Callable[..., Coroutine[Any, Any, T]]
+
+
+class WrapperAbstract[T]:
     """
     メソッドに付与するディザインパターンの基底クラス。
     インスタンスバインド時にデスクリプタ(__get__)を介してラッパーを生成・キャッシュする。
@@ -124,7 +129,7 @@ class WrapperAbstract:
         return wrapper
 
 
-class RunCheckStorageWrapper(WrapperAbstract, Generic[T]):
+class RunCheckStorageWrapper(WrapperAbstract[T]):
     """
     関数の二重実行を防止するラッパー
     """
@@ -179,34 +184,33 @@ def run_check_storage(check_fin: bool = True):
     return wrapper
 
 
-class TaskRunningWrapper(WrapperAbstract, Generic[T]):
+class TaskRunningWrapper(WrapperAbstract[Coroutine[Any, Any, T]]):
     """
     asyncio.Taskの重複作成を抑制し、単一タスクのライフサイクル（create/run/wait/cancel）を提供するラッパー
     """
-    def __init__(self, func: Callable[..., T], _class: object = None):
-        super().__init__(func, _class)
+    def __init__(self, func: AsyncFunc[T], instance: object = None):
+        super().__init__(func, instance)
         self.task: asyncio.Task | None = None
+
+    def _create_task(self, *args: Any, **kwargs: Any) -> asyncio.Task[T]:
+        if self._instance:
+            args = (self._instance,) + args
+        self.task = asyncio.create_task(self.func(*args, **kwargs))
+        return self.task
 
     def create_task(self, *args: Any, **kwargs: Any):
         if not self.is_running():
-            if self._class:
-                args = (self._class,) + args
-            try:
-                loop = asyncio.get_running_loop()
-                self.task = loop.create_task(self.func(*args, **kwargs))
-            except RuntimeError:
-                pass
+            self._create_task(*args, **kwargs)
 
-    async def wait(self) -> T | None:
+    def wait(self) -> asyncio.Task[T] | None:
         if self.task and not self.task.done():
-            return await self.task
+            return self.task
         return None
 
-    async def run(self, *args: Any, **kwargs: Any) -> T | None:
+    def run(self, *args: Any, **kwargs: Any) -> asyncio.Task[T]:
         if self.task and not self.task.done():
-            return await self.task
-        self.create_task(*args, **kwargs)
-        return await self.wait()
+            return self.task
+        return self._create_task(*args, **kwargs)
 
     def is_running(self) -> bool:
         return self.task is not None and not self.task.done()
@@ -217,11 +221,11 @@ class TaskRunningWrapper(WrapperAbstract, Generic[T]):
         self.task = None
 
     def _new_instance(self, obj: object) -> 'TaskRunningWrapper[T]':
-        return TaskRunningWrapper(self.func, _class=obj)
+        return TaskRunningWrapper(self.func, instance=obj)
 
 
 def task_running_wrapper():
-    def wrapper(func: Callable[..., T]) -> TaskRunningWrapper[T]:
+    def wrapper(func: AsyncFunc[T]) -> TaskRunningWrapper[T]:
         return TaskRunningWrapper(func)
     return wrapper
 
