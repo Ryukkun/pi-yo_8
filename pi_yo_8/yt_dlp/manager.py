@@ -7,7 +7,7 @@ from pi_yo_8.yt_dlp.unit import (
 
 
 class YTDLPManager:
-    YT_DLP:"YTDLPManager" = None # type: ignore
+    YT_DLP: "YTDLPManager" = None # type: ignore
     def __init__(self):
         self.ytdlp: dict[str, list[YTDLPExtractor]] = {
             str(YTDLP_GENERAL_PARAMS): [YTDLPExtractor(YTDLP_GENERAL_PARAMS) for _ in range(6)],
@@ -19,13 +19,9 @@ class YTDLPManager:
     def initialize(cls):
         YTDLPManager.YT_DLP = cls()
 
-    @classmethod
-    def initiallize(cls):
-        cls.initialize()
 
-
-    def get(self, opts:dict) -> "YTDLPExtractor":
-        _key = str(opts)
+    def get(self, options: dict) -> "YTDLPExtractor":
+        _key = str(options)
         if _key in self.ytdlp:
             for ytdlp in self.ytdlp[_key]:
                 if not ytdlp.is_running:
@@ -33,6 +29,6 @@ class YTDLPManager:
         else:
             self.ytdlp[_key] = []
 
-        new_ytdlp = YTDLPExtractor(opts)
+        new_ytdlp = YTDLPExtractor(options)
         self.ytdlp[_key].append(new_ytdlp)
         return new_ytdlp

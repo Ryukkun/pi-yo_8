@@ -1,7 +1,6 @@
 import asyncio
-from typing import Any, Callable
+from typing import Any, Callable, Self
 
-from discord import Self
 
 
 class WrapperAbstract:
@@ -19,7 +18,7 @@ class WrapperAbstract:
     def _new_instance(self, obj):
         return WrapperAbstract(self.func, _class=obj)
 
-    def __get__(self, obj:object, objtype) -> Self:
+    def __get__(self, obj:object, objtype: type|None = None) -> Self:
         """
         このインスタンスが参照された場合に呼び出される
 

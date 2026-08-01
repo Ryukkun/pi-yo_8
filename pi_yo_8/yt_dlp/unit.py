@@ -8,12 +8,12 @@ from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Pipe, Process, connection
 
 from pi_yo_8.utils import AsyncGenWrapper, ModdedBuffer, UrlAnalyzer
-from pi_yo_8.yt_dlp.status_manager import ErrorMessage, YTDLPStatusManager, ErrorType, LambdaLogger
+from pi_yo_8.yt_dlp.status_manager import ErrorMessage, YTDLPStatusManager, ErrorType, CustomLambdaLogger
 
 from ._ie import YoutubeIE
 
 if TYPE_CHECKING:
-    from pi_yo_8.main import DataInfo
+    from pi_yo_8.main import GuildSession
 
 
 YTDLP_GENERAL_PARAMS = {
@@ -43,64 +43,63 @@ YTDLP_VIDEO_PARAMS = {
 
 
 class YTDLPExtractor:
-    def __init__(self, parms:dict) -> None:
+    def __init__(self, params: dict) -> None:
         """
         Parameters
         ----------
-        opts : dict
+        params : dict
             yt-dlp に渡すオプション ログイン情報の想定
         """
-        self.is_running:bool = False
+        self.is_running: bool = False
         self.connection, child = Pipe()
-        self.process = Process(target=YTDLPExtractor._extract_info, args=(child, parms))
+        self.process = Process(target=YTDLPExtractor._extract_info, args=(child, params))
         self.process.start()
 
     @staticmethod
-    def get_ytdlp(parms:dict) -> YoutubeDL:
-        ydl = YoutubeDL(parms) # type: ignore
+    def get_ytdlp(params: dict) -> YoutubeDL:
+        ydl = YoutubeDL(params) # type: ignore
         ydl.add_info_extractor(YoutubeIE()) # type: ignore
         return ydl
 
 
-    def extract_raw_info(self, url:str, data_info:"DataInfo|None") -> tuple[AsyncGenWrapper, YTDLPStatusManager]:
+    def extract_raw_info(self, url: str, guild_session: "GuildSession | None") -> tuple[AsyncGenWrapper, YTDLPStatusManager]:
         self.is_running = True
         self.connection.send(url)
         loop = asyncio.get_event_loop()
         status_manager = YTDLPStatusManager(url if UrlAnalyzer(url).is_url else '')
-        if data_info:
-            data_info.ytdlp_status_managers.append(status_manager)
+        if guild_session:
+            guild_session.ytdlp_status_managers.append(status_manager)
         async def generator():
             with ThreadPoolExecutor(max_workers=1) as exe:
                 while True:
-                    _result:str | dict[str, Any] | ErrorMessage = await loop.run_in_executor(exe, self.connection.recv)
-                    if _result == '':
+                    received_item: str | dict[str, Any] | ErrorMessage = await loop.run_in_executor(exe, self.connection.recv)
+                    if received_item == '':
                         self.is_running = False
                         status_manager.is_running = False
-                        if data_info:
-                            loop.call_later(30, data_info.ytdlp_status_managers.remove, status_manager)
+                        if guild_session:
+                            loop.call_later(30, guild_session.ytdlp_status_managers.remove, status_manager)
                         break
-                    if isinstance(_result, ErrorMessage):
-                        status_manager.append_error(_result)
+                    if isinstance(received_item, ErrorMessage):
+                        status_manager.append_error(received_item)
                         continue
-                    info:dict[str, Any] = json.loads(_result) if isinstance(_result, str) else _result
+                    info: dict[str, Any] = json.loads(received_item) if isinstance(received_item, str) else received_item
                     yield info
 
-        async def finallize(generator: AsyncGenerator):
+        async def finalize(generator: AsyncGenerator):
             async for _ in generator:
                 pass
 
-        return AsyncGenWrapper(generator(), lambda x: loop.create_task(finallize(x))), status_manager
+        return AsyncGenWrapper(generator(), lambda x: loop.create_task(finalize(x))), status_manager
 
     
 
     @staticmethod
-    def _extract_info(connection: connection._ConnectionBase, opts:dict):
+    def _extract_info(connection: connection._ConnectionBase, options: dict):
         '''
         別スレッドで実行しっぱなしを想定
         '''
-        opts = opts.copy()
-        #opts["logger"] = LambdaLogger(warning=lambda msg: connection.send(ErrorMessage(ErrorType.WARNING, msg)))
-        ydl = YTDLPExtractor.get_ytdlp(opts)
+        options = options.copy()
+        ydl = YTDLPExtractor.get_ytdlp(options)
         
         buffer = ModdedBuffer()
         ydl._out_files.__dict__["out"] = buffer # type: ignore
@@ -121,7 +120,7 @@ class YTDLPExtractor:
                         send_count += 1
 
                     # プレイリストの場合戻り値要らない
-                    if (result := future.result()) and (not "entries" in result or send_count == 0):
+                    if (result := future.result()) and ("entries" not in result or send_count == 0):
                         connection.send(result)
                 except Exception as e:
                     connection.send(ErrorMessage(ErrorType.ERROR, str(e), type(e).__name__, traceback.format_exc()))

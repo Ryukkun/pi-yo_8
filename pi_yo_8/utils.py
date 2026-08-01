@@ -5,7 +5,7 @@ import logging
 import asyncio
 import threading
 import traceback
-from typing import Any, AsyncGenerator, AsyncIterator, Callable, Generic, Self
+from typing import Any, AsyncGenerator, AsyncIterator, Callable, Coroutine, Self
 import aiohttp
 import re
 import urllib.parse
@@ -16,7 +16,7 @@ from pi_yo_8.type import T
 
 
 
-def set_logger():
+def setup_logger():
     library, _, _ = __name__.partition('.')
     logger = logging.getLogger(library)
     handler = logging.StreamHandler()
@@ -27,20 +27,20 @@ def set_logger():
 
 class UrlAnalyzer:
     RE_IS_YOUTUBE = re.compile(r'^(.*?(youtube\.com|youtube-nocookie\.com)|youtu\.be)$')
-    def __init__(self, arg:str):
-        self.url_parse = urllib.parse.urlparse(arg)
-        self.url_query:dict = {}
+    def __init__(self, url_or_search_text: str):
+        self.url_parse = urllib.parse.urlparse(url_or_search_text)
+        self.url_query: dict = {}
         self.is_url = False
         self.is_yt = False
-        self.list_id:str | None = None
-        self.video_id:str | None = None
+        self.list_id: str | None = None
+        self.video_id: str | None = None
 
         if self.url_parse.query:
             self.url_query = urllib.parse.parse_qs(self.url_parse.query)
 
         self.is_url = bool(self.url_parse.hostname)
         if self.is_url:
-            self.is_yt = self.RE_IS_YOUTUBE.match(self.url_parse.hostname) if self.url_parse.hostname else False
+            self.is_yt = bool(self.RE_IS_YOUTUBE.match(self.url_parse.hostname)) if self.url_parse.hostname else False
             if self.is_yt:
                 self.list_id = self.url_query.get('list', [None])[0]
                 self.video_id = self.url_query.get('v', [None])[0]
@@ -48,7 +48,7 @@ class UrlAnalyzer:
                     self.video_id = self.url_parse.path[1:]
 
 
-async def is_url_accessible(url: str, headers:dict|None = None, _cookies:str|None = None) -> bool:
+async def is_url_accessible(url: str, headers: dict | None = None, cookie_str: str | None = None) -> bool:
     """
     指定したURLに接続可能かどうかを判定する
 
@@ -64,9 +64,9 @@ async def is_url_accessible(url: str, headers:dict|None = None, _cookies:str|Non
     """
     try:
         cookies_dict = {}
-        if _cookies:
+        if cookie_str:
             cookie_jar = cookies.SimpleCookie()
-            cookie_jar.load(_cookies)
+            cookie_jar.load(cookie_str)
             for key, morsel in cookie_jar.items():
                 cookies_dict[key] = morsel.value
         async with aiohttp.ClientSession(headers=headers, cookies=cookies_dict) as session:
@@ -79,8 +79,8 @@ async def is_url_accessible(url: str, headers:dict|None = None, _cookies:str|Non
 
 
 class AsyncGenWrapper():
-    def __init__(self, agen:AsyncGenerator[dict[str, Any], None], callback:Callable[[AsyncGenerator],Any]):
-        self._agen = agen
+    def __init__(self, async_generator: AsyncGenerator[dict[str, Any], None], callback: Callable[[AsyncGenerator], Any]):
+        self._agen = async_generator
         self._callback = callback
 
     def __aiter__(self) -> AsyncIterator[dict[str, Any]]:
@@ -96,11 +96,11 @@ class AsyncGenWrapper():
 
 class YoutubeUtil:
     @staticmethod
-    def get_web_url(video_id: str) -> str:
+    def get_video_url(video_id: str) -> str:
         return f"https://youtu.be/{video_id}"
     
     @staticmethod
-    def get_ch_url(ch_id: str) -> str:
+    def get_channel_url(ch_id: str) -> str:
         return f"https://www.youtube.com/channel/{ch_id}"
 
 
@@ -114,15 +114,15 @@ class WrapperAbstract[T]:
     メソッドに付与するディザインパターンの基底クラス。
     インスタンスバインド時にデスクリプタ(__get__)を介してラッパーを生成・キャッシュする。
     """
-    def __init__(self, func: Callable[..., Any], _class: object = None):
+    def __init__(self, func: Callable[..., T], instance: object = None):
         self.func = func
-        self._class = _class
+        self._instance = instance
 
     def _new_instance(self, obj: object) -> Self:
-        return self.__class__(self.func, _class=obj) # type: ignore
+        return self.__class__(self.func, instance=obj) # type: ignore
 
-    def __get__(self, obj: object, objtype: type = None) -> Self:
-        if obj is None or self._class is not None:
+    def __get__(self, obj: object, objtype: type|None = None) -> Self:
+        if obj is None or self._instance is not None:
             return self
         wrapper = self._new_instance(obj)
         setattr(obj, self.func.__name__, wrapper)
@@ -133,10 +133,10 @@ class RunCheckStorageWrapper(WrapperAbstract[T]):
     """
     関数の二重実行を防止するラッパー
     """
-    def __init__(self, func: Callable[..., T], check_fin: bool = True, _class: object = None):
-        super().__init__(func, _class)
+    def __init__(self, func: Callable[..., T], check_completion: bool = True, instance: object = None):
+        super().__init__(func, instance)
         self.is_running = False
-        self.check_fin = check_fin
+        self.check_completion = check_completion
         self.exe: ThreadPoolExecutor | None = None
         self.lock = threading.Lock()
 
@@ -146,8 +146,8 @@ class RunCheckStorageWrapper(WrapperAbstract[T]):
                 raise RuntimeError(f'{self.func.__name__} is already running')
             self.is_running = True
 
-        if self._class:
-            args = (self._class,) + args
+        if self._instance:
+            args = (self._instance,) + args
         return self._run(*args, **kwargs)
 
     def run_in_thread(self, *args: Any, **kwargs: Any):
@@ -156,8 +156,8 @@ class RunCheckStorageWrapper(WrapperAbstract[T]):
                 raise RuntimeError(f'{self.func.__name__} is already running')
             self.is_running = True
 
-        if self._class:
-            args = (self._class,) + args
+        if self._instance:
+            args = (self._instance,) + args
         if not self.exe:
             self.exe = ThreadPoolExecutor(max_workers=1)
         self.exe.submit(self._run, *args, **kwargs)
@@ -170,17 +170,17 @@ class RunCheckStorageWrapper(WrapperAbstract[T]):
         try:
             return self.func(*args, **kwargs)
         finally:
-            if self.check_fin:
+            if self.check_completion:
                 with self.lock:
                     self.is_running = False
 
     def _new_instance(self, obj: object) -> 'RunCheckStorageWrapper[T]':
-        return RunCheckStorageWrapper(self.func, self.check_fin, _class=obj)
+        return RunCheckStorageWrapper(self.func, self.check_completion, instance=obj)
 
 
-def run_check_storage(check_fin: bool = True):
+def run_check_storage(check_completion: bool = True):
     def wrapper(func: Callable[..., T]) -> RunCheckStorageWrapper[T]:
-        return RunCheckStorageWrapper(func, check_fin)
+        return RunCheckStorageWrapper(func, check_completion)
     return wrapper
 
 

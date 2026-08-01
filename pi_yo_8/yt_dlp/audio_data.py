@@ -10,12 +10,12 @@ from pi_yo_8.yt_dlp.unit import YTDLP_VIDEO_PARAMS
 
 if TYPE_CHECKING:
     from pi_yo_8.music_control.playlist import LazyPlaylist
-    from pi_yo_8.main import DataInfo
+    from pi_yo_8.main import GuildSession
 
 
 class YTDLPAudioData(StreamAudioData):
-    def __init__(self, info:dict[str, Any], guild_data:"DataInfo|None", playlist:"LazyPlaylist|None"):
-        self.guild_data = guild_data
+    def __init__(self, info: dict[str, Any], guild_session: "GuildSession | None", playlist: "LazyPlaylist | None"):
+        self.guild_session = guild_session
         self.playlist = playlist
         self.info = info
         self.ch_icon: str | None = None
@@ -75,19 +75,19 @@ class YTDLPAudioData(StreamAudioData):
         if not self.ch_icon:
             if (ch_url := self.ch_url()):
                 print("load ch icon:", ch_url)
-                info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(ch_url, self.guild_data)
+                info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(ch_url, self.guild_session)
                 status_manager._type = YTDLPInfoType.CHANNEL
                 status_manager.name = (self.ch_name() or '')
                 if info := await anext(info_generator, None):
-                    _ = YTDLPAudioData(info, None, None)
-                    self.ch_icon = await _.load_thumbnail.run()
+                    temp_audio_data = YTDLPAudioData(info, None, None)
+                    self.ch_icon = await temp_audio_data.load_thumbnail.run()
                 print("load ch icon fin:", ch_url)
         return self.ch_icon
     
     @task_running_wrapper()
     async def load_thumbnail(self) -> str | None:
         if not self.thumbnail:
-            thumbnails:list[Thumbnail] = self.info.get("thumbnails", [{"url":None}])
+            thumbnails: list[Thumbnail] = self.info.get("thumbnails", [{"url": None}])
             for thumb in reversed(thumbnails):
                 if (url := thumb.get("url", None)) and await is_url_accessible(url):
                     self.thumbnail = url
@@ -118,7 +118,7 @@ class YTDLPAudioData(StreamAudioData):
         #self.load_ch_icon.create_task()
         
         print("check stream data:", self.web_url())
-        info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(self.web_url(), self.guild_data)
+        info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS).extract_raw_info(self.web_url(), self.guild_session)
         status_manager._type = YTDLPInfoType.VIDEO
         status_manager.name = self.title()
         info = await anext(info_generator, None)
@@ -134,7 +134,7 @@ class YTDLPAudioData(StreamAudioData):
         print("check stream data fin:", self.web_url())
 
             
-    def _get_ffmpegaudio(self, opus: bool, before_options: list[str], options: list[str]) -> FFmpegOpusAudio | FFmpegPCMAudio:
+    def _create_ffmpeg_audio_source(self, opus: bool, before_options: list[str], options: list[str]) -> FFmpegOpusAudio | FFmpegPCMAudio:
         if isinstance(self, YTDLPAudioData):
             #headers
             if headers := self.info.get("http_headers"):
@@ -145,4 +145,4 @@ class YTDLPAudioData(StreamAudioData):
             if cookies := self.info.get("cookies"):
                 before_options.append('-headers')
                 before_options.append(f'"Cookie: {cookies}"')
-        return super()._get_ffmpegaudio(opus, before_options, options)
+        return super()._create_ffmpeg_audio_source(opus, before_options, options)

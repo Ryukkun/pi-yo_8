@@ -7,16 +7,16 @@ from pi_yo_8.utils import AsyncGenWrapper
 from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 if TYPE_CHECKING:
-    from pi_yo_8.main import DataInfo
+    from pi_yo_8.main import GuildSession
 
 class Playlist:
-    def __init__(self, playlist_title:str, playlist_url:str, guild_info:"DataInfo|None", loop=False, loop_pl=True, random_pl=False):
+    def __init__(self, playlist_title: str, playlist_url: str, guild_session: "GuildSession | None", loop=False, loop_pl=True, random_pl=False):
         """
         entriesは常に1つ以上ある
         """
         self.title = playlist_title
         self.url = playlist_url
-        self.guild_info = guild_info
+        self.guild_session = guild_session
         self.entries: list["YTDLPAudioData"] = []
         # 0 再生中, 1~ 次に再生
         self.next_indexes: deque[int] = deque()
@@ -47,14 +47,14 @@ class Playlist:
                 pass
 
 
-    async def update_next_indexes(self, length:int=25) -> None:
+    async def update_next_indexes(self, length: int = 25) -> None:
         '''
         next_indexesをlength個まで補充する
         再生可能なものがない場合はlength以下になる
         '''
         if self.status.random_pl:
             while len(self.next_indexes) < length:
-                self.next_indexes.append(self.random.next())
+                self.next_indexes.append(self.random.select_next_index())
                 
         else:
             while len(self.next_indexes) < length:
@@ -62,20 +62,16 @@ class Playlist:
                 if not self.status.loop_pl and len(self.entries) <= i:
                     break
                 self.next_indexes.append(i % len(self.entries))
-        self._load_streaming_data()
+        self._preload_upcoming_entries()
 
         
-
-    def _load_streaming_data(self, count = 2):
-        '''
-        先にロードしておく
-        '''
+    def _preload_upcoming_entries(self, count = 2):
+        '''先にロードしておく'''
         for i in range(min(len(self.next_indexes), count)):
             self.entries[self.next_indexes[i]].check_streaming_data.create_task()
 
 
-
-    async def set_next_index_from_videoID(self, video_id: str):
+    async def set_next_index_by_video_id(self, video_id: str):
         for i, entry in enumerate(self.entries):
             if entry.video_id() == video_id:
                 self.next_indexes.clear()
@@ -109,7 +105,7 @@ class Playlist:
 
 
 
-    async def next(self, count:int = 1) -> int:
+    async def next(self, count: int = 1) -> int:
         """
         indexを進める 動画のロードはしない
 
@@ -129,7 +125,7 @@ class Playlist:
             self.play_history.append(self.next_indexes.popleft())
             if not self.next_indexes: return count - _
 
-        self._load_streaming_data()
+        self._preload_upcoming_entries()
         self._update_cooldowns()
         return 0
     
@@ -143,18 +139,18 @@ class Playlist:
                     self.cooldowns[_] += 1
 
 
-    async def get_now_entry(self) -> "YTDLPAudioData | None":
+    async def get_current_entry(self) -> "YTDLPAudioData | None":
         if not self.next_indexes:
             await self.update_next_indexes()
 
         if self.next_indexes:
-            now_entry = self.entries[self.next_indexes[0]]
-            await now_entry.check_streaming_data.run()
-            if await now_entry.is_available():
-                return now_entry
+            current_entry = self.entries[self.next_indexes[0]]
+            await current_entry.check_streaming_data.run()
+            if await current_entry.is_available():
+                return current_entry
             else:
                 await self.next()
-                return await self.get_now_entry()
+                return await self.get_current_entry()
         return None
 
 
@@ -163,33 +159,27 @@ class LazyPlaylist(Playlist):
 
     ジェネレーター解答タスクが動いている間:
         random_pl = True:
-            get_now_entryが呼び出されるときに次の曲を決める
-            next_indexies[0]に格納しておく lenは1
-
-
-    Parameters
-    ----------
-    Playlist : _type_
-        _description_
+            get_current_entryが呼び出されるときに次の曲を決める
+            next_indexes[0]に格納しておく lenは1
     """
-    def __init__(self, first_entry:dict[str, Any], generator:AsyncGenWrapper, guild_info:"DataInfo|None"):
-        super().__init__(first_entry.get("playlist_title", "No Title"), first_entry.get("playlist_webpage_url", ""), guild_info)
-        self.entries.append(YTDLPAudioData(first_entry, self.guild_info, self))
+    def __init__(self, first_entry: dict[str, Any], generator: AsyncGenWrapper, guild_session: "GuildSession | None"):
+        super().__init__(first_entry.get("playlist_title", "No Title"), first_entry.get("playlist_webpage_url", ""), guild_session)
+        self.entries.append(YTDLPAudioData(first_entry, self.guild_session, self))
 
-        async def decompres_task_func():
+        async def decompress_task_func():
             async for entry in generator:
-                if (entry.get("duration") == None and entry.get("channel") == None and entry.get("view_count") == None):
+                if (entry.get("duration") is None and entry.get("channel") is None and entry.get("view_count") is None):
                     continue
-                self.entries.append(YTDLPAudioData(entry, self.guild_info, self))
-        self.decompres_task = asyncio.create_task(decompres_task_func())
+                self.entries.append(YTDLPAudioData(entry, self.guild_session, self))
+        self.decompress_task = asyncio.create_task(decompress_task_func())
 
         async def callback():
-            self._adaptation()()
+            self._adapt_cooldowns()()
             await self.update_next_indexes()
-        self.decompres_task.add_done_callback(lambda x : asyncio.create_task(callback()))
+        self.decompress_task.add_done_callback(lambda x: asyncio.create_task(callback()))
 
 
-    def _adaptation(self: Callable|"LazyPlaylist") -> Callable:
+    def _adapt_cooldowns(self: Callable | "LazyPlaylist") -> Callable:
         def wrapper(_self: "LazyPlaylist", *args, **kwargs):
             _self.random.set_range(len(_self.entries))
             max_value = max(_self.cooldowns) if _self.cooldowns else 0
@@ -201,20 +191,20 @@ class LazyPlaylist(Playlist):
         if isinstance(self, Callable):
             return wrapper
         else:
-            return lambda : wrapper(self)
-        
+            return lambda: wrapper(self)
 
-    async def _wait_load_entry(self, i:int):
-        while len(self.entries) <= i and not self.decompres_task.done():
+
+    async def _wait_load_entry(self, entry_index: int):
+        while len(self.entries) <= entry_index and not self.decompress_task.done():
             await asyncio.sleep(0.05)
 
 
-    async def update_next_indexes(self, length:int=25) -> None:
-        if self.decompres_task.done():
+    async def update_next_indexes(self, length: int = 25) -> None:
+        if self.decompress_task.done():
             return await super().update_next_indexes(length)
 
         
-        # ジェネレーターが解析し終わっていない状況でnext_indexies作成できない
+        # ジェネレーターが解析し終わっていない状況でnext_indexes作成できない
         if self.status.random_pl:
             return
         while len(self.next_indexes) < length:
@@ -225,53 +215,53 @@ class LazyPlaylist(Playlist):
             self.next_indexes.append(i % len(self.entries))
         
         # 先にロードしておく
-        self._load_streaming_data()
+        self._preload_upcoming_entries()
 
 
-    async def set_next_index_from_videoID(self, video_id: str):
-        i = 0
+    async def set_next_index_by_video_id(self, video_id: str):
+        entry_index = 0
         while True:
-            await self._wait_load_entry(i)
-            if len(self.entries) <= i:
+            await self._wait_load_entry(entry_index)
+            if len(self.entries) <= entry_index:
                 return
 
-            entry = self.entries[i]
+            entry = self.entries[entry_index]
             if entry.video_id() == video_id:
                 self.next_indexes.clear()
-                self.next_indexes.append(i)
+                self.next_indexes.append(entry_index)
                 if not await entry.is_available():
                     entry.check_streaming_data.create_task()
                 return
-            i += 1
+            entry_index += 1
 
 
-    @_adaptation
-    async def rewind(self, count:int = 1) -> int:
+    @_adapt_cooldowns
+    async def rewind(self, count: int = 1) -> int:
         return await super().rewind(count)
 
 
-    @_adaptation
-    async def next(self, count:int = 1) -> int:
-        if self.decompres_task.done():
+    @_adapt_cooldowns
+    async def next(self, count: int = 1) -> int:
+        if self.decompress_task.done():
             return await super().next(count)
         
         if self.status.random_pl:
-            #空っぽにしといてget_now_entryが呼び出されたときにrandomでチョイスする
+            # 空っぽにしといてget_current_entryが呼び出されたときにrandomでチョイスする
             if self.next_indexes:
                 self.next_indexes.popleft()
             return 0
         else:
-            i = self.next_indexes[0] + count + 1
-            await self._wait_load_entry(i)
+            target_index = self.next_indexes[0] + count + 1
+            await self._wait_load_entry(target_index)
             return await super().next(count)        
 
 
-    @_adaptation
-    async def get_now_entry(self) -> "YTDLPAudioData | None":
-        if (not self.decompres_task.done() and self.status.random_pl and not self.next_indexes):
+    @_adapt_cooldowns
+    async def get_current_entry(self) -> "YTDLPAudioData | None":
+        if (not self.decompress_task.done() and self.status.random_pl and not self.next_indexes):
             await self._wait_load_entry(10)
-            i = self.random.next()
-            self.next_indexes.append(i)
+            chosen_index = self.random.select_next_index()
+            self.next_indexes.append(chosen_index)
         if self.next_indexes:
             await self._wait_load_entry(self.next_indexes[0])
-        return await super().get_now_entry()
+        return await super().get_current_entry()

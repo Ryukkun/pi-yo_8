@@ -9,95 +9,94 @@ from pi_yo_8.type import SendableChannels
 
 
 if TYPE_CHECKING:
-    from pi_yo_8.main import DataInfo
+    from pi_yo_8.main import GuildSession
     from pi_yo_8.music_control.controller import MusicQueue
     from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
     from pi_yo_8.voice_client import AudioTrack
 
 
-# Button
-class CreateButton(discord.ui.View):
-    def __init__(self, info:"DataInfo"):
+# Button Views
+class PlayerControlsView(discord.ui.View):
+    def __init__(self, guild_session: "GuildSession"):
         super().__init__(timeout=None)
-        self.info = info
-        self.select_opt:list[discord.SelectOption] = []
-        self.pause_play = Button2(self.info)
+        self.guild_session = guild_session
+        self.select_opt: list[discord.SelectOption] = []
+        self.pause_play = PlayPauseButton(self.guild_session)
         self.add_item(self.pause_play)
-        self.add_item(Button3(self.info))
-        self.add_item(Button4(self.info))
-        self.add_item(Button5(self.info))
-        self.add_item(Button7(self.info))
-        self.add_item(CreateSelect(self, (self.info.music.queue)))
-        self.add_item(CreateStatusButton(self, '単曲 ループ', 'loop'))
-        if self.info.music.queue.is_playing_playlist():
-            self.add_item(CreateStatusButton(self, 'Playlist ループ', 'loop_pl'))
-            self.add_item(CreateStatusButton(self, 'シャッフル', 'random_pl'))
+        self.add_item(Forward10sButton(self.guild_session))
+        self.add_item(NextTrackButton(self.guild_session))
+        self.add_item(OptionsButton(self.guild_session))
+        self.add_item(DisconnectButton(self.guild_session))
+        self.add_item(QueueSelectMenu(self, self.guild_session.music.queue))
+        self.add_item(ToggleStatusButton(self, '単曲 ループ', 'loop'))
+        if self.guild_session.music.queue.is_playing_playlist():
+            self.add_item(ToggleStatusButton(self, 'Playlist ループ', 'loop_pl'))
+            self.add_item(ToggleStatusButton(self, 'シャッフル', 'random_pl'))
         else:
-            self.add_item(CreateStatusButton(self, 'Playlist ループ', 'loop_pl', True))
-            self.add_item(CreateStatusButton(self, 'シャッフル', 'random_pl', True))
+            self.add_item(ToggleStatusButton(self, 'Playlist ループ', 'loop_pl', True))
+            self.add_item(ToggleStatusButton(self, 'シャッフル', 'random_pl', True))
 
-
-
-    @discord.ui.button(label="<",row=2)
-    async def def_button0(self, interaction:discord.Interaction, button):
-        self.info.embed.update_action_time()
+    @discord.ui.button(label="<", row=2)
+    async def prev_track_button(self, interaction: discord.Interaction, button):
+        self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
-        await self.info.music.skip_music(-1)
+        await self.guild_session.music.skip_tracks(-1)
 
-    @discord.ui.button(label="10↩︎",row=2)
-    async def def_button1(self, interaction:discord.Interaction, button):
-        self.info.embed.update_action_time()
+    @discord.ui.button(label="10↩︎", row=2)
+    async def rewind_10s_button(self, interaction: discord.Interaction, button):
+        self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
-        await self.info.music.player_track.skip_time(-10)
+        await self.guild_session.music.player_track.seek_by_seconds(-10)
 
 
-class Button2(discord.ui.Button):
-    def __init__(self, info:"DataInfo"):
-        _label = '▶' if info.music.player_track.is_paused() else 'II'
-        super().__init__(label=_label,style=discord.ButtonStyle.blurple,row=2)
-        self.info = info
+class PlayPauseButton(discord.ui.Button):
+    def __init__(self, guild_session: "GuildSession"):
+        _label = '▶' if guild_session.music.player_track.is_paused() else 'II'
+        super().__init__(label=_label, style=discord.ButtonStyle.blurple, row=2)
+        self.guild_session = guild_session
 
     async def callback(self, interaction: Interaction):
-        self.info.embed.update_action_time()
+        self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
 
-        if self.info.music.player_track.is_paused():
-            self.info.music.player_track.resume()
-        elif self.info.music.player_track.has_play_data():
-            self.info.music.player_track.pause()
+        if self.guild_session.music.player_track.is_paused():
+            self.guild_session.music.player_track.resume()
+        elif self.guild_session.music.player_track.has_audio_data():
+            self.guild_session.music.player_track.pause()
 
 
-class Button3(discord.ui.Button):
-    def __init__(self, info:"DataInfo"):
-        super().__init__(label="↪︎10",row=2)
-        self.info = info
+class Forward10sButton(discord.ui.Button):
+    def __init__(self, guild_session: "GuildSession"):
+        super().__init__(label="↪︎10", row=2)
+        self.guild_session = guild_session
 
     async def callback(self, interaction: Interaction):
-        self.info.embed.update_action_time()
+        self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
-        await self.info.music.player_track.skip_time(10)
+        await self.guild_session.music.player_track.seek_by_seconds(10)
 
-class Button4(discord.ui.Button):
-    def __init__(self, info:"DataInfo"):
-        super().__init__(label=">",row=2)
-        self.info = info
+
+class NextTrackButton(discord.ui.Button):
+    def __init__(self, guild_session: "GuildSession"):
+        super().__init__(label=">", row=2)
+        self.guild_session = guild_session
 
     async def callback(self, interaction: Interaction):
-        self.info.embed.update_action_time()
+        self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
-        await self.info.music.skip(None)
+        await self.guild_session.music.seek_or_skip(None)
 
 
-class Button5(discord.ui.Button):
-    def __init__(self, info:"DataInfo"):
-        super().__init__(label="⚙️",row=3)
-        self.info = info
+class OptionsButton(discord.ui.Button):
+    def __init__(self, guild_session: "GuildSession"):
+        super().__init__(label="⚙️", row=3)
+        self.guild_session = guild_session
 
     async def callback(self, interaction: Interaction):
-        self.info.embed.update_action_time()
+        self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
 
-        if message := self.info.embed.options_display:
+        if message := self.guild_session.embed.options_display:
             if isinstance(message.channel, SendableChannels) and message.channel.last_message == message:
                 return
             else:
@@ -107,41 +106,21 @@ class Button5(discord.ui.Button):
                     pass
         
         if isinstance(interaction.channel, discord.abc.Messageable):
-            self.info.embed.options_display = await playoptionmessage(interaction.channel, self.info)
+            self.guild_session.embed.options_display = await send_play_option_message(interaction.channel, self.guild_session)
 
-    # @discord.ui.button(label="歌詞", row=3)
-    # async def def_button6(self, interaction:discord.Interaction, button):
-    #     self.Parent._update_action()
 
-    #     if title := self.Parent.Mvc._SAD.title:
-    #         songs = await GeniusLyric.from_q(title)
-    #         if songs:
-    #             text = await songs[0].get_lyric()
-    #             await interaction.response.send_message(
-    #                 embed= LyricEmbed(text),
-    #                 view= LyricView(songs),
-    #                 ephemeral= False
-    #                 )
-    #             return
-    #     await interaction.response.send_message(
-    #         embed= LyricEmbed('歌詞の取得に失敗しました'),
-    #         ephemeral= False,
-    #         delete_after=10,
-    #         )
-        
-
-class Button7(discord.ui.Button):
-    def __init__(self, info:"DataInfo"):
-        super().__init__(label="切断",row=3, style=discord.ButtonStyle.red)
-        self.info = info
+class DisconnectButton(discord.ui.Button):
+    def __init__(self, guild_session: "GuildSession"):
+        super().__init__(label="切断", row=3, style=discord.ButtonStyle.red)
+        self.guild_session = guild_session
 
     async def callback(self, interaction: Interaction):
         await interaction.response.defer()
-        await self.info.bye()
+        await self.guild_session.bye()
 
 
-class CreateStatusButton(discord.ui.Button):
-    def __init__(self, parent:'CreateButton', label:str, status_name:str, disable:bool=False):
+class ToggleStatusButton(discord.ui.Button):
+    def __init__(self, parent: 'PlayerControlsView', label: str, status_name: str, disable: bool = False):
         self.view_parent = parent
         self.name = status_name
         self.disable = disable
@@ -150,161 +129,140 @@ class CreateStatusButton(discord.ui.Button):
     def style_check(self):
         if self.disable:
             return discord.ButtonStyle.gray
-        elif self.view_parent.info.music.status.__dict__[self.name]:
+        elif self.view_parent.guild_session.music.status.__dict__[self.name]:
             return discord.ButtonStyle.green
         else:
             return discord.ButtonStyle.red
     
     async def callback(self, interaction: discord.Interaction):
-        status = self.view_parent.info.music.status
+        status = self.view_parent.guild_session.music.status
         status.set(**{self.name: not status.__dict__[self.name]})
         self.style = self.style_check()
-        self.view_parent.info.embed.update_action_time()
+        self.view_parent.guild_session.embed.record_channel_activity()
         await interaction.response.edit_message(view=self.view_parent)
 
 
-
-
-class CreateSelect(discord.ui.Select):
-    def __init__(self, parent:'CreateButton', queue:"MusicQueue") -> None:
+class QueueSelectMenu(discord.ui.Select):
+    def __init__(self, parent: 'PlayerControlsView', queue: "MusicQueue") -> None:
         self.view_parent = parent
         select_opt = []
-        _audio: YTDLPAudioData
-        #print(args)
         prev_items = queue.get_prev_items(4)
-        next_items = queue.get_next_items(25-len(prev_items))
+        next_items = queue.get_next_items(25 - len(prev_items))
         for i in range(-len(prev_items), len(next_items)):
             entry = prev_items[i] if i < 0 else next_items[i]
             title = entry.title()[0:100] if len(entry.title()) >= 100 else entry.title()
-            select_opt.append(discord.SelectOption(label=title,value=str(i),default=(i == 0)))
+            select_opt.append(discord.SelectOption(label=title, value=str(i), default=(i == 0)))
 
         if not select_opt:
-            select_opt.append(discord.SelectOption(label='動画がないよぉ～ん',value='0',default=False))
+            select_opt.append(discord.SelectOption(label='動画がないよぉ～ん', value='0', default=False))
         parent.select_opt = select_opt
         super().__init__(placeholder='キュー表示', options=select_opt, row=0)
 
-
     async def callback(self, interaction: discord.Interaction):
-        #await interaction.response.send_message(f'{interaction.user.name}は{self.values[0]}を選択しました')
         await interaction.response.defer()
         if self.values[0] == '': return
 
-        self.view_parent.info.embed.update_action_time()
-        await self.view_parent.info.music.skip_music(int(self.values[0]))
-        #print(f'{interaction.user.name}は{self.values[0]}を選択しました')
+        self.view_parent.guild_session.embed.record_channel_activity()
+        await self.view_parent.guild_session.music.skip_tracks(int(self.values[0]))
 
 
-async def playoptionmessage(channel:discord.abc.Messageable, info:"DataInfo") -> discord.Message:
+async def send_play_option_message(channel: discord.abc.Messageable, guild_session: "GuildSession") -> discord.Message:
     return await channel.send(
-        embed= PlayConfigEmbed(info.music.player_track),
-        view= PlayConfigView(info)
-        )
+        embed=create_play_config_embed(guild_session.music.player_track),
+        view=PlayConfigView(guild_session)
+    )
 
 
-def PlayConfigEmbed(audio_track:"AudioTrack"):
-    embed = discord.Embed(colour=EmbedTemplates.dont_replace_color())
-    embed.add_field(name='テンポ (x0.1 ~ x3.0)', value=f'x{round(audio_track.speed.get(),2)}', inline=True)
+def create_play_config_embed(audio_track: "AudioTrack"):
+    embed = discord.Embed(colour=EmbedTemplates.get_persistent_color())
+    embed.add_field(name='テンポ (x0.1 ~ x3.0)', value=f'x{round(audio_track.speed.get(), 2)}', inline=True)
     embed.add_field(name='キー', value=f'{audio_track.pitch.get()}', inline=True)
     return embed
 
 
-
 class PlayConfigView(discord.ui.View):
-    def __init__(self, info:"DataInfo"):
+    def __init__(self, guild_session: "GuildSession"):
         super().__init__(timeout=None)
-        self.info = info
-        self.player_track = info.music.player_track
+        self.guild_session = guild_session
+        self.player_track = guild_session.music.player_track
 
-    async def edit_message(self, interaction:discord.Interaction):
+    async def edit_message(self, interaction: discord.Interaction):
         if interaction.message:
-            await interaction.message.edit(embed=PlayConfigEmbed(self.player_track))
+            await interaction.message.edit(embed=create_play_config_embed(self.player_track))
 
-    async def edit_speed(self, interaction:discord.Interaction, num:float):
+    async def edit_speed(self, interaction: discord.Interaction, delta: float):
         await interaction.response.defer()
-        res = await self.player_track.speed.add(num)
-        self.info.embed.update_action_time()
+        res = await self.player_track.speed.add(delta)
+        self.guild_session.embed.record_channel_activity()
         if res:
             await self.edit_message(interaction)
 
-
-    async def edit_pitch(self, interaction:discord.Interaction, num:int):
+    async def edit_pitch(self, interaction: discord.Interaction, delta: int):
         await interaction.response.defer()
-        res = await self.player_track.pitch.add(num)
-        self.info.embed.update_action_time()
+        res = await self.player_track.pitch.add(delta)
+        self.guild_session.embed.record_channel_activity()
         if res:
             await self.edit_message(interaction)
-
 
     @discord.ui.button(label="- 0.5", row=0)
-    async def speed_m5(self, interaction:discord.Interaction, button):
+    async def speed_m5(self, interaction: discord.Interaction, button):
         await self.edit_speed(interaction, -0.5)
 
-
     @discord.ui.button(label="- 0.1", row=0)
-    async def speed_m1(self, interaction:discord.Interaction, button):
+    async def speed_m1(self, interaction: discord.Interaction, button):
         await self.edit_speed(interaction, -0.1)
-        
 
     @discord.ui.button(label="テンポリセット", row=0, style=discord.ButtonStyle.blurple)
-    async def speed_reset(self, interaction:discord.Interaction, button):
+    async def speed_reset(self, interaction: discord.Interaction, button):
         await interaction.response.defer()
         res = await self.player_track.speed.set(1.0)
         if res:
             await self.edit_message(interaction)
 
-
     @discord.ui.button(label="+ 0.1", row=0)
-    async def speed_p1(self, interaction:discord.Interaction, button):
+    async def speed_p1(self, interaction: discord.Interaction, button):
         await self.edit_speed(interaction, 0.1)
 
-
     @discord.ui.button(label="+ 0.5", row=0)
-    async def speed_p5(self, interaction:discord.Interaction, button):
+    async def speed_p5(self, interaction: discord.Interaction, button):
         await self.edit_speed(interaction, 0.5)
 
-
     @discord.ui.button(label="- 2", row=1)
-    async def pitch_m2(self, interaction:discord.Interaction, button):
+    async def pitch_m2(self, interaction: discord.Interaction, button):
         await self.edit_pitch(interaction, -2)
 
-
     @discord.ui.button(label="- 1", row=1)
-    async def pitch_m1(self, interaction:discord.Interaction, button):
+    async def pitch_m1(self, interaction: discord.Interaction, button):
         await self.edit_pitch(interaction, -1)
 
-
     @discord.ui.button(label="キー　リセット", row=1, style=discord.ButtonStyle.blurple)
-    async def pitch_reset(self, interaction:discord.Interaction, button):
+    async def pitch_reset(self, interaction: discord.Interaction, button):
         await interaction.response.defer()
         res = await self.player_track.pitch.set(0)
         if res:
             await self.edit_message(interaction)
 
-
-
     @discord.ui.button(label="+ 1", row=1)
-    async def pitch_p1(self, interaction:discord.Interaction, button):
+    async def pitch_p1(self, interaction: discord.Interaction, button):
         await self.edit_pitch(interaction, 1)
 
-
     @discord.ui.button(label="+ 2", row=1)
-    async def pitch_p2(self, interaction:discord.Interaction, button):
+    async def pitch_p2(self, interaction: discord.Interaction, button):
         await self.edit_pitch(interaction, 2)
 
-
     @discord.ui.button(label="↺", row=2, style=discord.ButtonStyle.red)
-    async def reload(self, interaction:discord.Interaction, button):
-        self.info.embed.update_action_time()
-        await interaction.response.edit_message(embed=PlayConfigEmbed(self.player_track))
-
+    async def reload(self, interaction: discord.Interaction, button):
+        self.guild_session.embed.record_channel_activity()
+        await interaction.response.edit_message(embed=create_play_config_embed(self.player_track))
 
     @discord.ui.button(label="delete", row=2, style=discord.ButtonStyle.red)
-    async def delete(self, interaction:discord.Interaction, button):
-        self.info.embed.update_action_time()
+    async def delete(self, interaction: discord.Interaction, button):
+        self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
         if interaction.message:
             await interaction.message.delete()
-        self.info.embed.options_display = None
+        self.guild_session.embed.options_display = None
+
 
 
 

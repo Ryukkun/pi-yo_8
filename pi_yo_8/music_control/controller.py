@@ -12,7 +12,7 @@ from discord.ext.commands import Context
 
 
 from pi_yo_8.yt_dlp.manager import YTDLPManager
-from pi_yo_8.gui.utils import EmbedTemplates, calc_time
+from pi_yo_8.gui.utils import EmbedTemplates, format_seconds_to_time
 from pi_yo_8.music_control.playlist import Playlist, LazyPlaylist
 from pi_yo_8.music_control.utils import Status
 from pi_yo_8.utils import UrlAnalyzer
@@ -21,7 +21,7 @@ from pi_yo_8.yt_dlp.unit import YTDLP_GENERAL_PARAMS
 from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
 
 if TYPE_CHECKING:
-    from pi_yo_8.main import DataInfo
+    from pi_yo_8.main import GuildSession
 
 
 re_skip = re.compile(r'^((-|)\d+)([hms])$')
@@ -87,12 +87,12 @@ class MusicQueue:
         return bool(self.play_queue)
 
 
-    async def get_item0(self) -> YTDLPAudioData | None:
+    async def get_current_item(self) -> YTDLPAudioData | None:
         if not self.play_queue:
             return None
         item = self.play_queue[0]
         if isinstance(item, Playlist):
-            item = await item.get_now_entry()
+            item = await item.get_current_entry()
         return item
     
 
@@ -131,7 +131,7 @@ class MusicQueue:
                 for entry in [item.entries[i] for i in item.next_indexes]:
                     items.append(entry)
                     if count <= len(items): break
-                if isinstance(item, LazyPlaylist) and not item.decompres_task.done():
+                if isinstance(item, LazyPlaylist) and not item.decompress_task.done():
                     return items
             else:
                 items.append(item)
@@ -140,17 +140,17 @@ class MusicQueue:
 
 
 class MusicController():
-    def __init__(self, info:"DataInfo"):
-        self.info = info
-        self.player_track = info.mavc.add_track(RNum=30 ,opus=True)
-        self.guild = info.guild
-        self.queue:MusicQueue = MusicQueue()
+    def __init__(self, guild_session: "GuildSession"):
+        self.guild_session = guild_session
+        self.player_track = guild_session.multi_track_voice_client.add_track(opus=True)
+        self.guild = guild_session.guild
+        self.queue: MusicQueue = MusicQueue()
         self.status = Status()
         self.last_status = copy.copy(self.status)
 
 
 
-    async def def_queue(self, ctx:Context, args):
+    async def enqueue(self, ctx: Context, args):
         _log.info(f"{self.guild.name} : Command:queue {args}")
         # 一時停止していた場合再生 開始
         if args:
@@ -159,20 +159,20 @@ class MusicController():
             self.player_track.resume()
             return
 
-        result = await self._analysis_input(arg, self.info)
+        result = await self._parse_and_extract_source(arg, self.guild_session)
         if not result: return
 
-        #Queueに登録
+        # Queueに登録
         self.queue.play_queue.append(result)
 
         # 再生されるまでループ
-        if not self.player_track.has_play_data():
-            await self.play_loop(None,0)
+        if not self.player_track.has_audio_data():
+            await self.play_loop(None, 0)
         self.player_track.resume()
 
 
 
-    async def play(self, ctx:Context, args):
+    async def play(self, ctx: Context, args):
         _log.info(f"{self.guild.name} : Command:play {' '.join(args)}")
         # 一時停止していた場合再生 開始
         if args:
@@ -181,12 +181,11 @@ class MusicController():
             self.player_track.resume()
             return
 
-
-        res = await self._analysis_input(arg, self.info)
+        res = await self._parse_and_extract_source(arg, self.guild_session)
         if not res: return
 
         if self.queue.play_queue:
-            await self._skip_music(ignore_playlist=True)
+            await self._advance_and_update_status(ignore_playlist=True)
         self.queue.play_queue.appendleft(res)
 
         if isinstance(res, Playlist):
@@ -194,24 +193,24 @@ class MusicController():
             self.last_status = copy.copy(self.status)
 
         # 再生されるまでループ
-        await self.play_loop(None,0)
+        await self.play_loop(None, 0)
         self.player_track.resume()
 
 
     @staticmethod
-    async def _analysis_input(arg:str, dataInfo:"DataInfo|None") -> "Playlist | YTDLPAudioData | None":
+    async def _parse_and_extract_source(arg: str, guild_session: "GuildSession | None") -> "Playlist | YTDLPAudioData | None":
         print("extract:", arg)
-        info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS).extract_raw_info(arg, dataInfo)
+        info_generator, status_manager = YTDLPManager.YT_DLP.get(YTDLP_GENERAL_PARAMS).extract_raw_info(arg, guild_session)
         if info := await anext(info_generator, None):
             if info.get("playlist"):
                 analysis = UrlAnalyzer(arg)
-                res = LazyPlaylist(info, info_generator, dataInfo)
+                res = LazyPlaylist(info, info_generator, guild_session)
                 status_manager._type = YTDLPInfoType.PLAYLIST
                 status_manager.name = res.title
 
                 if analysis.is_yt and analysis.list_id:
                     if analysis.video_id:
-                        await res.set_next_index_from_videoID(analysis.video_id)
+                        await res.set_next_index_by_video_id(analysis.video_id)
                     else:
                         res.status.set(loop=False, loop_pl=True, random_pl=True)
                 print("extract playlist:", arg)
@@ -219,7 +218,7 @@ class MusicController():
 
             if info.get("formats") and info.get("url"):
                 print("extract video", arg)
-                res = YTDLPAudioData(info, dataInfo, None)
+                res = YTDLPAudioData(info, guild_session, None)
                 status_manager._type = YTDLPInfoType.VIDEO
                 status_manager.name = res.title()
                 return res
@@ -228,42 +227,38 @@ class MusicController():
         return None
 
 
-    async def skip(self, sec_str:str | None):
+    async def seek_or_skip(self, skip_input: str | None):
         if self.guild.voice_client:
-            if sec_str:
+            if not skip_input:
+                await self.skip_tracks()
+                return
 
-                try:sec = int(sec_str)
-                except Exception:
-                    sec = sec_str.lower()
-                    if res := re_skip.match(sec):
-                        sec = int(res.group(1))
-                        suf = res.group(3)
-                        if suf == 'h':
-                            sec = sec * 3600
-                        elif suf == 'm':
-                            sec = sec * 60
-
-                    elif res := re_skip_set_h.match(sec):
-                        sec = int(res.group(3))
-                        sec += int(res.group(2)) * 60
-                        sec += int(res.group(1)) * 3600
-                        await self.player_track.skip_time((sec) - int(self.player_track.timer))
-                        return
-
-                    elif res := re_skip_set_m.match(sec):
-                        sec = int(res.group(2))
-                        sec += int(res.group(1)) * 60
-                        await self.player_track.skip_time((sec) - int(self.player_track.timer))
-                        return
-
-                await self.player_track.skip_time(int(sec))
-
-            else:
-                await self.skip_music()
+            try:
+                sec = int(skip_input)
+            except Exception:
+                sec_str_lower = skip_input.lower()
+                if res := re_skip.match(sec_str_lower):
+                    sec = int(res.group(1))
+                    unit_suffix = res.group(3)
+                    if unit_suffix == 'h':
+                        sec = sec * 3600
+                    elif unit_suffix == 'm':
+                        sec = sec * 60
+                elif res := re_skip_set_h.match(sec_str_lower):
+                    sec = int(res.group(3))
+                    sec += int(res.group(2)) * 60
+                    sec += int(res.group(1)) * 3600
+                    sec -= int(self.player_track.timer)
+                elif res := re_skip_set_m.match(sec_str_lower):
+                    sec = int(res.group(2))
+                    sec += int(res.group(1)) * 60
+                    sec -= int(self.player_track.timer)
+                else: 
+                    return
+            await self.player_track.seek_by_seconds(sec)
 
 
-
-    async def _skip_music(self, count:int=1, ignore_playlist:bool=False) -> bool:
+    async def _advance_and_update_status(self, count: int = 1, ignore_playlist: bool = False) -> bool:
         '''
         Parameters
         ----------
@@ -279,7 +274,7 @@ class MusicController():
         '''
         if count == 0:
             return bool(self.queue.play_queue)
-        res:bool = await self.queue.next(count, ignore_playlist)
+        res: bool = await self.queue.next(count, ignore_playlist)
         if res:
             data = self.queue.play_queue[0]
             if isinstance(data, LazyPlaylist):
@@ -289,10 +284,10 @@ class MusicController():
 
 
 
-    async def skip_music(self, count:int=1):
+    async def skip_tracks(self, count: int = 1):
         if count == 0: return
 
-        res:bool = await self._skip_music(count)
+        res: bool = await self._advance_and_update_status(count)
         if not res: return
         data = self.queue.play_queue[0]
         if isinstance(data, LazyPlaylist):
@@ -319,9 +314,9 @@ class MusicController():
 #   Download
 #---------------------------------------------------------------------------------------
     @staticmethod
-    async def download(arg:str) -> list[Embed] | None:
+    async def download(arg: str) -> list[Embed] | None:
         # Download Embed
-        result = await MusicController._analysis_input(arg, None)
+        result = await MusicController._parse_and_extract_source(arg, None)
         if result is None:
             return
         audio_data = result.entries[0] if isinstance(result, Playlist) else result
@@ -329,69 +324,58 @@ class MusicController():
         if not await audio_data.is_available():
             return
 
-        embed=Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.main_color())
+        embed = Embed(title=audio_data.title(), url=audio_data.web_url(), colour=EmbedTemplates.get_main_color())
         embed.set_thumbnail(url=await audio_data.load_thumbnail.run())
         embed.set_author(name=audio_data.ch_name(), url=audio_data.ch_url(), icon_url=await audio_data.load_ch_icon.run())
             
         if audio_data.duration:
-            Duration = calc_time(audio_data.duration)
-            embed.add_field(name="Length", value=Duration, inline=True)
+            duration_str = format_seconds_to_time(audio_data.duration)
+            embed.add_field(name="Length", value=duration_str, inline=True)
 
             
-        __list = []
+        table_rows = []
         for f in audio_data.formats():
 
-            _dl_string = f'[`download`]({f["url"]})`'
+            download_link = f'[`download`]({f["url"]})`'
 
             if f.get('width'):
-                _res = f"{f['width']}x{f['height']}"
+                resolution = f"{f['width']}x{f['height']}"
             elif f.get('resolution'):
-                _res = f.get('resolution')
+                resolution = str(f.get('resolution'))
             else: 
-                _res = ''
+                resolution = ''
 
-            ext = f.get('ext','')
-            acodec = f.get('acodec','')
-            vcodec = f.get('vcodec','')
-            abr = f"{f.get('abr','?')}k"
-            protocol = f.get('protocol','')
+            ext = f.get('ext', '')
+            acodec = f.get('acodec', '')
+            abr = f"{f.get('abr', '?')}k"
+            protocol = f.get('protocol', '')
 
 
             if '3gpp' in ext:
                 continue
 
-            __list.append([_dl_string,ext,protocol,_res,acodec,abr])
+            table_rows.append([download_link, ext, protocol, resolution, acodec, abr])
 
-        headers = ['','EXT','Protocol','RES','Audio','ABR']
-        table = tabulate.tabulate(tabular_data=__list, headers=headers, tablefmt='github')
-        table = re_space.sub(')`|',table)
-        table = table.split('\n')
-        table[0] = re_space2.sub('',re_space3.sub('[`--------`](https://github.com/Ryukkun/pi-yo_8)`|',table[0]))
-        table[1] = re_space2.sub('',re_space3.sub('[`--------`](https://github.com/Ryukkun/pi-yo_8)`|',table[1]))
+        headers = ['', 'EXT', 'Protocol', 'RES', 'Audio', 'ABR']
+        table = tabulate.tabulate(tabular_data=table_rows, headers=headers, tablefmt='github')
+        table = re_space.sub(')`|', table)
+        table_lines = table.split('\n')
+        table_lines[0] = re_space2.sub('', re_space3.sub('[`--------`](https://github.com/Ryukkun/pi-yo_8)`|', table_lines[0]))
+        table_lines[1] = re_space2.sub('', re_space3.sub('[`--------`](https://github.com/Ryukkun/pi-yo_8)`|', table_lines[1]))
 
-        _embeds = [embed]
-        while table:
-            __table = ''
-            embed = Embed(colour=EmbedTemplates.main_color())
-            while table:
-                temp = re_space2.sub('', table[0])
-                if len(__table) + len(temp) + 5 > 4096:
+        embed_list = [embed]
+        while table_lines:
+            table_content = ''
+            embed = Embed(colour=EmbedTemplates.get_main_color())
+            while table_lines:
+                temp = re_space2.sub('', table_lines[0])
+                if len(table_content) + len(temp) + 5 > 4096:
                     break
-                __table += f'{temp}`\n'
-                table.pop(0)
+                table_content += f'{temp}`\n'
+                table_lines.pop(0)
                 
-            embed.description = __table
-            _embeds.append(embed)
-
-        return _embeds
-
-
-
-        
-            # embed=Embed(title=audio_data.web_url, url=audio_data.web_url, colour=EmbedTemplates.main_color())
-            # embed_list = [embed]
-            # embed=Embed(title='Download', url=audio_data.st_url, colour=EmbedTemplates.main_color())
-            # embed_list.append(embed)
+            embed.description = table_content
+            embed_list.append(embed)
 
         return embed_list
             
@@ -400,7 +384,7 @@ class MusicController():
 #---------------------------------------------------------------------------------------
 #   再生 Loop
 #---------------------------------------------------------------------------------------
-    async def play_loop(self, played=None, did_time=0.0):
+    async def play_loop(self, played=None, played_at_timestamp=0.0):
         """
         再生後に実行される
         """
@@ -409,18 +393,18 @@ class MusicController():
         loop = asyncio.get_event_loop()
 
         # Queue削除
-        audio_data = await self.queue.get_item0()
+        audio_data = await self.queue.get_current_item()
         if audio_data:
-            if self.status.loop == False and audio_data.stream_url == played or (time.time() - did_time) <= 0.2:
-                await self._skip_music()
+            if not self.status.loop and audio_data.stream_url == played or (time.time() - played_at_timestamp) <= 0.2:
+                await self._advance_and_update_status()
 
 
         # 再生
-        if audio_data := await self.queue.get_item0():
+        if audio_data := await self.queue.get_current_item():
             played_time = time.time()
             _log.info(f"{self.guild.name} : Play {audio_data.web_url()}  volume:{audio_data.get_volume()}  [Now len: {str(len(self.queue.play_queue))}]")
 
-            await self.player_track.play(audio_data,after=lambda : asyncio.run_coroutine_threadsafe(self.play_loop(audio_data.stream_url,played_time), loop))
+            await self.player_track.play(audio_data, after=lambda: asyncio.run_coroutine_threadsafe(self.play_loop(audio_data.stream_url, played_time), loop))
 
 
     # async def task_loop(self):

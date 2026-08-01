@@ -36,9 +36,9 @@ class PlaylistRandom:
         for _ in range(value - len(self.cooldowns)):
             self.cooldowns.append(max_value)
 
-    def next(self):
+    def select_next_index(self):
         # 重みを二次関数で計算
-        weights = self.get_weight()
+        weights = self.calculate_weights()
         # 選択
         choice = random.choices(range(self.range), weights=weights, k=1)[0]
         
@@ -51,5 +51,5 @@ class PlaylistRandom:
 
         return choice
     
-    def get_weight(self):
-        return [0.000001 if c/self.range < 0.3 else c**2 for c in self.cooldowns]
+    def calculate_weights(self):
+        return [0.000001 if c / self.range < 0.3 else c ** 2 for c in self.cooldowns]

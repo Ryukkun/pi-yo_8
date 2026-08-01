@@ -21,8 +21,8 @@ class YoutubeIE(OldYoutubeIE):
         if isinstance(player_configs, dict):
             volume = find(player_configs)
         elif isinstance(player_configs, list):
-            for pc in player_configs:
-                volume = find(pc)
+            for player_config in player_configs:
+                volume = find(player_config)
                 if volume:
                     break
 
@@ -36,19 +36,19 @@ class YoutubeIE(OldYoutubeIE):
         このメソッドの戻り値はInfo（YoutubeDL.extract_info()の戻り値）のKey["__post_extractor"]に保存される
         """
         volume = args[0].pop("volume_data", None)
-        ret = [super().extract_comments(*args, **kwargs)]
+        comments_and_volume = [super().extract_comments(*args, **kwargs)]
         if volume:
-            ret.append(volume)
-        return ret
+            comments_and_volume.append(volume)
+        return comments_and_volume
 
 
     def _real_extract(self, url):
         """
         info["volume_data"] <= info["__post_extractor"]["volume_data"]
         """
-        info:dict[str, list[Any]] = super()._real_extract(url)
+        info: dict[str, list[Any]] = super()._real_extract(url)
         if isinstance(info, dict) and "__post_extractor" in info and len(info['__post_extractor']) == 2:
-            _ = info['__post_extractor'][0]
+            post_extractor_comments = info['__post_extractor'][0]
             info['volume_data'] = info['__post_extractor'][1]
-            info['__post_extractor'] = _
+            info['__post_extractor'] = post_extractor_comments
         return info

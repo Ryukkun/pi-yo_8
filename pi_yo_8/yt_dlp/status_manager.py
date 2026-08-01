@@ -6,25 +6,25 @@ from enum import Enum
 from typing import Any, Callable
 
 
-class LambdaLogger:
+class CustomLambdaLogger:
     def __init__(self,
-                 debug:Callable[[str], Any]|None = None,
-                 warning:Callable[[str], Any]|None = None,
-                 error:Callable[[str], Any]|None = None
+                 debug: Callable[[str], Any] | None = None,
+                 warning: Callable[[str], Any] | None = None,
+                 error: Callable[[str], Any] | None = None
                  ) -> None:
         self.debug_callback = debug
         self.warning_callback = warning
         self.error_callback = error
 
-    def debug(self, msg:str):
+    def debug(self, msg: str):
         if self.debug_callback:
             self.debug_callback(msg)
 
-    def warning(self, msg:str):
+    def warning(self, msg: str):
         if self.warning_callback:
             self.warning_callback(msg)
 
-    def error(self, msg:str):
+    def error(self, msg: str):
         if self.error_callback:
             self.error_callback(msg)
 

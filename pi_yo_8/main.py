@@ -6,7 +6,7 @@ from discord.ext import commands, tasks
 from pi_yo_8.patch import patch
 from pi_yo_8.type import SendableChannels
 from pi_yo_8.gui.controller import EmbedController
-from pi_yo_8.voice_client import MultiAudioVoiceClient
+from pi_yo_8.voice_client import MultiTrackVoiceClient
 from pi_yo_8.music_control.controller import MusicController
 from pi_yo_8.yt_dlp.status_manager import YTDLPStatusManager
 
@@ -18,18 +18,19 @@ _log = logging.getLogger(__name__)
 
 
 
-class MyCog(commands.Cog):
-    def __init__(self, bot:commands.Bot) -> None:
+class MusicBotCog(commands.Cog):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.g_opts:dict[int, 'DataInfo'] = {}
+        self.guild_sessions: dict[int, 'GuildSession'] = {}
+
 
     @discord.app_commands.command(name="download", description='URL or 検索したい文字')
-    async def download_slash(self, interaction:discord.Interaction, arg:str):
-        task = asyncio.create_task(MusicController.download(arg))
+    async def download_command(self, interaction: discord.Interaction, query: str):
+        task = asyncio.create_task(MusicController.download(query))
         await interaction.response.defer(thinking=True)
-        if embeds := await task:
-            for em in embeds:
-                await interaction.followup.send(embed=em, ephemeral=True)
+        if embed_list := await task:
+            for embed in embed_list:
+                await interaction.followup.send(embed=embed, ephemeral=True)
 
 
     ####  基本的コマンド
@@ -46,62 +47,62 @@ class MyCog(commands.Cog):
 
 
     @commands.command()
-    async def join(self, ctx:commands.Context):
-        if ctx.guild and not self.g_opts.get(ctx.guild.id):
+    async def join(self, ctx: commands.Context):
+        if ctx.guild and not self.guild_sessions.get(ctx.guild.id):
             try: 
                 if isinstance(ctx.author, discord.Member) and ctx.author.voice and ctx.author.voice.channel:
                     await ctx.author.voice.channel.connect(self_deaf=True)
                     _log.info(f'{ctx.guild.name} : #join')
-                    self.g_opts[ctx.guild.id] = DataInfo(ctx.guild, self)
+                    self.guild_sessions[ctx.guild.id] = GuildSession(ctx.guild, self)
                     return True
-            except:
-                _log.exception(f"func:join  guild:{ctx.guild.name}")
+            except Exception:
+                _log.exception(f"func:join guild:{ctx.guild.name}")
 
 
     @commands.command()
-    async def bye(self, ctx:commands.Context):
-        if ctx.guild and (info := self.g_opts.get(ctx.guild.id)):
-            await info.bye()
+    async def bye(self, ctx: commands.Context):
+        if ctx.guild and (guild_session := self.guild_sessions.get(ctx.guild.id)):
+            await guild_session.bye()
 
         
     @commands.command()
-    async def speed(self, ctx:commands.Context, arg:float):
-        if ctx.guild and (data := self.g_opts.get(ctx.guild.id)):
-            await data.music.player_track.speed.set(arg)
+    async def speed(self, ctx: commands.Context, speed_value: float):
+        if ctx.guild and (guild_session := self.guild_sessions.get(ctx.guild.id)):
+            await guild_session.music.player_track.speed.set(speed_value)
 
 
     @commands.command()
-    async def pitch(self, ctx:commands.Context, arg:int):
-        if ctx.guild and (data := self.g_opts.get(ctx.guild.id)):
-            await data.music.player_track.pitch.set(arg)
+    async def pitch(self, ctx: commands.Context, pitch_value: int):
+        if ctx.guild and (guild_session := self.guild_sessions.get(ctx.guild.id)):
+            await guild_session.music.player_track.pitch.set(pitch_value)
 
 
     @commands.command()
-    async def playing(self, ctx:commands.Context):
-        if ctx.guild and (info := self.g_opts.get(ctx.guild.id)):
+    async def playing(self, ctx: commands.Context):
+        if ctx.guild and (guild_session := self.guild_sessions.get(ctx.guild.id)):
             if isinstance(ctx.channel, SendableChannels):
-                info.embed.update_action_time(ctx.channel)
-            await info.embed.update_main_display()
+                guild_session.embed.record_channel_activity(ctx.channel)
+            await guild_session.embed.build_main_embed()
 
 
 #---------------------------------------------------------------------------------------------------
 #   Skip
 #---------------------------------------------------------------------------------------------------
     @commands.command(aliases=['s'])
-    async def skip(self, ctx:commands.Context, arg:str | None):
-        if ctx.guild and (info := self.g_opts.get(ctx.guild.id)):
-            info.embed.update_action_time(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
-            await info.music.skip(arg)
+    async def skip(self, ctx: commands.Context, skip_input: str | None):
+        if ctx.guild and (guild_session := self.guild_sessions.get(ctx.guild.id)):
+            guild_session.embed.record_channel_activity(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
+            await guild_session.music.seek_or_skip(skip_input)
 
 
 #---------------------------------------------------------------------------------------
 #   Download
 #---------------------------------------------------------------------------------------
     @commands.command(aliases=['dl'])
-    async def download(self, ctx:commands.Context, arg:str):
-        if embeds := await MusicController.download(arg):
-            for em in embeds:
-                await ctx.send(embed=em)
+    async def download(self, ctx: commands.Context, query: str):
+        if embed_list := await MusicController.download(query):
+            for embed in embed_list:
+                await ctx.send(embed=embed)
 
 
 
@@ -110,22 +111,22 @@ class MyCog(commands.Cog):
 ##############################################################################
 
     @commands.command(aliases=['q'])
-    async def queue(self, ctx:commands.Context, *args):
+    async def queue(self, ctx: commands.Context, *args):
         if ctx.guild:
             await self.join(ctx)
-            if info := self.g_opts.get(ctx.guild.id):
-                info.embed.update_action_time(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
-                await info.music.def_queue(ctx, args)
+            if guild_session := self.guild_sessions.get(ctx.guild.id):
+                guild_session.embed.record_channel_activity(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
+                await guild_session.music.enqueue(ctx, args)
 
 
 
-    @commands.command(aliases=['p','pl'])
-    async def play(self, ctx:commands.Context, *args):
+    @commands.command(aliases=['p', 'pl'])
+    async def play(self, ctx: commands.Context, *args):
         if ctx.guild:
             await self.join(ctx)
-            if info := self.g_opts.get(ctx.guild.id):
-                info.embed.update_action_time(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
-                await info.music.play(ctx, args)
+            if guild_session := self.guild_sessions.get(ctx.guild.id):
+                guild_session.embed.record_channel_activity(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
+                await guild_session.music.play(ctx, args)
 
 
 
@@ -138,7 +139,7 @@ class GuildSession:
     """
     Guildごとの接続セッション・音楽コントローラー・UI表示・タスク状態を管理するクラス
     """
-    def __init__(self, guild: discord.Guild, cog: MyCog):
+    def __init__(self, guild: discord.Guild, cog: MusicBotCog):
         if isinstance(guild.voice_client, discord.VoiceClient):
             self.vc: discord.VoiceClient = guild.voice_client
         else:
@@ -147,24 +148,25 @@ class GuildSession:
 
         self.guild = guild
         self.bot = cog.bot
-        self.g_opts = cog.g_opts
+        self.guild_sessions = cog.guild_sessions
         self.client_user_id = self.bot.user.id if self.bot.user else -1
-        self.count_loop = 0
+        self.empty_channel_loop_count = 0
 
-        self.mavc = MultiAudioVoiceClient(guild, self) # type: ignore
+        self.multi_track_voice_client = MultiTrackVoiceClient(guild, self) # type: ignore
         self.music = MusicController(self) # type: ignore
         self.embed = EmbedController(self) # type: ignore
         self.ytdlp_status_managers: list[YTDLPStatusManager] = []
-        self.loop_5.start()
+        self.inactivity_check_loop.start()
+
 
     async def bye(self, text: str = '切断'):
         asyncio.create_task(self._bye(text))
-        self.loop_5.stop()
+        self.inactivity_check_loop.stop()
 
     async def _bye(self, text: str):
-        self.mavc.kill()
-        if self.guild.id in self.g_opts:
-            del self.g_opts[self.guild.id]
+        self.multi_track_voice_client.kill()
+        if self.guild.id in self.guild_sessions:
+            del self.guild_sessions[self.guild.id]
 
         _log.info(f'{self.guild.name} : #{text}')
         await asyncio.sleep(0.02)
@@ -173,7 +175,7 @@ class GuildSession:
         except Exception:
             pass
 
-        while self.loop_5.is_running():
+        while self.inactivity_check_loop.is_running():
             await asyncio.sleep(1)
 
         if message := self.embed.main_display:
@@ -189,8 +191,8 @@ class GuildSession:
                 pass
 
     @tasks.loop(seconds=5.0)
-    async def loop_5(self):
-        if self.guild.id not in self.g_opts:
+    async def inactivity_check_loop(self):
+        if self.guild.id not in self.guild_sessions:
             return
 
         # 強制切断検知
@@ -198,22 +200,18 @@ class GuildSession:
             await self.bye('チャンネル未存在のため切断')
             return
 
-        mems = self.vc.channel.members
-        if self.client_user_id not in [_.id for _ in mems]:
+        channel_members = self.vc.channel.members
+        if self.client_user_id not in [member.id for member in channel_members]:
             await self.bye('強制切断検知')
 
         # voice channelにBot以外誰もいなくなったことを確認
-        elif not any(not _.bot for _ in mems):
-            self.count_loop += 1
-            if self.count_loop >= 2:
+        elif not any(not member.bot for member in channel_members):
+            self.empty_channel_loop_count += 1
+            if self.empty_channel_loop_count >= 2:
                 await self.bye('誰もいなくなったため切断')
 
         else:
-            self.count_loop = 0
+            self.empty_channel_loop_count = 0
 
         # Embedの自動更新タスク
         await self.embed.task_loop()
-
-
-# 後方互換性保持のためのエイリアス
-DataInfo = GuildSession
