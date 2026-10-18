@@ -101,7 +101,7 @@ class LazyPlaylist(Playlist):
             idx = self.next_indexes[i]
             if idx < len(self.entries):
                 entry = self.entries[idx]
-                if not entry.is_stream_ready():
+                if not entry.is_stream_ready() and (entry._load_task is None or entry._load_task.done()):
                     asyncio.create_task(ensure_track_playable(entry, on_status=self.on_status))
 
     async def get_current_track(self) -> Track | None:
@@ -128,7 +128,8 @@ class LazyPlaylist(Playlist):
 
 async def ensure_track_playable(track: Track, on_status: Callable[[StatusManager], None] | None = None) -> bool:
     """
-    トラックのストリームURLが有効か検査し、無効なら再抽出を行う
+    トラックのストリームURLが有効か検査し、無効なら再抽出を行う。
+    既に抽出中の場合は同一タスクを待機し、二重抽出（重複リクエスト）を防止する。
     """
     if track.is_stream_ready() and track.stream_info:
         _log.debug(f"Track '{track.title}' stream ready, checking URL accessibility...")
@@ -137,7 +138,19 @@ async def ensure_track_playable(track: Track, on_status: Callable[[StatusManager
             return True
         _log.info(f"Track '{track.title}' stream URL inaccessible/expired. Re-extracting...")
 
-    # 再抽出
+    # 既に抽出タスクが実行中であれば、その完了を待つ（重複実行を防止）
+    if track._load_task is not None and not track._load_task.done():
+        _log.debug(f"Track '{track.title}' stream extraction already in flight, awaiting existing task...")
+        return await track._load_task
+
+    track._load_task = asyncio.create_task(_do_extract_stream(track, on_status))
+    try:
+        return await track._load_task
+    finally:
+        track._load_task = None
+
+
+async def _do_extract_stream(track: Track, on_status: Callable[[StatusManager], None] | None = None) -> bool:
     _log.info(f"Extracting stream URL for: '{track.title}' ({track.web_url})")
     extractor = YTDLPManager.get_extractor(YTDLP_VIDEO_PARAMS)
     gen, sm = extractor.extract_raw_info(track.web_url)
