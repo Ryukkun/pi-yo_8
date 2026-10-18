@@ -29,6 +29,8 @@ class EmbedController:
         self.main_display: Message | None = None
         self.options_display: Message | None = None
         self._scheduled_task: asyncio.Task | None = None
+        self._was_active_playback: bool = False
+        self._was_active_extraction: bool = False
 
     def record_channel_activity(self, channel: Any | None = None) -> None:
         self.latest_action_time = time.time()
@@ -116,16 +118,15 @@ class EmbedController:
         change_view = False
         components = target_message.components
 
-        if len(components) >= 3:
-            if isinstance(components[0], ActionRow) and components[0].children and isinstance(components[0].children[0], SelectMenu):
-                old_select = components[0].children[0]
-                if [opt.to_dict() for opt in view.select_opt] != [opt.to_dict() for opt in old_select.options]:
-                    change_view = True
-
-            if isinstance(components[2], ActionRow) and len(components[2].children) >= 3 and isinstance(components[2].children[2], Button):
-                old_pause_play = components[2].children[2]
-                if view.pause_play.label != old_pause_play.label:
-                    change_view = True
+        for row in components:
+            if isinstance(row, ActionRow):
+                for child in row.children:
+                    if isinstance(child, SelectMenu):
+                        if [opt.to_dict() for opt in view.select_opt] != [opt.to_dict() for opt in child.options]:
+                            change_view = True
+                    elif isinstance(child, Button) and child.label in ('▶', 'II'):
+                        if view.pause_play.label != child.label:
+                            change_view = True
 
         try:
             if change_view:
@@ -219,6 +220,16 @@ class EmbedController:
 
             has_active_extraction = any(s.is_running for s in snap.statuses)
             is_active_playback = snap.has_audio_data and not snap.is_paused
+
+            was_active = self._was_active_playback or self._was_active_extraction
+            is_active = is_active_playback or has_active_extraction
+            self._was_active_playback = is_active_playback
+            self._was_active_extraction = has_active_extraction
+
+            # 停止・一時停止・解析完了直後の場合、状態変化をUI（ボタンや進捗バー）に反映するため必ず1回更新を行う
+            if was_active and not is_active:
+                await self.refresh_main_display()
+                return
 
             # 解析中は進行状況を迅速に反映 (5秒)
             if has_active_extraction:

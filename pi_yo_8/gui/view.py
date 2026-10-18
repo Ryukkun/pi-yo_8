@@ -46,6 +46,7 @@ class PlayerControlsView(discord.ui.View):
         self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
         await self.guild_session.music.player_track.seek_by_seconds(-10)
+        await self.guild_session.embed.refresh_main_display()
 
 
 class PlayPauseButton(discord.ui.Button):
@@ -62,6 +63,7 @@ class PlayPauseButton(discord.ui.Button):
             self.guild_session.music.player_track.resume()
         elif self.guild_session.music.player_track.has_audio_data():
             self.guild_session.music.player_track.pause()
+        await self.guild_session.embed.refresh_main_display()
 
 
 class Forward10sButton(discord.ui.Button):
@@ -73,6 +75,7 @@ class Forward10sButton(discord.ui.Button):
         self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
         await self.guild_session.music.player_track.seek_by_seconds(10)
+        await self.guild_session.embed.refresh_main_display()
 
 
 class NextTrackButton(discord.ui.Button):

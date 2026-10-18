@@ -34,6 +34,19 @@ class GuildSession:
         player_track = self.multi_track_voice_client.add_track(opus_mode=True)
 
         self.embed = EmbedController(self)
+        orig_state_change = player_track.on_state_change
+
+        def _on_audio_state_change():
+            if orig_state_change:
+                orig_state_change()
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self.embed.refresh_main_display())
+            except RuntimeError:
+                asyncio.run_coroutine_threadsafe(self.embed.refresh_main_display(), self.bot.loop)
+
+        player_track.on_state_change = _on_audio_state_change
+
         self.music = PlayerService(
             guild.name,
             player_track,
