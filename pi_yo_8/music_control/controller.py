@@ -405,18 +405,4 @@ class MusicController():
             _log.info(f"{self.guild.name} : Play {audio_data.web_url()}  volume:{audio_data.get_volume()}  [Now len: {str(len(self.queue.play_queue))}]")
 
             await self.player_track.play(audio_data, after=lambda: asyncio.run_coroutine_threadsafe(self.play_loop(audio_data.stream_url, played_time), loop))
-
-
-    # async def task_loop(self):
-    #     '''
-    #     Infoより 5秒おきに実行
-    #     '''
-
-    #     try:
-    #         # PlayList再生時に 次の動画を取得する
-    #         if self.PL and self.status['random_pl'] != self.last_status['random_pl']:
-    #             self.last_status = self.status.copy()
-    #             del self.queue[1:]
-    #             self._load_next_pl()
-    #     except Exception as e:
-    #         print(e)
+
