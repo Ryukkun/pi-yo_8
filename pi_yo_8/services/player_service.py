@@ -18,12 +18,19 @@ re_skip_set_h = re.compile(r'^(\d+)[:;,](\d+)[:;,](\d+)$')
 re_skip_set_m = re.compile(r'^(\d+)[:;,](\d+)$')
 
 class PlayerService:
-    def __init__(self, guild_name: str, audio_track: AudioTrack, on_status_report: Any = None):
+    def __init__(
+        self,
+        guild_name: str,
+        audio_track: AudioTrack,
+        on_status_report: Any = None,
+        on_track_change: Any = None,
+    ):
         self.guild_name = guild_name
         self.player_track = audio_track
         self.queue = PlayQueue()
         self.status = PlayMode()
         self.on_status_report = on_status_report
+        self.on_track_change = on_track_change
         self.last_played_url: str | None = None
         self.last_played_time: float = 0.0
 
@@ -96,6 +103,8 @@ class PlayerService:
             self.last_played_url = track.stream_info.url if track.stream_info else None
             self.last_played_time = time.time()
             _log.info(f"{self.guild_name} : Now Playing '{track.title}' [{track.web_url}] [Queue items: {len(self.queue.play_queue)}]")
+            if self.on_track_change:
+                self.on_track_change()
 
             loop = asyncio.get_running_loop()
             await self.player_track.play(
@@ -106,6 +115,8 @@ class PlayerService:
             )
         else:
             _log.info(f"{self.guild_name} : Play loop finished - no more tracks to play.")
+            if self.on_track_change:
+                self.on_track_change()
 
 
     async def _advance_and_update_status(self, count: int = 1, ignore_playlist: bool = False) -> bool:

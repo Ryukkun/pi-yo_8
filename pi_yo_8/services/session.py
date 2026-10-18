@@ -5,6 +5,8 @@ from typing import Any
 import discord
 from discord.ext import tasks
 
+from pi_yo_8.core.playlist import Playlist
+from pi_yo_8.core.snapshot import PlaybackSnapshot, StatusSnapshot, TrackSnapshot
 from pi_yo_8.engine.mixer import MultiTrackVoiceClient
 from pi_yo_8.gui.controller import EmbedController
 from pi_yo_8.services.player_service import PlayerService
@@ -31,14 +33,78 @@ class GuildSession:
         self.multi_track_voice_client = MultiTrackVoiceClient(guild, self.vc, bot.loop)
         player_track = self.multi_track_voice_client.add_track(opus_mode=True)
 
-        self.music = PlayerService(guild.name, player_track, on_status_report=self.register_status_manager)
         self.embed = EmbedController(self)
+        self.music = PlayerService(
+            guild.name,
+            player_track,
+            on_status_report=self.register_status_manager,
+            on_track_change=self._on_track_change,
+        )
         self.inactivity_check_loop.start()
+
+    def _on_track_change(self) -> None:
+        asyncio.create_task(self.embed.refresh_main_display())
+
+    def get_snapshot(self) -> PlaybackSnapshot:
+        track = self.music.player_track.track
+        track_snap = None
+        if track:
+            track_snap = TrackSnapshot(
+                title=track.title,
+                web_url=track.web_url,
+                duration=track.duration,
+                thumbnail_url=track.thumbnail_url,
+                uploader=track.uploader,
+                uploader_url=track.uploader_url,
+                view_count=track.view_count,
+                upload_date=track.upload_date,
+            )
+
+        raw_head = self.music.queue.get_current_raw()
+        pl_title = None
+        pl_url = None
+        if isinstance(raw_head, Playlist):
+            pl_title = raw_head.title
+            pl_url = raw_head.url
+
+        status_snaps: list[StatusSnapshot] = []
+        for sm in self.ytdlp_status_managers:
+            recent_errs = [e.description for e in sm.get_errors(seconds_ago=20)]
+            if sm.is_running or recent_errs:
+                status_snaps.append(
+                    StatusSnapshot(
+                        name=sm.name,
+                        url=sm.url,
+                        type_name=sm._type.name,
+                        is_running=sm.is_running,
+                        recent_errors=recent_errs,
+                    )
+                )
+
+        return PlaybackSnapshot(
+            track=track_snap,
+            timer=self.music.player_track.timer,
+            duration=track.duration if track else None,
+            is_paused=self.music.player_track.is_paused(),
+            has_audio_data=self.music.player_track.has_audio_data(),
+            is_playing_playlist=self.music.queue.is_playing_playlist(),
+            playlist_title=pl_title,
+            playlist_url=pl_url,
+            loop=self.music.status.loop,
+            loop_pl=self.music.status.loop_pl,
+            random_pl=self.music.status.random_pl,
+            speed=self.music.player_track.speed.get(),
+            pitch=self.music.player_track.pitch.get(),
+            statuses=status_snaps,
+        )
 
     def register_status_manager(self, sm: StatusManager) -> None:
         self.ytdlp_status_managers.append(sm)
-        loop = asyncio.get_event_loop()
-        loop.call_later(30, lambda: self.ytdlp_status_managers.remove(sm) if sm in self.ytdlp_status_managers else None)
+        try:
+            loop = asyncio.get_running_loop()
+            loop.call_later(30, lambda: self.ytdlp_status_managers.remove(sm) if sm in self.ytdlp_status_managers else None)
+        except RuntimeError:
+            pass
 
     async def bye(self, text: str = '切断') -> None:
         asyncio.create_task(self._bye(text))

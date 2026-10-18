@@ -52,6 +52,18 @@ class YTDLPExtractor:
         self.process = Process(target=YTDLPExtractor._extract_info, args=(child, params))
         self.process.start()
 
+    def stop(self) -> None:
+        try:
+            self.connection.close()
+        except Exception:
+            pass
+        if self.process.is_alive():
+            try:
+                self.process.terminate()
+                self.process.join(timeout=1.0)
+            except Exception:
+                pass
+
     @staticmethod
     def get_ytdlp(params: dict) -> YoutubeDL:
         ydl = YoutubeDL(params)  # type: ignore
@@ -61,18 +73,16 @@ class YTDLPExtractor:
     def extract_raw_info(self, url: str) -> tuple[AsyncGenerator[dict[str, Any]], StatusManager]:
         self.is_running = True
         self.connection.send(url)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         status_manager = StatusManager(url if UrlAnalyzer(url).is_url else '')
 
         async def generator():
-            with ThreadPoolExecutor(max_workers=1) as exe:
+            try:
                 while True:
                     received_item: str | dict[str, Any] | ErrorMessage = await loop.run_in_executor(
-                        exe, self.connection.recv
+                        None, self.connection.recv
                     )
                     if received_item == '':
-                        self.is_running = False
-                        status_manager.is_running = False
                         break
                     if isinstance(received_item, ErrorMessage):
                         status_manager.append_error(received_item)
@@ -87,6 +97,9 @@ class YTDLPExtractor:
                         continue
                     info: dict[str, Any] = json.loads(received_item) if isinstance(received_item, str) else received_item
                     yield info
+            finally:
+                self.is_running = False
+                status_manager.is_running = False
 
         return generator(), status_manager
 
