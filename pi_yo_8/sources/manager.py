@@ -31,9 +31,23 @@ class YTDLPManager:
 
     def shutdown(self) -> None:
         with self._lock:
-            for pool in self.ytdlp.values():
-                for extractor in pool:
-                    extractor.stop()
+            all_extractors = [e for pool in self.ytdlp.values() for e in pool]
+            for extractor in all_extractors:
+                try:
+                    extractor.connection.close()
+                except Exception:
+                    pass
+                if extractor.process.is_alive():
+                    try:
+                        extractor.process.terminate()
+                    except Exception:
+                        pass
+            for extractor in all_extractors:
+                if extractor.process.is_alive():
+                    try:
+                        extractor.process.join(timeout=0.2)
+                    except Exception:
+                        pass
             self.ytdlp.clear()
 
     def get(self, options: dict) -> YTDLPExtractor:

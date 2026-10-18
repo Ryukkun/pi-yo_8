@@ -105,6 +105,12 @@ class YTDLPExtractor:
 
     @staticmethod
     def _extract_info(conn: connection._ConnectionBase, options: dict) -> None:
+        import signal
+        try:
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+        except Exception:
+            pass
+
         send_lock = threading.Lock()
 
         def safe_send(item: Any) -> None:
@@ -114,43 +120,53 @@ class YTDLPExtractor:
                 except Exception:
                     pass
 
-        opts = options.copy()
-        opts["logger"] = LambdaLogger(
-            debug=lambda msg: safe_send(ErrorMessage(ErrorType.DEBUG if msg.startswith("[debug]") else ErrorType.INFO, msg)),
-            warning=lambda msg: safe_send(ErrorMessage(ErrorType.WARNING, msg)),
-            error=lambda msg: safe_send(ErrorMessage(ErrorType.ERROR, msg)),
-        )
+        try:
+            opts = options.copy()
+            opts["logger"] = LambdaLogger(
+                debug=lambda msg: safe_send(ErrorMessage(ErrorType.DEBUG if msg.startswith("[debug]") else ErrorType.INFO, msg)),
+                warning=lambda msg: safe_send(ErrorMessage(ErrorType.WARNING, msg)),
+                error=lambda msg: safe_send(ErrorMessage(ErrorType.ERROR, msg)),
+            )
 
-        ydl = YTDLPExtractor.get_ytdlp(opts)
-        buffer = ModdedBuffer()
-        ydl._out_files.__dict__["out"] = buffer  # type: ignore
-        with ThreadPoolExecutor(max_workers=1) as exe:
-            while True:
-                try:
-                    url = conn.recv()
-                except (EOFError, BrokenPipeError):
-                    break
-                if not url:
-                    break
-                try:
-                    future = exe.submit(ydl.extract_info, url, download=False, process=True)
-                    send_count = 0
-                    while True:
-                        line = buffer.readline()
-                        if line == '':
-                            if future.done():
-                                break
-                            time.sleep(0.01)
-                            continue
-                        safe_send(line)
-                        send_count += 1
+            ydl = YTDLPExtractor.get_ytdlp(opts)
+            buffer = ModdedBuffer()
+            ydl._out_files.__dict__["out"] = buffer  # type: ignore
+            with ThreadPoolExecutor(max_workers=1) as exe:
+                while True:
+                    try:
+                        url = conn.recv()
+                    except (EOFError, BrokenPipeError, KeyboardInterrupt):
+                        break
+                    if not url:
+                        break
+                    try:
+                        future = exe.submit(ydl.extract_info, url, download=False, process=True)
+                        send_count = 0
+                        while True:
+                            line = buffer.readline()
+                            if line == '':
+                                if future.done():
+                                    break
+                                time.sleep(0.01)
+                                continue
+                            safe_send(line)
+                            send_count += 1
 
-                    if (result := future.result()) and ("entries" not in result or send_count == 0):
-                        safe_send(result)
-                except Exception as e:
-                    safe_send(ErrorMessage(ErrorType.ERROR, str(e), type(e).__name__, traceback.format_exc()))
-                finally:
-                    buffer.clean()
-                    safe_send('')
+                        if (result := future.result()) and ("entries" not in result or send_count == 0):
+                            safe_send(result)
+                    except (KeyboardInterrupt, SystemExit):
+                        break
+                    except Exception as e:
+                        safe_send(ErrorMessage(ErrorType.ERROR, str(e), type(e).__name__, traceback.format_exc()))
+                    finally:
+                        buffer.clean()
+                        safe_send('')
+        except (KeyboardInterrupt, SystemExit, EOFError, BrokenPipeError):
+            pass
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 

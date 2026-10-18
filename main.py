@@ -33,4 +33,13 @@ async def main():
         await bot.start(config.Token)
 
 if IS_MAIN_PROCESS:
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nBot has stopped (Ctrl+C).")
+    finally:
+        try:
+            from pi_yo_8.sources.manager import YTDLPManager
+            YTDLPManager.shutdown_all()
+        except Exception:
+            pass
