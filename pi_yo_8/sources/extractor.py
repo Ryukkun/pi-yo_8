@@ -145,7 +145,7 @@ class YTDLPExtractor:
         try:
             opts = options.copy()
             opts["logger"] = LambdaLogger(
-                debug=lambda msg: safe_send(ErrorMessage(ErrorType.DEBUG if msg.startswith("[debug]") else ErrorType.INFO, msg)),
+                debug=lambda msg: safe_send(ErrorMessage(ErrorType.DEBUG, msg)),
                 warning=lambda msg: safe_send(ErrorMessage(ErrorType.WARNING, msg)),
                 error=lambda msg: safe_send(ErrorMessage(ErrorType.ERROR, msg)),
             )
