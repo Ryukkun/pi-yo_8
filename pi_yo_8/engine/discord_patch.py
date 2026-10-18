@@ -1,4 +1,5 @@
 from typing import IO
+
 import discord
 
 
@@ -20,6 +21,6 @@ def _patch_pipe_reader(self, dest: IO[bytes]) -> None:
             self._stderr.close()
             return
 
-def patch():
+def apply_discord_patch():
     discord.FFmpegOpusAudio._pipe_reader = _patch_pipe_reader
     discord.FFmpegPCMAudio._pipe_reader = _patch_pipe_reader

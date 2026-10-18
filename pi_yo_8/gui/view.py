@@ -1,18 +1,17 @@
 import asyncio
-import discord
 from typing import TYPE_CHECKING
+import discord
+from discord import Interaction
 
-from discord.interactions import Interaction
-
+from pi_yo_8.core.types import SendableChannels
 from pi_yo_8.gui.utils import EmbedTemplates
-from pi_yo_8.type import SendableChannels
 
 
 if TYPE_CHECKING:
-    from pi_yo_8.main import GuildSession
-    from pi_yo_8.music_control.controller import MusicQueue
-    from pi_yo_8.yt_dlp.audio_data import YTDLPAudioData
-    from pi_yo_8.voice_client import AudioTrack
+    from pi_yo_8.services.session import GuildSession
+    from pi_yo_8.core.queue import PlayQueue
+    from pi_yo_8.core.track import Track
+    from pi_yo_8.engine.track_stream import AudioTrack
 
 
 # Button Views
@@ -47,6 +46,7 @@ class PlayerControlsView(discord.ui.View):
         self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
         await self.guild_session.music.player_track.seek_by_seconds(-10)
+        await self.guild_session.embed.refresh_main_display()
 
 
 class PlayPauseButton(discord.ui.Button):
@@ -63,6 +63,7 @@ class PlayPauseButton(discord.ui.Button):
             self.guild_session.music.player_track.resume()
         elif self.guild_session.music.player_track.has_audio_data():
             self.guild_session.music.player_track.pause()
+        await self.guild_session.embed.refresh_main_display()
 
 
 class Forward10sButton(discord.ui.Button):
@@ -74,6 +75,7 @@ class Forward10sButton(discord.ui.Button):
         self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
         await self.guild_session.music.player_track.seek_by_seconds(10)
+        await self.guild_session.embed.refresh_main_display()
 
 
 class NextTrackButton(discord.ui.Button):
@@ -143,14 +145,15 @@ class ToggleStatusButton(discord.ui.Button):
 
 
 class QueueSelectMenu(discord.ui.Select):
-    def __init__(self, parent: 'PlayerControlsView', queue: "MusicQueue") -> None:
+    def __init__(self, parent: 'PlayerControlsView', queue: "PlayQueue") -> None:
         self.view_parent = parent
         select_opt = []
         prev_items = queue.get_prev_items(4)
         next_items = queue.get_next_items(25 - len(prev_items))
         for i in range(-len(prev_items), len(next_items)):
             entry = prev_items[i] if i < 0 else next_items[i]
-            title = entry.title()[0:100] if len(entry.title()) >= 100 else entry.title()
+            entry_title = entry.title if hasattr(entry, "title") and isinstance(entry.title, str) else (entry.title() if callable(getattr(entry, "title", None)) else "No Title")
+            title = entry_title[0:100] if len(entry_title) >= 100 else entry_title
             select_opt.append(discord.SelectOption(label=title, value=str(i), default=(i == 0)))
 
         if not select_opt:
@@ -266,46 +269,4 @@ class PlayConfigView(discord.ui.View):
 
 
 
-# class LyricView(discord.ui.View):
-#     def __init__(self, songs:List[GeniusLyric]):
-#         self.songs = songs
-#         super().__init__(timeout=None)
-#         self.select = LyricSelect(self)
-#         self.add_item(self.select)
-
-#     @discord.ui.button(label='Delete', style=discord.ButtonStyle.red, row=1)
-#     async def def_button0(self, interaction:discord.Interaction, button):
-#         await interaction.response.defer()
-#         await interaction.message.delete()
-
-# class LyricSelect(discord.ui.Select):
-#     def __init__(self, parent:'LyricView', i=0):
-#         self.parent = parent
-#         if 25 < len(parent.songs):
-#             self.songs = parent.songs[:25]
-#         else:
-#             self.songs = parent.songs
-#         self.my_options = [discord.SelectOption(label=_.title, value=i) for i,_ in enumerate(self.songs)]
-#         options = self.my_options.copy()
-#         options[i].default = True
-#         super().__init__(placeholder='曲リスト', options=options)
-
-#     async def callback(self, interaction: discord.Interaction):
-#         res = int(self.values[0])
-#         lyric = await self.songs[res].get_lyric()
-#         self.options = self.my_options.copy()
-#         self.parent.remove_item(self.parent.select)
-#         select = LyricSelect(self.parent, i=res)
-#         self.parent.select = select
-#         self.parent.add_item(select)
-#         #super().__init__(placeholder='曲リスト', options=options)
-#         await interaction.response.edit_message(
-#             embed= LyricEmbed(lyric),
-#             view= self.parent
-#         )
-
-
-# def LyricEmbed(description):
-#     if not description:
-#         description = 'None'
-#     return discord.Embed(description=description, color=EmBase.dont_replace_color())
+
