@@ -1,5 +1,7 @@
 import asyncio
 import json
+import logging
+import threading
 import time
 import traceback
 from collections.abc import AsyncGenerator
@@ -12,7 +14,10 @@ from yt_dlp import YoutubeDL
 from pi_yo_8.core.url import UrlAnalyzer
 from pi_yo_8.sources.buffer import ModdedBuffer
 from pi_yo_8.sources.loudness_ie import YoutubeIE
-from pi_yo_8.sources.status import ErrorMessage, ErrorType, StatusManager
+from pi_yo_8.sources.status import ErrorMessage, ErrorType, LambdaLogger, StatusManager
+
+_log = logging.getLogger("pi_yo_8.ytdlp")
+
 
 YTDLP_GENERAL_PARAMS = {
     "http_headers": {
@@ -70,6 +75,14 @@ class YTDLPExtractor:
                         break
                     if isinstance(received_item, ErrorMessage):
                         status_manager.append_error(received_item)
+                        if received_item.type == ErrorType.ERROR:
+                            _log.error(f"{received_item.description}")
+                        elif received_item.type == ErrorType.WARNING:
+                            _log.warning(f"{received_item.description}")
+                        elif received_item.type == ErrorType.INFO:
+                            _log.info(f"{received_item.description}")
+                        elif received_item.type == ErrorType.DEBUG:
+                            _log.debug(f"{received_item.description}")
                         continue
                     info: dict[str, Any] = json.loads(received_item) if isinstance(received_item, str) else received_item
                     yield info
@@ -78,11 +91,33 @@ class YTDLPExtractor:
 
     @staticmethod
     def _extract_info(conn: connection._ConnectionBase, options: dict) -> None:
-        ydl = YTDLPExtractor.get_ytdlp(options.copy())
+        send_lock = threading.Lock()
+
+        def safe_send(item: Any) -> None:
+            with send_lock:
+                try:
+                    conn.send(item)
+                except Exception:
+                    pass
+
+        opts = options.copy()
+        opts["logger"] = LambdaLogger(
+            debug=lambda msg: safe_send(ErrorMessage(ErrorType.DEBUG if msg.startswith("[debug]") else ErrorType.INFO, msg)),
+            warning=lambda msg: safe_send(ErrorMessage(ErrorType.WARNING, msg)),
+            error=lambda msg: safe_send(ErrorMessage(ErrorType.ERROR, msg)),
+        )
+
+        ydl = YTDLPExtractor.get_ytdlp(opts)
         buffer = ModdedBuffer()
         ydl._out_files.__dict__["out"] = buffer  # type: ignore
         with ThreadPoolExecutor(max_workers=1) as exe:
-            while url := conn.recv():
+            while True:
+                try:
+                    url = conn.recv()
+                except (EOFError, BrokenPipeError):
+                    break
+                if not url:
+                    break
                 try:
                     future = exe.submit(ydl.extract_info, url, download=False, process=True)
                     send_count = 0
@@ -93,13 +128,15 @@ class YTDLPExtractor:
                                 break
                             time.sleep(0.01)
                             continue
-                        conn.send(line)
+                        safe_send(line)
                         send_count += 1
 
                     if (result := future.result()) and ("entries" not in result or send_count == 0):
-                        conn.send(result)
+                        safe_send(result)
                 except Exception as e:
-                    conn.send(ErrorMessage(ErrorType.ERROR, str(e), type(e).__name__, traceback.format_exc()))
+                    safe_send(ErrorMessage(ErrorType.ERROR, str(e), type(e).__name__, traceback.format_exc()))
                 finally:
                     buffer.clean()
-                    conn.send('')
+                    safe_send('')
+
+
