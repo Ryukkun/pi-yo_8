@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
@@ -10,10 +11,15 @@ _log = logging.getLogger(__name__)
 
 class FFmpegAudioReader:
     """ffmpegのreadによるブロックを別スレッドで先読みして回避するクラス"""
+
+    # 1フレーム = 20ms (50フレーム = 1秒)
+    MAX_PENDING_FRAMES = 1500  # 30秒分先読み
+    MAX_HISTORY_FRAMES = 3000  # 60秒分巻き戻し履歴保持
+
     def __init__(self, ffmpeg: FFmpegAudio) -> None:
         self.ffmpeg = ffmpeg
         self.pending_audio_queue: deque[bytes] = deque()
-        self.history_audio_queue: deque[bytes] = deque()
+        self.history_audio_queue: deque[bytes] = deque(maxlen=self.MAX_HISTORY_FRAMES)
         self.stop_flag = threading.Event()
         self.exe = ThreadPoolExecutor(max_workers=1)
 
@@ -22,6 +28,9 @@ class FFmpegAudioReader:
                 _log.debug("FFmpeg reader thread started.")
                 total_frames = 0
                 while not self.stop_flag.is_set():
+                    if len(self.pending_audio_queue) >= self.MAX_PENDING_FRAMES:
+                        time.sleep(0.02)
+                        continue
                     data = ffmpeg.read()
                     if not data:
                         _log.debug(f"FFmpeg reader reached EOF after {total_frames} frames.")
