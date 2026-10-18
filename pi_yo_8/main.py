@@ -83,20 +83,22 @@ class MusicBotCog(commands.Cog):
             for embed in embed_list:
                 await ctx.send(embed=embed)
 
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx: commands.Context, error: Exception):
+        _log.error(f"Command '{ctx.command or ctx.message.content}' failed: {error}", exc_info=error)
+
     @commands.command(aliases=['q'])
-    async def queue(self, ctx: commands.Context, *args):
+    async def queue(self, ctx: commands.Context, *, query: str = ""):
         if ctx.guild:
             await self.join(ctx)
             if session := self.guild_sessions.get(ctx.guild.id):
                 session.embed.record_channel_activity(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
-                query = ' '.join(args)
                 await session.music.enqueue(query)
 
     @commands.command(aliases=['p', 'pl'])
-    async def play(self, ctx: commands.Context, *args):
+    async def play(self, ctx: commands.Context, *, query: str = ""):
         if ctx.guild:
             await self.join(ctx)
             if session := self.guild_sessions.get(ctx.guild.id):
                 session.embed.record_channel_activity(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
-                query = ' '.join(args)
                 await session.music.play(query)
