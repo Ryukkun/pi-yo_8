@@ -107,9 +107,20 @@ class AudioTrack:
             options.extend(('-af', ','.join(audio_filters)))
 
         ffmpeg_options: dict[str, Any] = {
-            "options": ' '.join(options),
             "before_options": ' '.join(before_options),
         }
+
+        if self.opus:
+            is_opus_source = bool((stream.acodec and "opus" in stream.acodec.lower()) or (".webm" in stream.url))
+            if is_opus_source and not audio_filters:
+                ffmpeg_options["codec"] = "copy"
+                _log.info(f"AudioTrack: Using lossless 1:1 Opus passthrough (-c:a copy) for '{self.track.title}'")
+            else:
+                ffmpeg_options["bitrate"] = 256
+                options.extend(("-vbr", "on", "-compression_level", "10"))
+                _log.info(f"AudioTrack: Using high-quality libopus re-encode (256kbps VBR) for '{self.track.title}'")
+
+        ffmpeg_options["options"] = ' '.join(options)
 
         # duration probe if missing
         if self.track.duration is None:
@@ -126,6 +137,7 @@ class AudioTrack:
             else FFmpegPCMAudio(stream.url, **ffmpeg_options)
         )
         self.ffmpeg_audio = FFmpegAudioReader(source)
+
 
 
     async def _probe_duration_from_stderr(self, duration_buffer: io.BytesIO) -> None:

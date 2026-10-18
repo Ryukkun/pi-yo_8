@@ -9,6 +9,8 @@ class StreamInfo:
     cookies: str | None = None
     volume_gain_db: float | None = None
     duration: float | None = None
+    acodec: str | None = None
+
 
 @dataclass
 class Track:

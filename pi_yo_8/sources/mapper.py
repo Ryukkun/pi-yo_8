@@ -39,13 +39,16 @@ def map_info_to_track(info: dict[str, Any]) -> Track:
             headers = info.get("http_headers") or {}
             cookie = info.get("cookies")
             gain = calculate_gain(info.get("volume_data"))
+            acodec = info.get("acodec")
             stream_info = StreamInfo(
                 url=stream_url,
                 http_headers=headers,
                 cookies=cookie,
                 volume_gain_db=gain,
                 duration=duration,
+                acodec=acodec,
             )
+
 
 
 

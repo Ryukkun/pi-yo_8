@@ -23,7 +23,7 @@ YTDLP_GENERAL_PARAMS = {
     "http_headers": {
         "Accept-Language": "ja-JP,ja;q=0.9",
     },
-    'format': 'bestaudio/worst',
+    'format': 'bestaudio[acodec=opus]/bestaudio/best',
     "default_search": "ytsearch30",
     'extract_flat': "in_playlist",
     'quiet': True,
@@ -36,13 +36,14 @@ YTDLP_VIDEO_PARAMS = {
     "http_headers": {
         "Accept-Language": "ja-JP,ja;q=0.9",
     },
-    'format': 'bestaudio/worst',
+    'format': 'bestaudio[acodec=opus]/bestaudio/best',
     "default_search": "ytsearch30",
     'extract_flat': "in_playlist",
     'quiet': True,
     'skip_download': True,
     "noplaylist": True,
 }
+
 
 class YTDLPExtractor:
     def __init__(self, params: dict) -> None:
