@@ -2,9 +2,10 @@ import asyncio
 import logging
 import discord
 from discord.ext import commands
+from pi_yo_8.core.types import SendableChannels
 from pi_yo_8.services.download_service import DownloadService
 from pi_yo_8.services.session import GuildSession
-from pi_yo_8.type import SendableChannels
+
 
 _log = logging.getLogger(__name__)
 

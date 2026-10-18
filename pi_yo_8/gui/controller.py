@@ -5,6 +5,7 @@ from discord import ActionRow, Button, Embed, Message, NotFound, SelectMenu
 from pi_yo_8.core.playlist import Playlist
 from pi_yo_8.core.track import Track
 from pi_yo_8.core.url import UrlAnalyzer
+from pi_yo_8.core.types import SendableChannels
 from pi_yo_8.gui.utils import (
     EmbedTemplates,
     calculate_days_ago_text,
@@ -12,7 +13,7 @@ from pi_yo_8.gui.utils import (
     format_seconds_to_time,
 )
 from pi_yo_8.gui.view import PlayerControlsView, send_play_option_message
-from pi_yo_8.type import SendableChannels
+
 
 if TYPE_CHECKING:
     from pi_yo_8.services.session import GuildSession

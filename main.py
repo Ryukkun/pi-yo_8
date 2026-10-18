@@ -12,10 +12,10 @@ async def main():
         shutil.copy("./pi_yo_8/resources/config_template.py", "./pi_yo_8/config.py")
         raise Exception('Config ファイルを生成しました')
 
+    from pi_yo_8.core.logging import setup_logger
     from pi_yo_8.engine.discord_patch import apply_discord_patch
     from pi_yo_8.main import MusicBotCog
     from pi_yo_8.sources.manager import YTDLPManager
-    from pi_yo_8.utils import setup_logger
 
     apply_discord_patch()
 

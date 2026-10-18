@@ -1,11 +1,10 @@
 import asyncio
-import discord
 from typing import TYPE_CHECKING
+import discord
+from discord import Interaction
 
-from discord.interactions import Interaction
-
+from pi_yo_8.core.types import SendableChannels
 from pi_yo_8.gui.utils import EmbedTemplates
-from pi_yo_8.type import SendableChannels
 
 
 if TYPE_CHECKING:
