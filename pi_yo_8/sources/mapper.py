@@ -33,16 +33,21 @@ def map_info_to_track(info: dict[str, Any]) -> Track:
 
     stream_info = None
     if stream_url := info.get("url"):
-        headers = info.get("http_headers") or {}
-        cookie = info.get("cookies")
-        gain = calculate_gain(info.get("volume_data"))
-        stream_info = StreamInfo(
-            url=stream_url,
-            http_headers=headers,
-            cookies=cookie,
-            volume_gain_db=gain,
-            duration=duration,
-        )
+        is_webpage = ("youtube.com/watch" in stream_url) or ("youtu.be/" in stream_url) or ("youtube.com/playlist" in stream_url)
+        has_formats = bool(info.get("formats"))
+        if has_formats or not is_webpage:
+            headers = info.get("http_headers") or {}
+            cookie = info.get("cookies")
+            gain = calculate_gain(info.get("volume_data"))
+            stream_info = StreamInfo(
+                url=stream_url,
+                http_headers=headers,
+                cookies=cookie,
+                volume_gain_db=gain,
+                duration=duration,
+            )
+
+
 
     return Track(
         id=track_id,

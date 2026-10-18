@@ -14,6 +14,12 @@ class YTDLPManager:
     def initialize(cls, general_pool_size: int = 4, video_pool_size: int = 4) -> None:
         cls.YT_DLP = cls(general_pool_size, video_pool_size)
 
+    @classmethod
+    def get_extractor(cls, options: dict) -> YTDLPExtractor:
+        if cls.YT_DLP is None:
+            cls.initialize()
+        return cls.YT_DLP.get(options)
+
     def get(self, options: dict) -> YTDLPExtractor:
         _key = str(options)
         if _key in self.ytdlp:
@@ -26,3 +32,4 @@ class YTDLPManager:
         new_ytdlp = YTDLPExtractor(options)
         self.ytdlp[_key].append(new_ytdlp)
         return new_ytdlp
+

@@ -1,8 +1,11 @@
+import logging
 import threading
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
 from discord import FFmpegAudio
+
+_log = logging.getLogger(__name__)
 
 
 class FFmpegAudioReader:
@@ -15,11 +18,23 @@ class FFmpegAudioReader:
         self.exe = ThreadPoolExecutor(max_workers=1)
 
         def read_all():
-            while not self.stop_flag.is_set() and (data := ffmpeg.read()):
-                self.pending_audio_queue.append(data)
-            self.exe.shutdown(wait=False)
+            try:
+                _log.debug("FFmpeg reader thread started.")
+                total_frames = 0
+                while not self.stop_flag.is_set():
+                    data = ffmpeg.read()
+                    if not data:
+                        _log.debug(f"FFmpeg reader reached EOF after {total_frames} frames.")
+                        break
+                    total_frames += 1
+                    self.pending_audio_queue.append(data)
+            except Exception as e:
+                _log.error(f"FFmpeg reader error: {e}", exc_info=True)
+            finally:
+                self.exe.shutdown(wait=False)
 
         self.read_all_task = self.exe.submit(read_all)
+
 
     def read(self) -> bytes | None:
         """

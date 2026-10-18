@@ -1,5 +1,6 @@
 import asyncio
 import io
+import logging
 import re
 import threading
 from collections.abc import Callable
@@ -10,6 +11,9 @@ from discord import FFmpegOpusAudio, FFmpegPCMAudio, opus
 from pi_yo_8.core.track import Track
 from pi_yo_8.engine.attributes import TrackAttribute
 from pi_yo_8.engine.ffmpeg_reader import FFmpegAudioReader
+
+_log = logging.getLogger(__name__)
+
 
 
 class AudioTrack:
@@ -53,29 +57,42 @@ class AudioTrack:
         self.timer = 0.0
         self.after = after
         self.pausing = False
+        _log.info(f"AudioTrack.play: '{track.title}' (duration={track.duration}s)")
         self._create_reader(seek_seconds=0.0)
         if self.on_state_change:
             self.on_state_change()
 
     def _create_reader(self, seek_seconds: float = 0.0) -> None:
         if not self.track or not self.track.stream_info:
+            _log.warning(f"AudioTrack._create_reader: track or stream_info is missing! track={self.track}")
             return
 
         stream = self.track.stream_info
         before_options = []
-        options = ['-vn', '-application', 'audio', '-loglevel', 'quiet']
+        options = ['-vn', '-loglevel', 'warning']
+        if self.opus:
+            options.extend(('-application', 'audio'))
         audio_filters = []
+
+
 
         if int(seek_seconds):
             before_options.extend(('-ss', str(seek_seconds)))
         before_options.extend(('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-analyzeduration', '2147483647', '-probesize', '2147483647'))
 
-        # headers
+        # headers: Combine multiple headers into a single argument separated by CRLF (\r\n)
+        header_lines = []
         if stream.http_headers:
             for k, v in stream.http_headers.items():
-                before_options.extend(('-headers', f'"{k}: {v}"'))
+                header_lines.append(f"{k}: {v}")
         if stream.cookies:
-            before_options.extend(('-headers', f'"Cookie: {stream.cookies}"'))
+            header_lines.append(f"Cookie: {stream.cookies}")
+        if header_lines:
+            headers_str = "".join(f"{line}\r\n" for line in header_lines)
+            before_options.extend(('-headers', f'"{headers_str}"'))
+
+        if stream.http_headers and 'User-Agent' in stream.http_headers:
+            before_options.extend(('-user_agent', f'"{stream.http_headers["User-Agent"]}"'))
 
         # pitch & speed
         if self.pitch.value != 0:
@@ -102,12 +119,14 @@ class AudioTrack:
             ffmpeg_options["options"] = ' '.join(options)
             asyncio.create_task(self._probe_duration_from_stderr(duration_buffer))
 
+        _log.debug(f"Creating FFmpeg audio reader for '{self.track.title}' (opus={self.opus})")
         source = (
             FFmpegOpusAudio(stream.url, **ffmpeg_options)
             if self.opus
             else FFmpegPCMAudio(stream.url, **ffmpeg_options)
         )
         self.ffmpeg_audio = FFmpegAudioReader(source)
+
 
     async def _probe_duration_from_stderr(self, duration_buffer: io.BytesIO) -> None:
         last_pos = 0
@@ -182,6 +201,8 @@ class AudioTrack:
         return audio_chunk
 
     def _finish(self) -> None:
+        title = self.track.title if self.track else 'Unknown'
+        _log.info(f"AudioTrack._finish: track '{title}' finished at {self.timer:.1f}s")
         if self.ffmpeg_audio:
             self.ffmpeg_audio.cleanup()
         self.ffmpeg_audio = None
@@ -190,3 +211,4 @@ class AudioTrack:
             self.after()
         if self.on_state_change:
             self.on_state_change()
+

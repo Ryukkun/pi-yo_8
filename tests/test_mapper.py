@@ -24,3 +24,18 @@ def test_map_info_to_track():
     assert track.is_stream_ready() is True
     assert track.stream_info is not None
     assert track.stream_info.volume_gain_db == -2.0
+
+def test_map_info_to_track_flat_item():
+    raw = {
+        "id": "flat123",
+        "title": "Flat Search Result",
+        "url": "https://www.youtube.com/watch?v=flat123",
+        "webpage_url": "https://www.youtube.com/watch?v=flat123",
+        "duration": 200,
+    }
+    track = map_info_to_track(raw)
+    assert track.id == "flat123"
+    assert track.title == "Flat Search Result"
+    assert track.is_stream_ready() is False
+    assert track.stream_info is None
+

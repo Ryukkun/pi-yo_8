@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -8,6 +9,8 @@ from pi_yo_8.sources.extractor import YTDLP_VIDEO_PARAMS
 from pi_yo_8.sources.http import is_url_accessible
 from pi_yo_8.sources.manager import YTDLPManager
 from pi_yo_8.sources.mapper import map_info_to_track
+
+_log = logging.getLogger(__name__)
 
 
 class LazyPlaylist(Playlist):
@@ -36,6 +39,9 @@ class LazyPlaylist(Playlist):
                 max_cooldown = max(self.cooldowns) if self.cooldowns else 0
                 self.cooldowns.append(max_cooldown)
                 self.random.set_range(len(self.entries))
+            _log.info(f"LazyPlaylist '{self.title}' decompression completed with {len(self.entries)} entries.")
+        except Exception as e:
+            _log.error(f"LazyPlaylist '{self.title}' decompression error: {e}", exc_info=True)
         finally:
             await self.update_next_indexes()
 
@@ -50,14 +56,32 @@ class LazyPlaylist(Playlist):
         if self.status.random_pl:
             return
 
+        if not self.next_indexes and self.entries:
+            self.next_indexes.append(0)
+
         while len(self.next_indexes) < length:
             i = (self.next_indexes[-1] + 1) if self.next_indexes else 0
-            await self.wait_until_index_available(i)
-            if not self.status.loop_pl and i >= len(self.entries):
-                break
-            self.next_indexes.append(i % len(self.entries))
+            if i >= len(self.entries):
+                if self.decompress_task.done():
+                    if not self.status.loop_pl or not self.entries:
+                        break
+                    self.next_indexes.append(i % len(self.entries))
+                else:
+                    break
+            else:
+                self.next_indexes.append(i)
 
         self._preload_upcoming_entries()
+
+    def _preload_upcoming_entries(self, count: int = 2) -> None:
+        if not self.next_indexes:
+            return
+        for i in range(min(len(self.next_indexes), count)):
+            idx = self.next_indexes[i]
+            if idx < len(self.entries):
+                entry = self.entries[idx]
+                if not entry.is_stream_ready():
+                    asyncio.create_task(ensure_track_playable(entry))
 
     async def get_current_track(self) -> Track | None:
         if not self.next_indexes:
@@ -73,8 +97,10 @@ class LazyPlaylist(Playlist):
             await self.wait_until_index_available(idx)
             if idx < len(self.entries):
                 current_track = self.entries[idx]
+                _log.info(f"Loading current track at index {idx}: '{current_track.title}'")
                 if await ensure_track_playable(current_track):
                     return current_track
+                _log.warning(f"Track '{current_track.title}' could not be played. Skipping to next.")
                 await self.next()
                 return await self.get_current_track()
         return None
@@ -84,17 +110,28 @@ async def ensure_track_playable(track: Track) -> bool:
     トラックのストリームURLが有効か検査し、無効なら再抽出を行う
     """
     if track.is_stream_ready() and track.stream_info:
+        _log.debug(f"Track '{track.title}' stream ready, checking URL accessibility...")
         if await is_url_accessible(track.stream_info.url, track.stream_info.http_headers, track.stream_info.cookies):
+            _log.debug(f"Track '{track.title}' stream URL is accessible.")
             return True
+        _log.info(f"Track '{track.title}' stream URL inaccessible/expired. Re-extracting...")
 
     # 再抽出
-    extractor = YTDLPManager.YT_DLP.get(YTDLP_VIDEO_PARAMS)
+    _log.info(f"Extracting stream URL for: '{track.title}' ({track.web_url})")
+    extractor = YTDLPManager.get_extractor(YTDLP_VIDEO_PARAMS)
     gen, _ = extractor.extract_raw_info(track.web_url)
-    async for info in gen:
-        if info.get("formats") and info.get("url"):
-            fresh = map_info_to_track(info)
-            track.stream_info = fresh.stream_info
-            track.duration = fresh.duration
-            track.thumbnail_url = fresh.thumbnail_url
-            return True
+    try:
+        async for info in gen:
+            if info.get("formats") and info.get("url"):
+                fresh = map_info_to_track(info)
+                track.stream_info = fresh.stream_info
+                track.duration = fresh.duration or track.duration
+                track.thumbnail_url = fresh.thumbnail_url or track.thumbnail_url
+                if fresh.raw_info:
+                    track.raw_info.update(fresh.raw_info)
+                _log.info(f"Successfully extracted stream URL for '{track.title}'")
+                return True
+    except Exception as e:
+        _log.error(f"Failed to extract stream for '{track.title}': {e}", exc_info=True)
     return False
+

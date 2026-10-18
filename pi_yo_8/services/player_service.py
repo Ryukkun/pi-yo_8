@@ -84,15 +84,18 @@ class PlayerService:
         current_raw = self.queue.get_current_raw()
         if current_raw:
             url_match = (played_url is not None and self.last_played_url == played_url)
-            quick_end = (time.time() - played_at) <= 0.2
+            elapsed = time.time() - played_at
+            quick_end = (played_at > 0.0) and (elapsed <= 0.5)
             if not self.status.loop and (url_match or quick_end):
+                if quick_end:
+                    _log.warning(f"{self.guild_name} : Track ended abruptly ({elapsed:.3f}s). Advancing queue.")
                 await self._advance_and_update_status()
 
         track = await self.get_current_playable_track()
         if track and track.is_stream_ready():
             self.last_played_url = track.stream_info.url if track.stream_info else None
             self.last_played_time = time.time()
-            _log.info(f"{self.guild_name} : Play {track.web_url} [Queue: {len(self.queue.play_queue)}]")
+            _log.info(f"{self.guild_name} : Now Playing '{track.title}' [{track.web_url}] [Queue items: {len(self.queue.play_queue)}]")
 
             loop = asyncio.get_running_loop()
             await self.player_track.play(
@@ -101,6 +104,9 @@ class PlayerService:
                     self.play_loop(self.last_played_url, self.last_played_time), loop
                 )
             )
+        else:
+            _log.info(f"{self.guild_name} : Play loop finished - no more tracks to play.")
+
 
     async def _advance_and_update_status(self, count: int = 1, ignore_playlist: bool = False) -> bool:
         if count == 0:
