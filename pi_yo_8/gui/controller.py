@@ -184,8 +184,13 @@ class EmbedController:
             has_active_extraction = any(s.is_running for s in snap.statuses)
             is_active_playback = snap.has_audio_data and not snap.is_paused
 
-            # 再生中でも解析中でもなければ定期編集しない（Discord API節約）
-            if not is_active_playback and not has_active_extraction:
+            # 解析中は進行状況を即反映
+            if has_active_extraction:
+                await self.refresh_main_display()
+                return
+
+            # 再生中でなければ定期編集しない（Discord API節約）
+            if not is_active_playback:
                 return
 
             delay = now - self.latest_action_time

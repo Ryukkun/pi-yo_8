@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
 from pi_yo_8.core.playlist import Playlist
@@ -9,6 +9,7 @@ from pi_yo_8.sources.extractor import YTDLP_VIDEO_PARAMS
 from pi_yo_8.sources.http import is_url_accessible
 from pi_yo_8.sources.manager import YTDLPManager
 from pi_yo_8.sources.mapper import map_info_to_track
+from pi_yo_8.sources.status import StatusManager, YTDLPInfoType
 
 _log = logging.getLogger(__name__)
 
@@ -17,7 +18,12 @@ class LazyPlaylist(Playlist):
     """
     動的にplaylistのentryを読み込むプレイリストクラス
     """
-    def __init__(self, first_entry_info: dict[str, Any], generator: AsyncGenerator[dict[str, Any]]):
+    def __init__(
+        self,
+        first_entry_info: dict[str, Any],
+        generator: AsyncGenerator[dict[str, Any]],
+        on_status: Callable[[StatusManager], None] | None = None,
+    ):
         title = first_entry_info.get("playlist_title", "No Title")
         url = first_entry_info.get("playlist_webpage_url", "")
         super().__init__(title, url)
@@ -26,6 +32,7 @@ class LazyPlaylist(Playlist):
         self.entries.append(first_track)
         self.cooldowns.append(0)
 
+        self.on_status = on_status
         self._generator = generator
         self.decompress_task = asyncio.create_task(self._decompress_loop())
 
@@ -95,7 +102,7 @@ class LazyPlaylist(Playlist):
             if idx < len(self.entries):
                 entry = self.entries[idx]
                 if not entry.is_stream_ready():
-                    asyncio.create_task(ensure_track_playable(entry))
+                    asyncio.create_task(ensure_track_playable(entry, on_status=self.on_status))
 
     async def get_current_track(self) -> Track | None:
         if not self.next_indexes:
@@ -112,14 +119,14 @@ class LazyPlaylist(Playlist):
             if idx < len(self.entries):
                 current_track = self.entries[idx]
                 _log.info(f"Loading current track at index {idx}: '{current_track.title}'")
-                if await ensure_track_playable(current_track):
+                if await ensure_track_playable(current_track, on_status=self.on_status):
                     return current_track
                 _log.warning(f"Track '{current_track.title}' could not be played. Skipping to next.")
                 await self.next()
                 return await self.get_current_track()
         return None
 
-async def ensure_track_playable(track: Track) -> bool:
+async def ensure_track_playable(track: Track, on_status: Callable[[StatusManager], None] | None = None) -> bool:
     """
     トラックのストリームURLが有効か検査し、無効なら再抽出を行う
     """
@@ -133,7 +140,11 @@ async def ensure_track_playable(track: Track) -> bool:
     # 再抽出
     _log.info(f"Extracting stream URL for: '{track.title}' ({track.web_url})")
     extractor = YTDLPManager.get_extractor(YTDLP_VIDEO_PARAMS)
-    gen, _ = extractor.extract_raw_info(track.web_url)
+    gen, sm = extractor.extract_raw_info(track.web_url)
+    sm._type = YTDLPInfoType.VIDEO
+    sm.name = track.title
+    if on_status:
+        on_status(sm)
     try:
         async for info in gen:
             if info.get("formats") and info.get("url"):

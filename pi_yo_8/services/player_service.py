@@ -39,10 +39,7 @@ class PlayerService:
             self.player_track.resume()
             return
 
-        result, status_manager = await TrackResolver.resolve(query)
-        if self.on_status_report and status_manager:
-            self.on_status_report(status_manager)
-
+        result, _ = await TrackResolver.resolve(query, on_status=self.on_status_report)
         if not result:
             return
 
@@ -56,10 +53,7 @@ class PlayerService:
             self.player_track.resume()
             return
 
-        result, status_manager = await TrackResolver.resolve(query)
-        if self.on_status_report and status_manager:
-            self.on_status_report(status_manager)
-
+        result, _ = await TrackResolver.resolve(query, on_status=self.on_status_report)
         if not result:
             return
 
@@ -80,7 +74,7 @@ class PlayerService:
         if isinstance(raw, LazyPlaylist):
             return await raw.get_current_track()
         if isinstance(raw, Track):
-            if await ensure_track_playable(raw):
+            if await ensure_track_playable(raw, on_status=self.on_status_report):
                 return raw
             # 再生不能なら次へ
             await self.skip_tracks(1)

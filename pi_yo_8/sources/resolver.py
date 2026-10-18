@@ -1,5 +1,6 @@
 import logging
 
+from collections.abc import Callable
 from pi_yo_8.core.track import Track
 from pi_yo_8.core.url import UrlAnalyzer
 from pi_yo_8.sources.extractor import YTDLP_GENERAL_PARAMS
@@ -13,17 +14,24 @@ _log = logging.getLogger(__name__)
 
 class TrackResolver:
     @staticmethod
-    async def resolve(query_or_url: str) -> tuple[Track | LazyPlaylist | None, StatusManager | None]:
+    async def resolve(
+        query_or_url: str,
+        on_status: Callable[[StatusManager], None] | None = None,
+    ) -> tuple[Track | LazyPlaylist | None, StatusManager | None]:
         _log.info(f"Resolving query: '{query_or_url}'")
         extractor = YTDLPManager.get_extractor(YTDLP_GENERAL_PARAMS)
         gen, status_manager = extractor.extract_raw_info(query_or_url)
+        if on_status:
+            on_status(status_manager)
 
         async for info in gen:
             if info.get("playlist"):
                 analysis = UrlAnalyzer(query_or_url)
-                playlist = LazyPlaylist(info, gen)
+                playlist = LazyPlaylist(info, gen, on_status=on_status)
                 status_manager._type = YTDLPInfoType.PLAYLIST
                 status_manager.name = playlist.title
+                if on_status:
+                    on_status(status_manager)
                 _log.info(f"Resolved playlist: '{playlist.title}' (entries: {len(playlist.entries)})")
 
                 if analysis.is_yt and analysis.list_id:
@@ -36,6 +44,8 @@ class TrackResolver:
             track = map_info_to_track(info)
             status_manager._type = YTDLPInfoType.VIDEO
             status_manager.name = track.title
+            if on_status:
+                on_status(status_manager)
             _log.info(f"Resolved single track: '{track.title}' (stream_ready: {track.is_stream_ready()})")
             return track, status_manager
 

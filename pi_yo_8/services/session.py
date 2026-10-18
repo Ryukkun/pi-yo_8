@@ -99,12 +99,14 @@ class GuildSession:
         )
 
     def register_status_manager(self, sm: StatusManager) -> None:
-        self.ytdlp_status_managers.append(sm)
-        try:
-            loop = asyncio.get_running_loop()
-            loop.call_later(30, lambda: self.ytdlp_status_managers.remove(sm) if sm in self.ytdlp_status_managers else None)
-        except RuntimeError:
-            pass
+        if sm not in self.ytdlp_status_managers:
+            self.ytdlp_status_managers.append(sm)
+            asyncio.create_task(self.embed.refresh_main_display())
+            try:
+                loop = asyncio.get_running_loop()
+                loop.call_later(30, lambda: self.ytdlp_status_managers.remove(sm) if sm in self.ytdlp_status_managers else None)
+            except RuntimeError:
+                pass
 
     async def bye(self, text: str = '切断') -> None:
         asyncio.create_task(self._bye(text))
