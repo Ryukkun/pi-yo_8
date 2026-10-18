@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -23,17 +24,51 @@ class EmbedController:
     def __init__(self, guild_session: "GuildSession") -> None:
         self.guild_session = guild_session
         self.latest_action_time = 0.0
+        self.last_update_time = 0.0
         self.latest_action_channel: SendableChannels | None = None
         self.main_display: Message | None = None
         self.options_display: Message | None = None
+        self._scheduled_task: asyncio.Task | None = None
 
     def record_channel_activity(self, channel: Any | None = None) -> None:
         self.latest_action_time = time.time()
         if isinstance(channel, SendableChannels):
             self.latest_action_channel = channel
 
+    def schedule_update(self, delay: float = 10.0) -> None:
+        """
+        指定秒数後の更新を予約する。
+        実行時に前回の実際の更新から delay 秒経っていなければ、
+        前回の更新から delay 秒後になるよう自動調整して待機する。
+        """
+        if self._scheduled_task and not self._scheduled_task.done():
+            return
+
+        async def _runner():
+            try:
+                while True:
+                    target_time = self.last_update_time + delay
+                    now = time.time()
+                    wait_sec = target_time - now
+                    if wait_sec > 0.05:
+                        await asyncio.sleep(min(wait_sec, delay))
+                    else:
+                        break
+                await self.refresh_main_display()
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self._scheduled_task = None
+
+        try:
+            loop = asyncio.get_running_loop()
+            self._scheduled_task = loop.create_task(_runner())
+        except RuntimeError:
+            pass
+
     async def create_and_send_main_display(self) -> None:
         try:
+            self.last_update_time = time.time()
             if self.latest_action_channel:
                 embed = await self.build_main_embed()
                 play_option = False
@@ -58,6 +93,7 @@ class EmbedController:
             _log.info(f"Embed.create_and_send_main_display - {self.guild_session.guild.name}", exc_info=True)
 
     async def refresh_main_display(self) -> None:
+        self.last_update_time = time.time()
         if not self.latest_action_channel:
             return
 
@@ -184,25 +220,26 @@ class EmbedController:
             has_active_extraction = any(s.is_running for s in snap.statuses)
             is_active_playback = snap.has_audio_data and not snap.is_paused
 
-            # 解析中は進行状況を即反映
+            # 解析中は進行状況を迅速に反映 (5秒)
             if has_active_extraction:
-                await self.refresh_main_display()
-                return
-
-            # 再生中でなければ定期編集しない（Discord API節約）
-            if not is_active_playback:
-                return
-
-            delay = now - self.latest_action_time
-            # レートリミット回避: 5秒ごとの過剰なeditを緩和
-            if delay < 30:
-                if int(now) % 10 < 5:
-                    await self.refresh_main_display()
-            elif delay < 300:
-                if int(now) % 15 < 5:
-                    await self.refresh_main_display()
+                interval = 5.0
+            elif is_active_playback:
+                # 放置時間に応じて更新間隔を動的に延長 (10秒 〜 最大60秒)
+                idle_time = now - self.latest_action_time
+                if idle_time < 30:
+                    interval = 10.0   # 操作直後: 10秒間隔
+                elif idle_time < 120:
+                    interval = 20.0   # 2分未満: 20秒間隔
+                elif idle_time < 300:
+                    interval = 30.0   # 5分未満: 30秒間隔
+                else:
+                    interval = 60.0   # 5分以上放置: 最大60秒間隔
             else:
-                if int(now) % 30 < 5:
-                    await self.refresh_main_display()
+                # 停止中・一時停止中は自動更新不要
+                return
+
+            # 前回の更新から interval 秒以上経過していれば更新を実行
+            if (now - self.last_update_time) >= interval:
+                await self.refresh_main_display()
         except Exception:
             _log.info(f"EmbedController.task_loop - {self.guild_session.guild.name}", exc_info=True)
