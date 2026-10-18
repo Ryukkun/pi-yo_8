@@ -73,6 +73,20 @@ class LazyPlaylist(Playlist):
 
         self._preload_upcoming_entries()
 
+    async def set_next_index_by_video_id(self, video_id: str) -> bool:
+        entry_index = 0
+        while True:
+            await self.wait_until_index_available(entry_index)
+            if len(self.entries) <= entry_index:
+                return False
+            entry = self.entries[entry_index]
+            if entry.id == video_id or (entry.raw_info and entry.raw_info.get("id") == video_id):
+                self.next_indexes.clear()
+                self.next_indexes.append(entry_index)
+                self._preload_upcoming_entries()
+                return True
+            entry_index += 1
+
     def _preload_upcoming_entries(self, count: int = 2) -> None:
         if not self.next_indexes:
             return

@@ -28,7 +28,7 @@ class TrackResolver:
 
                 if analysis.is_yt and analysis.list_id:
                     if analysis.video_id:
-                        playlist.set_next_index_by_id(analysis.video_id)
+                        await playlist.set_next_index_by_video_id(analysis.video_id)
                     else:
                         playlist.status.set(loop=False, loop_pl=True, random_pl=True)
                 return playlist, status_manager
