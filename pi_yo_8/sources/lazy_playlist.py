@@ -168,6 +168,10 @@ async def _do_extract_stream(track: Track, on_status: Callable[[StatusManager], 
                 if fresh.raw_info:
                     track.raw_info.update(fresh.raw_info)
                 _log.info(f"Successfully extracted stream URL for '{track.title}'")
+                try:
+                    await anext(gen, None)
+                except Exception:
+                    pass
                 return True
     except Exception as e:
         _log.error(f"Failed to extract stream for '{track.title}': {e}", exc_info=True)

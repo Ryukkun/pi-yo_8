@@ -47,9 +47,13 @@ YTDLP_VIDEO_PARAMS = {
 
 class YTDLPExtractor:
     def __init__(self, params: dict) -> None:
+        self.params = params
         self.is_running: bool = False
+        self._start_process()
+
+    def _start_process(self) -> None:
         self.connection, child = Pipe()
-        self.process = Process(target=YTDLPExtractor._extract_info, args=(child, params))
+        self.process = Process(target=YTDLPExtractor._extract_info, args=(child, self.params))
         self.process.start()
 
     def stop(self) -> None:
@@ -60,9 +64,14 @@ class YTDLPExtractor:
         if self.process.is_alive():
             try:
                 self.process.terminate()
-                self.process.join(timeout=1.0)
+                self.process.join(timeout=0.5)
             except Exception:
                 pass
+
+    def restart(self) -> None:
+        self.stop()
+        self.is_running = False
+        self._start_process()
 
     @staticmethod
     def get_ytdlp(params: dict) -> YoutubeDL:
@@ -72,17 +81,26 @@ class YTDLPExtractor:
 
     def extract_raw_info(self, url: str) -> tuple[AsyncGenerator[dict[str, Any]], StatusManager]:
         self.is_running = True
+        # 残存している未読データをパージしてパイプの同期ズレを防止
+        try:
+            while self.connection.poll():
+                self.connection.recv()
+        except Exception:
+            pass
+
         self.connection.send(url)
         loop = asyncio.get_running_loop()
         status_manager = StatusManager(url if UrlAnalyzer(url).is_url else '')
 
         async def generator():
+            reached_eof = False
             try:
                 while True:
                     received_item: str | dict[str, Any] | ErrorMessage = await loop.run_in_executor(
                         None, self.connection.recv
                     )
                     if received_item == '':
+                        reached_eof = True
                         break
                     if isinstance(received_item, ErrorMessage):
                         status_manager.append_error(received_item)
@@ -98,8 +116,12 @@ class YTDLPExtractor:
                     info: dict[str, Any] = json.loads(received_item) if isinstance(received_item, str) else received_item
                     yield info
             finally:
-                self.is_running = False
                 status_manager.is_running = False
+                if not reached_eof:
+                    _log.warning("YTDLPExtractor: stream closed before EOF. Recycling worker process.")
+                    self.restart()
+                else:
+                    self.is_running = False
 
         return generator(), status_manager
 

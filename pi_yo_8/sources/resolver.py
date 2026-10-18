@@ -47,6 +47,10 @@ class TrackResolver:
             if on_status:
                 on_status(status_manager)
             _log.info(f"Resolved single track: '{track.title}' (stream_ready: {track.is_stream_ready()})")
+            try:
+                await anext(gen, None)
+            except Exception:
+                pass
             return track, status_manager
 
         _log.warning(f"Could not resolve any tracks for query: '{query_or_url}'")
