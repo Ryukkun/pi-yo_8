@@ -11,6 +11,6 @@ dependencies = [
     "ffmpeg>=1.4",
     "numpy>=2.4.2",
     "tabulate>=0.9.0",
-    "yt-dlp>=2026.2.21",
+    "yt-dlp[default]>=2026.2.21",
 ]
 
