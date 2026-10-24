@@ -2,10 +2,12 @@ import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any
+
 from discord import ActionRow, Button, Embed, Message, NotFound, SelectMenu
+
 from pi_yo_8.core.snapshot import PlaybackSnapshot
+from pi_yo_8.core.types import SENDABLE_CHANNEL_TYPES, SendableChannels
 from pi_yo_8.core.url import UrlAnalyzer
-from pi_yo_8.core.types import SendableChannels
 from pi_yo_8.gui.utils import (
     EmbedTemplates,
     calculate_days_ago_text,
@@ -14,11 +16,11 @@ from pi_yo_8.gui.utils import (
 )
 from pi_yo_8.gui.view import PlayerControlsView, send_play_option_message
 
-
 if TYPE_CHECKING:
     from pi_yo_8.services.session import GuildSession
 
 _log = logging.getLogger(__name__)
+
 
 class EmbedController:
     def __init__(self, guild_session: "GuildSession") -> None:
@@ -28,13 +30,13 @@ class EmbedController:
         self.latest_action_channel: SendableChannels | None = None
         self.main_display: Message | None = None
         self.options_display: Message | None = None
-        self._scheduled_task: asyncio.Task | None = None
+        self._scheduled_task: asyncio.Task[None] | None = None
         self._was_active_playback: bool = False
         self._was_active_extraction: bool = False
 
     def record_channel_activity(self, channel: Any | None = None) -> None:
         self.latest_action_time = time.time()
-        if isinstance(channel, SendableChannels):
+        if isinstance(channel, SENDABLE_CHANNEL_TYPES):
             self.latest_action_channel = channel
 
     def schedule_update(self, delay: float = 10.0) -> None:
@@ -46,7 +48,7 @@ class EmbedController:
         if self._scheduled_task and not self._scheduled_task.done():
             return
 
-        async def _runner():
+        async def _runner() -> None:
             try:
                 while True:
                     target_time = self.last_update_time + delay
@@ -152,7 +154,7 @@ class EmbedController:
             if snap.track.uploader:
                 embed.set_author(name=snap.track.uploader, url=snap.track.uploader_url or None)
 
-            descriptions = []
+            descriptions: list[str] = []
             if snap.track.view_count:
                 descriptions.append(f'{format_large_number(snap.track.view_count)} 回再生')
             if snap.track.upload_date:

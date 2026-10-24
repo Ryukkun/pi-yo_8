@@ -170,7 +170,7 @@ class YTDLPExtractor:
 
             ydl = YTDLPExtractor.get_ytdlp(opts)
             buffer = ModdedBuffer()
-            setattr(ydl._out_files, "out", buffer)
+            ydl._out_files.out = buffer
             with ThreadPoolExecutor(max_workers=1) as exe:
                 while True:
                     try:

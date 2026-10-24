@@ -1,4 +1,5 @@
 import pytest
+
 from pi_yo_8.engine.attributes import TrackAttribute
 from pi_yo_8.gui.utils import (
     EmbedTemplates,

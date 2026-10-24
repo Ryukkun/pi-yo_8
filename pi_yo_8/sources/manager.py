@@ -1,13 +1,14 @@
 import atexit
 import threading
+from typing import Any
 
 from pi_yo_8.sources.extractor import YTDLP_GENERAL_PARAMS, YTDLP_VIDEO_PARAMS, YTDLPExtractor
 
 
 class YTDLPManager:
-    YT_DLP: "YTDLPManager" = None  # type: ignore
+    YT_DLP: "YTDLPManager | None" = None
 
-    def __init__(self, general_pool_size: int = 4, video_pool_size: int = 4):
+    def __init__(self, general_pool_size: int = 4, video_pool_size: int = 4) -> None:
         self._lock = threading.Lock()
         self.ytdlp: dict[str, list[YTDLPExtractor]] = {
             str(YTDLP_GENERAL_PARAMS): [YTDLPExtractor(YTDLP_GENERAL_PARAMS) for _ in range(general_pool_size)],
@@ -19,9 +20,10 @@ class YTDLPManager:
         cls.YT_DLP = cls(general_pool_size, video_pool_size)
 
     @classmethod
-    def get_extractor(cls, options: dict) -> YTDLPExtractor:
+    def get_extractor(cls, options: dict[str, Any]) -> YTDLPExtractor:
         if cls.YT_DLP is None:
             cls.initialize()
+        assert cls.YT_DLP is not None
         return cls.YT_DLP.get(options)
 
     @classmethod
@@ -50,7 +52,7 @@ class YTDLPManager:
                         pass
             self.ytdlp.clear()
 
-    def get(self, options: dict) -> YTDLPExtractor:
+    def get(self, options: dict[str, Any]) -> YTDLPExtractor:
         _key = str(options)
         with self._lock:
             if _key in self.ytdlp:
@@ -68,4 +70,3 @@ class YTDLPManager:
 
 
 atexit.register(YTDLPManager.shutdown_all)
-

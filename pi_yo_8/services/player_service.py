@@ -2,7 +2,7 @@ import asyncio
 import logging
 import re
 import time
-from typing import Any
+from collections.abc import Callable
 
 from pi_yo_8.core.play_mode import PlayMode
 from pi_yo_8.core.queue import PlayQueue
@@ -10,6 +10,7 @@ from pi_yo_8.core.track import Track
 from pi_yo_8.engine.track_stream import AudioTrack
 from pi_yo_8.sources.lazy_playlist import LazyPlaylist, ensure_track_playable
 from pi_yo_8.sources.resolver import TrackResolver
+from pi_yo_8.sources.status import StatusManager
 
 _log = logging.getLogger(__name__)
 
@@ -17,14 +18,15 @@ re_skip = re.compile(r'^((-|)\d+)([hms])$')
 re_skip_set_h = re.compile(r'^(\d+)[:;,](\d+)[:;,](\d+)$')
 re_skip_set_m = re.compile(r'^(\d+)[:;,](\d+)$')
 
+
 class PlayerService:
     def __init__(
         self,
         guild_name: str,
         audio_track: AudioTrack,
-        on_status_report: Any = None,
-        on_track_change: Any = None,
-    ):
+        on_status_report: Callable[[StatusManager], None] | None = None,
+        on_track_change: Callable[[], None] | None = None,
+    ) -> None:
         self.guild_name = guild_name
         self.player_track = audio_track
         self.queue = PlayQueue()
@@ -76,7 +78,7 @@ class PlayerService:
         if isinstance(raw, Track):
             if await ensure_track_playable(raw, on_status=self.on_status_report):
                 return raw
-            # 再生不能なら次へ
+            # 再生不能なら次へスキップ
             await self.skip_tracks(1)
             return await self.get_current_playable_track()
         return None
@@ -112,7 +114,6 @@ class PlayerService:
             if self.on_track_change:
                 self.on_track_change()
 
-
     async def _advance_and_update_status(self, count: int = 1, ignore_playlist: bool = False) -> bool:
         if count == 0:
             return bool(self.queue.play_queue)
@@ -142,18 +143,18 @@ class PlayerService:
         try:
             sec = int(skip_input)
         except ValueError:
-            s_lower = skip_input.lower()
+            s_lower = skip_input.lower().strip()
             if res := re_skip.match(s_lower):
-                sec = int(res.group(1))
+                val = int(res.group(1))
                 unit = res.group(3)
-                if unit == 'h':
-                    sec *= 3600
-                elif unit == 'm':
-                    sec *= 60
+                multipliers = {'h': 3600, 'm': 60, 's': 1}
+                sec = val * multipliers[unit]
             elif res := re_skip_set_h.match(s_lower):
-                sec = int(res.group(3)) + int(res.group(2)) * 60 + int(res.group(1)) * 3600 - int(self.player_track.timer)
+                h, m, s = int(res.group(1)), int(res.group(2)), int(res.group(3))
+                sec = (h * 3600 + m * 60 + s) - int(self.player_track.timer)
             elif res := re_skip_set_m.match(s_lower):
-                sec = int(res.group(2)) + int(res.group(1)) * 60 - int(self.player_track.timer)
+                m, s = int(res.group(1)), int(res.group(2))
+                sec = (m * 60 + s) - int(self.player_track.timer)
             else:
                 return
 

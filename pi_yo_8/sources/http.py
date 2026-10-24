@@ -1,5 +1,4 @@
 from http import cookies
-from typing import Any
 import aiohttp
 
 
@@ -21,8 +20,10 @@ async def is_url_accessible(url: str, headers: dict[str, str] | None = None, coo
             req_headers["Range"] = "bytes=0-0"
 
         timeout = aiohttp.ClientTimeout(total=5)
-        async with aiohttp.ClientSession(headers=req_headers, cookies=cookies_dict, timeout=timeout) as session:
-            async with session.get(url) as response:
-                return response.status in (200, 206)
+        async with (
+            aiohttp.ClientSession(headers=req_headers, cookies=cookies_dict, timeout=timeout) as session,
+            session.get(url) as response,
+        ):
+            return response.status in (200, 206)
     except Exception:
         return False

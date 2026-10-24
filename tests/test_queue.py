@@ -1,7 +1,9 @@
 import pytest
-from pi_yo_8.core.queue import PlayQueue
+
 from pi_yo_8.core.playlist import Playlist
+from pi_yo_8.core.queue import PlayQueue
 from pi_yo_8.core.track import Track
+
 
 @pytest.mark.asyncio
 async def test_queue_single_tracks():

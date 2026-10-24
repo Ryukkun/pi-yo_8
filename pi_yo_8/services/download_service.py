@@ -11,6 +11,7 @@ re_space = re.compile(r'\)` +?\|')
 re_space2 = re.compile(r'(( |-)\|$|^\|( |-))')
 re_space3 = re.compile(r'^\|( |-)+?\|')
 
+
 class DownloadService:
     @staticmethod
     async def create_download_embeds(query: str) -> list[Embed] | None:
@@ -32,7 +33,7 @@ class DownloadService:
         if track.duration:
             embed.add_field(name="Length", value=format_seconds_to_time(track.duration), inline=True)
 
-        table_rows = []
+        table_rows: list[list[str]] = []
         for f in raw.get("formats", []):
             dl_link = f'[`download`]({f.get("url")})`'
             if f.get('width'):

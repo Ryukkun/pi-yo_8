@@ -1,4 +1,5 @@
-from pi_yo_8.sources.mapper import map_info_to_track, calculate_gain
+from pi_yo_8.sources.mapper import calculate_gain, map_info_to_track
+
 
 def test_calculate_gain():
     assert calculate_gain(None) is None

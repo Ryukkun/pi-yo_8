@@ -1,4 +1,5 @@
 import pytest
+
 from pi_yo_8.core.play_mode import PlayMode
 from pi_yo_8.core.playlist import Playlist
 from pi_yo_8.core.shuffle import PlaylistRandom

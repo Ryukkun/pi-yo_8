@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any
+from collections.abc import Callable
 
 import discord
 from discord.ext import tasks
@@ -14,11 +14,17 @@ from pi_yo_8.sources.status import StatusManager
 
 _log = logging.getLogger(__name__)
 
+
 class GuildSession:
     """
     Guildごとの接続セッション・音楽コントローラー・UI表示・タスク状態を管理するクラス
     """
-    def __init__(self, guild: discord.Guild, bot: discord.Client, on_destroy: Any = None):
+    def __init__(
+        self,
+        guild: discord.Guild,
+        bot: discord.Client,
+        on_destroy: Callable[[int], None] | None = None,
+    ) -> None:
         if not isinstance(guild.voice_client, discord.VoiceClient):
             raise ValueError(f"Invalid voice client for guild {guild.name}")
 
@@ -29,6 +35,7 @@ class GuildSession:
         self.client_user_id = bot.user.id if bot.user else -1
         self.empty_channel_loop_count = 0
         self.ytdlp_status_managers: list[StatusManager] = []
+        self._is_closing = False
 
         self.multi_track_voice_client = MultiTrackVoiceClient(guild, self.vc, bot.loop)
         player_track = self.multi_track_voice_client.add_track(opus_mode=True)
@@ -36,7 +43,7 @@ class GuildSession:
         self.embed = EmbedController(self)
         orig_state_change = player_track.on_state_change
 
-        def _on_audio_state_change():
+        def _on_audio_state_change() -> None:
             if orig_state_change:
                 orig_state_change()
             try:
@@ -88,7 +95,7 @@ class GuildSession:
                     StatusSnapshot(
                         name=sm.name,
                         url=sm.url,
-                        type_name=sm._type.name,
+                        type_name=sm.info_type.name,
                         is_running=sm.is_running,
                         recent_errors=recent_errs,
                     )
@@ -122,35 +129,34 @@ class GuildSession:
                 pass
 
     async def bye(self, text: str = '切断') -> None:
-        asyncio.create_task(self._bye(text))
-        self.inactivity_check_loop.stop()
+        if self._is_closing:
+            return
+        self._is_closing = True
+        self.inactivity_check_loop.cancel()
 
-    async def _bye(self, text: str) -> None:
         self.multi_track_voice_client.kill()
         if self.on_destroy:
             self.on_destroy(self.guild.id)
 
         _log.info(f"{self.guild.name} : #{text}")
-        await asyncio.sleep(0.02)
         try:
             await self.vc.disconnect()
         except Exception:
             pass
-
-        while self.inactivity_check_loop.is_running():
-            await asyncio.sleep(0.5)
 
         if message := self.embed.main_display:
             try:
                 await message.delete()
             except Exception:
                 pass
+            self.embed.main_display = None
 
         if message := self.embed.options_display:
             try:
                 await message.delete()
             except Exception:
                 pass
+            self.embed.options_display = None
 
     @tasks.loop(seconds=5.0)
     async def inactivity_check_loop(self) -> None:

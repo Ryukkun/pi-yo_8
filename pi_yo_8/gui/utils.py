@@ -4,7 +4,7 @@ from typing import Final
 from discord import Colour, Embed
 
 
-def format_large_number(number_value: int | float | str) -> str:
+def format_large_number(number_value: float | str) -> str:
     """
     数字を見やすく変換
     12345 -> 1.2万
@@ -50,7 +50,7 @@ def calculate_days_ago_text(date_string: str) -> str:
     return '今日'
 
 
-def format_seconds_to_time(total_seconds: int | float) -> str:
+def format_seconds_to_time(total_seconds: float) -> str:
     """秒から分と時間を計算 (HH:MM:SS または M:SS)"""
     total_sec = max(0, int(total_seconds))
     hours, remainder = divmod(total_sec, 3600)

@@ -1,7 +1,8 @@
 import asyncio
 import logging
-from pathlib import Path
 import shutil
+from pathlib import Path
+
 import discord
 from discord.ext import commands
 

@@ -1,13 +1,15 @@
 import asyncio
 import logging
+
 import discord
 from discord.ext import commands
-from pi_yo_8.core.types import SendableChannels
+
+from pi_yo_8.core.types import SENDABLE_CHANNEL_TYPES
 from pi_yo_8.services.download_service import DownloadService
 from pi_yo_8.services.session import GuildSession
 
-
 _log = logging.getLogger(__name__)
+
 
 class MusicBotCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
@@ -18,7 +20,7 @@ class MusicBotCog(commands.Cog):
         self.guild_sessions.pop(guild_id, None)
 
     @discord.app_commands.command(name="download", description='URL or 検索したい文字')
-    async def download_command(self, interaction: discord.Interaction, query: str):
+    async def download_command(self, interaction: discord.Interaction, query: str) -> None:
         task = asyncio.create_task(DownloadService.create_download_embeds(query))
         await interaction.response.defer(thinking=True)
         if embed_list := await task:
@@ -26,11 +28,10 @@ class MusicBotCog(commands.Cog):
                 await interaction.followup.send(embed=embed, ephemeral=True)
 
     @commands.Cog.listener()
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         _log.info('Logged in')
         _log.info(self.bot.user.name if self.bot.user else "error")
         _log.info(self.bot.user.id if self.bot.user else -1)
-        print('--------------------------')
         activity = discord.Activity(name='華麗なる美声', type=discord.ActivityType.listening)
         await self.bot.change_presence(activity=activity)
 
@@ -50,55 +51,55 @@ class MusicBotCog(commands.Cog):
         return False
 
     @commands.command()
-    async def bye(self, ctx: commands.Context):
+    async def bye(self, ctx: commands.Context) -> None:
         if ctx.guild and (session := self.guild_sessions.get(ctx.guild.id)):
             await session.bye()
 
     @commands.command()
-    async def speed(self, ctx: commands.Context, speed_value: float):
+    async def speed(self, ctx: commands.Context, speed_value: float) -> None:
         if ctx.guild and (session := self.guild_sessions.get(ctx.guild.id)):
             await session.music.player_track.speed.set(speed_value)
 
     @commands.command()
-    async def pitch(self, ctx: commands.Context, pitch_value: int):
+    async def pitch(self, ctx: commands.Context, pitch_value: int) -> None:
         if ctx.guild and (session := self.guild_sessions.get(ctx.guild.id)):
             await session.music.player_track.pitch.set(pitch_value)
 
     @commands.command()
-    async def playing(self, ctx: commands.Context):
+    async def playing(self, ctx: commands.Context) -> None:
         if ctx.guild and (session := self.guild_sessions.get(ctx.guild.id)):
-            if isinstance(ctx.channel, SendableChannels):
+            if isinstance(ctx.channel, SENDABLE_CHANNEL_TYPES):
                 session.embed.record_channel_activity(ctx.channel)
             await session.embed.build_main_embed()
 
     @commands.command(aliases=['s'])
-    async def skip(self, ctx: commands.Context, skip_input: str | None = None):
+    async def skip(self, ctx: commands.Context, skip_input: str | None = None) -> None:
         if ctx.guild and (session := self.guild_sessions.get(ctx.guild.id)):
-            session.embed.record_channel_activity(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
+            session.embed.record_channel_activity(ctx.channel if isinstance(ctx.channel, SENDABLE_CHANNEL_TYPES) else None)
             await session.music.seek_or_skip(skip_input)
 
     @commands.command(aliases=['dl'])
-    async def download(self, ctx: commands.Context, *, query: str):
+    async def download(self, ctx: commands.Context, *, query: str) -> None:
         if embed_list := await DownloadService.create_download_embeds(query):
             for embed in embed_list:
                 await ctx.send(embed=embed)
 
     @commands.Cog.listener()
-    async def on_command_error(self, ctx: commands.Context, error: Exception):
+    async def on_command_error(self, ctx: commands.Context, error: Exception) -> None:
         _log.error(f"Command '{ctx.command or ctx.message.content}' failed: {error}", exc_info=error)
 
     @commands.command(aliases=['q'])
-    async def queue(self, ctx: commands.Context, *, query: str = ""):
+    async def queue(self, ctx: commands.Context, *, query: str = "") -> None:
         if ctx.guild:
             await self.join(ctx)
             if session := self.guild_sessions.get(ctx.guild.id):
-                session.embed.record_channel_activity(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
+                session.embed.record_channel_activity(ctx.channel if isinstance(ctx.channel, SENDABLE_CHANNEL_TYPES) else None)
                 await session.music.enqueue(query)
 
     @commands.command(aliases=['p', 'pl'])
-    async def play(self, ctx: commands.Context, *, query: str = ""):
+    async def play(self, ctx: commands.Context, *, query: str = "") -> None:
         if ctx.guild:
             await self.join(ctx)
             if session := self.guild_sessions.get(ctx.guild.id):
-                session.embed.record_channel_activity(ctx.channel if isinstance(ctx.channel, SendableChannels) else None)
+                session.embed.record_channel_activity(ctx.channel if isinstance(ctx.channel, SENDABLE_CHANNEL_TYPES) else None)
                 await session.music.play(query)
