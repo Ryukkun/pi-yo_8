@@ -1,7 +1,8 @@
 import logging
 from discord.utils import _ColourFormatter
 
-def setup_logger(level: int = logging.INFO):
+
+def setup_logger(level: int = logging.INFO) -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(_ColourFormatter())
 
@@ -15,5 +16,3 @@ def setup_logger(level: int = logging.INFO):
     player_logger.setLevel(logging.WARNING)
     if not player_logger.handlers:
         player_logger.addHandler(handler)
-
-

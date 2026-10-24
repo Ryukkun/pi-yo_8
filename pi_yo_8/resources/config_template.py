@@ -1,4 +1,3 @@
-Prefix = ',',
-#youtube data api v3",
-youtube_key = '',
+Prefix = ':'
+youtube_key = ''
 Token = ''

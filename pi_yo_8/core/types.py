@@ -1,4 +1,5 @@
-from typing import TypeAlias
 from discord import StageChannel, TextChannel, Thread, VoiceChannel
 
-SendableChannels: TypeAlias = TextChannel | VoiceChannel | StageChannel | Thread
+type SendableChannels = TextChannel | VoiceChannel | StageChannel | Thread
+
+SENDABLE_CHANNEL_TYPES = (TextChannel, VoiceChannel, StageChannel, Thread)

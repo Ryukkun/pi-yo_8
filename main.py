@@ -1,17 +1,23 @@
 import asyncio
+import logging
+from pathlib import Path
 import shutil
 import discord
 from discord.ext import commands
 
 IS_MAIN_PROCESS = __name__ == "__main__"
+_log = logging.getLogger(__name__)
 
-async def main():
-    try:
-        from pi_yo_8 import config
-    except Exception:
-        shutil.copy("./pi_yo_8/resources/config_template.py", "./pi_yo_8/config.py")
-        raise Exception('Config ファイルを生成しました')
+async def main() -> None:
+    base_dir = Path(__file__).resolve().parent
+    config_file = base_dir / "pi_yo_8" / "config.py"
+    template_file = base_dir / "pi_yo_8" / "resources" / "config_template.py"
 
+    if not config_file.exists():
+        shutil.copy(template_file, config_file)
+        raise RuntimeError("Config ファイル (pi_yo_8/config.py) をテンプレートから生成しました。Token等を設定して再起動してください。")
+
+    from pi_yo_8 import config
     from pi_yo_8.core.logging import setup_logger
     from pi_yo_8.engine.discord_patch import apply_discord_patch
     from pi_yo_8.main import MusicBotCog
@@ -19,7 +25,6 @@ async def main():
 
     apply_discord_patch()
 
-    ####  起動準備 And 初期設定
     intents = discord.Intents.default()
     intents.message_content = True
     intents.reactions = True
@@ -36,7 +41,7 @@ if IS_MAIN_PROCESS:
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nBot has stopped (Ctrl+C).")
+        _log.info("Bot has stopped (Ctrl+C).")
     finally:
         try:
             from pi_yo_8.sources.manager import YTDLPManager
