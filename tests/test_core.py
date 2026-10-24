@@ -1,5 +1,8 @@
+import pytest
 from pi_yo_8.core.play_mode import PlayMode
+from pi_yo_8.core.playlist import Playlist
 from pi_yo_8.core.shuffle import PlaylistRandom
+
 
 def test_play_mode_defaults():
     mode = PlayMode()
@@ -7,8 +10,10 @@ def test_play_mode_defaults():
     assert not mode.loop_pl
     assert not mode.random_pl
 
+
 def test_play_mode_callback():
     changes = []
+
     def callback(old: PlayMode, new: PlayMode):
         changes.append((old.loop, new.loop))
 
@@ -17,6 +22,7 @@ def test_play_mode_callback():
     assert mode.loop
     assert len(changes) == 1
     assert changes[0] == (False, True)
+
 
 def test_shuffle_random():
     shuffler = PlaylistRandom(10)
@@ -29,8 +35,17 @@ def test_shuffle_random():
     # Check that it samples various indices
     assert len(selected) > 1
 
+
 def test_shuffle_set_range():
     shuffler = PlaylistRandom(5)
     shuffler.set_range(8)
     assert shuffler.range == 8
     assert len(shuffler.cooldowns) == 8
+
+
+@pytest.mark.asyncio
+async def test_empty_playlist_update_next_indexes():
+    pl = Playlist("Empty", "http://empty")
+    # Must not raise ZeroDivisionError
+    await pl.update_next_indexes()
+    assert len(pl.next_indexes) == 0

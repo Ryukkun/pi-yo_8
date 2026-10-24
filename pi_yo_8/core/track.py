@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -27,7 +28,10 @@ class Track:
     channel_icon_url: str | None = None
     stream_info: StreamInfo | None = None
     raw_info: dict[str, Any] = field(default_factory=dict)
-    _load_task: Any = field(default=None, repr=False, compare=False)
+    _load_task: asyncio.Task[bool] | None = field(default=None, repr=False, compare=False)
 
     def is_stream_ready(self) -> bool:
         return self.stream_info is not None and bool(self.stream_info.url)
+
+    def is_loading(self) -> bool:
+        return self._load_task is not None and not self._load_task.done()

@@ -19,12 +19,12 @@ class Playlist:
         loop_pl: bool = True,
         random_pl: bool = False,
         preload_callback: Callable[[list[Any]], Any] | None = None,
-    ):
+    ) -> None:
         self.title = title
         self.url = url
         self.entries: list[Any] = []
         self.next_indexes: deque[int] = deque()
-        self.play_history: deque[int] = deque()
+        self.play_history: deque[int] = deque(maxlen=200)
         self.cooldowns: list[int] = []
         self._preload_callback = preload_callback
         self._status = PlayMode(loop, loop_pl, random_pl, on_change=self._on_status_change)
@@ -42,7 +42,8 @@ class Playlist:
                 self.next_indexes.append(playing_index)
             if new.random_pl:
                 self.random.set_range(len(self.entries))
-                self.random.cooldowns = self.cooldowns.copy()
+                if self.cooldowns:
+                    self.random.cooldowns = self.cooldowns.copy()
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(self.update_next_indexes())
@@ -50,22 +51,31 @@ class Playlist:
                 pass
 
     async def update_next_indexes(self, length: int = 25) -> None:
+        if not self.entries:
+            return
+
         if self.status.random_pl:
             while len(self.next_indexes) < length:
                 self.next_indexes.append(self.random.select_next_index())
         else:
+            num_entries = len(self.entries)
             while len(self.next_indexes) < length:
                 i = (self.next_indexes[-1] + 1) if self.next_indexes else 0
-                if not self.status.loop_pl and len(self.entries) <= i:
+                if not self.status.loop_pl and num_entries <= i:
                     break
-                self.next_indexes.append(i % len(self.entries))
+                self.next_indexes.append(i % num_entries)
         self._preload_upcoming_entries()
 
     def _preload_upcoming_entries(self, count: int = 2) -> None:
         if not self._preload_callback or not self.next_indexes:
             return
-        upcoming = [self.entries[self.next_indexes[i]] for i in range(min(len(self.next_indexes), count))]
-        self._preload_callback(upcoming)
+        upcoming = [
+            self.entries[self.next_indexes[i]]
+            for i in range(min(len(self.next_indexes), count))
+            if self.next_indexes[i] < len(self.entries)
+        ]
+        if upcoming:
+            self._preload_callback(upcoming)
 
     def set_next_index_by_id(self, item_id: str) -> bool:
         for i, entry in enumerate(self.entries):
@@ -87,21 +97,16 @@ class Playlist:
 
     async def next(self, count: int = 1) -> int:
         await self.update_next_indexes(count + 25)
-        for _ in range(count):
-            if not self.next_indexes:
-                return count - _
+        completed = 0
+        while completed < count and self.next_indexes:
             self.play_history.append(self.next_indexes.popleft())
-            if not self.next_indexes:
-                return count - _
+            completed += 1
         self._preload_upcoming_entries()
         self._update_cooldowns()
-        return 0
+        return count - completed
 
     def _update_cooldowns(self) -> None:
-        if self.next_indexes:
+        if self.next_indexes and self.entries:
             current = self.next_indexes[0]
-            for i in range(len(self.cooldowns)):
-                if i == current:
-                    self.cooldowns[i] = 0
-                else:
-                    self.cooldowns[i] += 1
+            self.random.record_played(current)
+            self.cooldowns = self.random.cooldowns
