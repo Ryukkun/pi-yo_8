@@ -15,7 +15,6 @@ from pi_yo_8.engine.ffmpeg_reader import FFmpegAudioReader
 _log = logging.getLogger(__name__)
 
 
-
 class AudioTrack:
     FRAME_LENGTH = opus.Encoder.FRAME_LENGTH / 1000  # 秒
     FRAME_PER_SEC = 1000 / opus.Encoder.FRAME_LENGTH
@@ -68,20 +67,23 @@ class AudioTrack:
             return
 
         stream = self.track.stream_info
-        before_options = []
+        before_options: list[str] = []
         options = ['-vn', '-loglevel', 'warning']
         if self.opus:
             options.extend(('-application', 'audio'))
-        audio_filters = []
+        audio_filters: list[str] = []
 
-
-
-        if int(seek_seconds):
+        if seek_seconds > 0:
             before_options.extend(('-ss', str(seek_seconds)))
-        before_options.extend(('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-analyzeduration', '2147483647', '-probesize', '2147483647'))
+        before_options.extend((
+            '-reconnect', '1',
+            '-reconnect_streamed', '1',
+            '-reconnect_delay_max', '5',
+            '-analyzeduration', '2147483647',
+            '-probesize', '2147483647',
+        ))
 
-        # headers: Combine multiple headers into a single argument separated by CRLF (\r\n)
-        header_lines = []
+        header_lines: list[str] = []
         if stream.http_headers:
             for k, v in stream.http_headers.items():
                 header_lines.append(f"{k}: {v}")
@@ -126,7 +128,7 @@ class AudioTrack:
             ffmpeg_options["stderr"] = duration_buffer
             options.extend(("-nostats", "-loglevel", "info"))
             ffmpeg_options["options"] = ' '.join(options)
-            asyncio.create_task(self._probe_duration_from_stderr(duration_buffer))
+            asyncio.create_task(self._probe_duration_from_stderr(duration_buffer, self.track))
 
         _log.debug(f"Creating FFmpeg audio reader for '{self.track.title}' (opus={self.opus})")
         source = (
@@ -136,11 +138,12 @@ class AudioTrack:
         )
         self.ffmpeg_audio = FFmpegAudioReader(source)
 
-
-
-    async def _probe_duration_from_stderr(self, duration_buffer: io.BytesIO) -> None:
+    async def _probe_duration_from_stderr(self, duration_buffer: io.BytesIO, target_track: Track) -> None:
         last_pos = 0
-        while True:
+        attempts = 0
+        while attempts < 50:
+            if self.track is not target_track:
+                return
             duration_buffer.seek(last_pos)
             chunk = duration_buffer.read()
             last_pos = duration_buffer.tell()
@@ -148,10 +151,10 @@ class AudioTrack:
                 text = chunk.decode('utf-8', errors='ignore')
                 if "Duration:" in text and (match := self.DURATION_REGEX.search(text)):
                     h, m, s = match.groups()
-                    if self.track:
-                        self.track.duration = float(h) * 3600 + float(m) * 60 + float(s)
+                    target_track.duration = float(h) * 3600 + float(m) * 60 + float(s)
                     return
             await asyncio.sleep(0.1)
+            attempts += 1
 
     async def seek_to_position(self, sec: float | None = None) -> None:
         if not self.track:
@@ -162,37 +165,42 @@ class AudioTrack:
         with self._lock:
             if self.ffmpeg_audio:
                 self.ffmpeg_audio.cleanup()
-            self._create_reader(seek_seconds=sec)
-            self.timer = sec
+            self._create_reader(seek_seconds=max(0.0, sec))
+            self.timer = max(0.0, sec)
 
     async def seek_by_seconds(self, seconds: float) -> None:
         if not self.track or not self.ffmpeg_audio:
             return
 
-        with self._lock:
-            if seconds > 0:
-                skip_len = int(seconds * self.FRAME_PER_SEC / self.speed.get())
-                target_sec = self.timer + seconds
-                if self.track.duration is not None and self.track.duration < target_sec:
-                    self._finish()
-                    return
+        target_sec = max(0.0, self.timer + seconds)
+        if self.track.duration is not None and self.track.duration < target_sec:
+            self._finish()
+            return
 
-                if len(self.ffmpeg_audio.pending_audio_queue) + (self.FRAME_PER_SEC * 10) < skip_len:
-                    await self.seek_to_position(sec=target_sec)
-                    return
+        speed_val = max(0.1, self.speed.get())
+        if seconds > 0:
+            skip_len = int(seconds * self.FRAME_PER_SEC / speed_val)
+            # 先読みバッファを大幅に超える長距離シークは FFmpeg -ss でシーク
+            if len(self.ffmpeg_audio.pending_audio_queue) + int(self.FRAME_PER_SEC * 5) < skip_len:
+                await self.seek_to_position(sec=target_sec)
+                return
 
-                while len(self.ffmpeg_audio.pending_audio_queue) < skip_len and not self.ffmpeg_audio.read_all_task.done():
-                    await asyncio.sleep(0.01)
-                self.ffmpeg_audio.skip(skip_len)
-                self.timer += skip_len * self.FRAME_LENGTH * self.speed.get()
+            with self._lock:
+                actual_skip = min(skip_len, len(self.ffmpeg_audio.pending_audio_queue))
+                self.ffmpeg_audio.skip(actual_skip)
+                self.timer += actual_skip * self.FRAME_LENGTH * speed_val
 
-            elif seconds < 0:
-                target_sec = self.timer + seconds
-                if target_sec < 0:
-                    seconds = -self.timer
-                rwd_len = int(-seconds * self.FRAME_PER_SEC / self.speed.get())
-                self.ffmpeg_audio.rewind(rwd_len)
-                self.timer += -rwd_len * self.FRAME_LENGTH * self.speed.get()
+        elif seconds < 0:
+            rwd_len = int(-seconds * self.FRAME_PER_SEC / speed_val)
+            # 巻き戻し履歴バッファを超える場合は FFmpeg -ss でシーク
+            if len(self.ffmpeg_audio.history_audio_queue) < rwd_len:
+                await self.seek_to_position(sec=target_sec)
+                return
+
+            with self._lock:
+                actual_rwd = min(rwd_len, len(self.ffmpeg_audio.history_audio_queue))
+                self.ffmpeg_audio.rewind(actual_rwd)
+                self.timer = max(0.0, self.timer - actual_rwd * self.FRAME_LENGTH * speed_val)
 
     def read_bytes(self) -> bytes:
         audio_chunk = b''
@@ -221,4 +229,3 @@ class AudioTrack:
             self.after()
         if self.on_state_change:
             self.on_state_change()
-

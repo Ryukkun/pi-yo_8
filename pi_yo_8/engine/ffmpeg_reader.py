@@ -23,7 +23,7 @@ class FFmpegAudioReader:
         self.stop_flag = threading.Event()
         self.exe = ThreadPoolExecutor(max_workers=1)
 
-        def read_all():
+        def read_all() -> None:
             try:
                 _log.debug("FFmpeg reader thread started.")
                 total_frames = 0
@@ -44,7 +44,6 @@ class FFmpegAudioReader:
 
         self.read_all_task = self.exe.submit(read_all)
 
-
     def read(self) -> bytes | None:
         """
         Returns:
@@ -64,6 +63,10 @@ class FFmpegAudioReader:
         self.stop_flag.set()
         try:
             self.ffmpeg.cleanup()
+        except Exception:
+            pass
+        try:
+            self.exe.shutdown(wait=False, cancel_futures=True)
         except Exception:
             pass
         self.pending_audio_queue.clear()

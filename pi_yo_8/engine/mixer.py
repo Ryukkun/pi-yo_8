@@ -12,9 +12,11 @@ from pi_yo_8.engine.track_stream import AudioTrack
 
 _log = logging.getLogger(__name__)
 
+
 class MultiTrackVoiceClient:
     """
     Discord音声送出エンジン。複数AudioTrackの同時ミックス（20ms周期）に対応。
+    単一トラックかつopus_modeの場合は再エンコードをバイパスし低負荷で送信。
     """
     def __init__(self, guild: Guild, vc: discord.VoiceClient, loop: asyncio.AbstractEventLoop) -> None:
         self.guild = guild
@@ -38,6 +40,7 @@ class MultiTrackVoiceClient:
     def add_track(self, opus_mode: bool = False) -> AudioTrack:
         track = AudioTrack(opus_mode=opus_mode, on_state_change=self.ensure_audio_loop_running)
         self.tracks.append(track)
+        # 単一トラックかつOpusモードであれば直接送出（再エンコード不要）
         self.should_encode = len(self.tracks) != 1 or (len(self.tracks) == 1 and not opus_mode)
         return track
 
@@ -84,7 +87,8 @@ class MultiTrackVoiceClient:
 
                 start_time += 0.02
                 delay = max(0.0, start_time - time.perf_counter())
-                time.sleep(delay)
+                if delay > 0:
+                    time.sleep(delay)
 
                 if audio_bytes:
                     send_audio(audio_bytes, encode=self.should_encode)
