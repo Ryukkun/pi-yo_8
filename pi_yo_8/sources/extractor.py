@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import signal
 import threading
 import time
 import traceback
@@ -17,7 +18,6 @@ from pi_yo_8.sources.loudness_ie import YoutubeIE
 from pi_yo_8.sources.status import ErrorMessage, ErrorType, LambdaLogger, StatusManager
 
 _log = logging.getLogger("pi_yo_8.ytdlp")
-
 
 YTDLP_GENERAL_PARAMS = {
     "http_headers": {
@@ -46,7 +46,7 @@ YTDLP_VIDEO_PARAMS = {
 
 
 class YTDLPExtractor:
-    def __init__(self, params: dict) -> None:
+    def __init__(self, params: dict[str, Any]) -> None:
         self.params = params
         self.is_running: bool = False
         self._start_process()
@@ -74,9 +74,9 @@ class YTDLPExtractor:
         self._start_process()
 
     @staticmethod
-    def get_ytdlp(params: dict) -> YoutubeDL:
-        ydl = YoutubeDL(params)  # type: ignore
-        ydl.add_info_extractor(YoutubeIE())  # type: ignore
+    def get_ytdlp(params: dict[str, Any]) -> YoutubeDL:
+        ydl = YoutubeDL(params)  # type: ignore[arg-type]
+        ydl.add_info_extractor(YoutubeIE())  # type: ignore[arg-type]
         return ydl
 
     def extract_raw_info(self, url: str) -> tuple[AsyncGenerator[dict[str, Any]], StatusManager]:
@@ -92,7 +92,7 @@ class YTDLPExtractor:
         loop = asyncio.get_running_loop()
         status_manager = StatusManager(url if UrlAnalyzer(url).is_url else '')
 
-        async def generator():
+        async def generator() -> AsyncGenerator[dict[str, Any]]:
             reached_eof = False
             try:
                 while True:
@@ -118,16 +118,34 @@ class YTDLPExtractor:
             finally:
                 status_manager.is_running = False
                 if not reached_eof:
-                    _log.warning("YTDLPExtractor: stream closed before EOF. Recycling worker process.")
-                    self.restart()
+                    # EOF前に終了した場合、パイプに残っている同一タスクの出力をドレイン試行
+                    drained = False
+                    start_drain = time.time()
+                    try:
+                        while time.time() - start_drain < 1.0:
+                            if self.connection.poll(0.05):
+                                item = self.connection.recv()
+                                if item == '':
+                                    drained = True
+                                    break
+                            else:
+                                if not self.process.is_alive():
+                                    break
+                    except Exception:
+                        pass
+
+                    if drained:
+                        self.is_running = False
+                    else:
+                        _log.warning("YTDLPExtractor: stream drain timed out. Recycling worker process.")
+                        self.restart()
                 else:
                     self.is_running = False
 
         return generator(), status_manager
 
     @staticmethod
-    def _extract_info(conn: connection._ConnectionBase, options: dict) -> None:
-        import signal
+    def _extract_info(conn: connection._ConnectionBase, options: dict[str, Any]) -> None:
         try:
             signal.signal(signal.SIGINT, signal.SIG_IGN)
         except Exception:
@@ -152,7 +170,7 @@ class YTDLPExtractor:
 
             ydl = YTDLPExtractor.get_ytdlp(opts)
             buffer = ModdedBuffer()
-            ydl._out_files.__dict__["out"] = buffer  # type: ignore
+            setattr(ydl._out_files, "out", buffer)
             with ThreadPoolExecutor(max_workers=1) as exe:
                 while True:
                     try:
@@ -190,5 +208,3 @@ class YTDLPExtractor:
                 conn.close()
             except Exception:
                 pass
-
-

@@ -8,10 +8,30 @@ def calculate_gain(volume_data: dict[str, Any] | None) -> float | None:
         return -14.0 - float(volume)
     return None
 
+
 def format_upload_date(upload_date: str | None) -> str | None:
     if upload_date and len(upload_date) == 8:
         return f"{upload_date[:4]}/{upload_date[4:6]}/{upload_date[6:]}"
     return upload_date
+
+
+def filter_essential_raw_info(info: dict[str, Any]) -> dict[str, Any]:
+    """メモリ節約のため、巨大な不要メタデータを削ぎ落とした辞書を作成"""
+    essential_keys = {"id", "title", "url", "webpage_url", "formats", "volume_data", "uploader"}
+    filtered = {k: info[k] for k in essential_keys if k in info}
+    # formats があれば必要なキーだけに圧縮
+    if "formats" in filtered and isinstance(filtered["formats"], list):
+        filtered["formats"] = [
+            {
+                k: f[k]
+                for k in ("url", "width", "height", "resolution", "ext", "acodec", "abr", "protocol")
+                if k in f
+            }
+            for f in filtered["formats"]
+            if isinstance(f, dict)
+        ]
+    return filtered
+
 
 def map_info_to_track(info: dict[str, Any]) -> Track:
     track_id = info.get("id")
@@ -49,9 +69,6 @@ def map_info_to_track(info: dict[str, Any]) -> Track:
                 acodec=acodec,
             )
 
-
-
-
     return Track(
         id=track_id,
         title=title,
@@ -64,5 +81,5 @@ def map_info_to_track(info: dict[str, Any]) -> Track:
         upload_date=upload_date,
         thumbnail_url=thumbnail_url,
         stream_info=stream_info,
-        raw_info=info,
+        raw_info=filter_essential_raw_info(info),
     )

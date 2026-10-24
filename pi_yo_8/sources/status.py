@@ -1,10 +1,8 @@
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from threading import Lock
 from typing import Any
-
 
 
 class ErrorType(Enum):
@@ -13,11 +11,13 @@ class ErrorType(Enum):
     WARNING = 2
     ERROR = 3
 
+
 class YTDLPInfoType(Enum):
     URL = 1
     PLAYLIST = 2
     VIDEO = 3
     CHANNEL = 4
+
 
 @dataclass
 class ErrorMessage:
@@ -26,6 +26,7 @@ class ErrorMessage:
     name: str = ''
     traceback: str = ''
     occurred_time: float = field(default_factory=time.time)
+
 
 class LambdaLogger:
     def __init__(
@@ -56,14 +57,23 @@ class LambdaLogger:
         if self.error_callback:
             self.error_callback(msg)
 
+
 class StatusManager:
     def __init__(self, url: str, name: str = '', info_type: YTDLPInfoType = YTDLPInfoType.URL) -> None:
         self.url = url
         self.name = name
-        self._type = info_type
+        self.info_type = info_type
         self.is_running = True
         self._errors: list[ErrorMessage] = []
         self.lock = Lock()
+
+    @property
+    def _type(self) -> YTDLPInfoType:
+        return self.info_type
+
+    @_type.setter
+    def _type(self, value: YTDLPInfoType) -> None:
+        self.info_type = value
 
     def append_error(self, error: ErrorMessage) -> None:
         with self.lock:
@@ -81,4 +91,3 @@ class StatusManager:
                     else:
                         break
         return result
-

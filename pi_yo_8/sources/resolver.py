@@ -1,6 +1,6 @@
 import logging
-
 from collections.abc import Callable
+
 from pi_yo_8.core.track import Track
 from pi_yo_8.core.url import UrlAnalyzer
 from pi_yo_8.sources.extractor import YTDLP_GENERAL_PARAMS
@@ -28,7 +28,7 @@ class TrackResolver:
             if info.get("playlist"):
                 analysis = UrlAnalyzer(query_or_url)
                 playlist = LazyPlaylist(info, gen, on_status=on_status)
-                status_manager._type = YTDLPInfoType.PLAYLIST
+                status_manager.info_type = YTDLPInfoType.PLAYLIST
                 status_manager.name = playlist.title
                 if on_status:
                     on_status(status_manager)
@@ -42,17 +42,13 @@ class TrackResolver:
                 return playlist, status_manager
 
             track = map_info_to_track(info)
-            status_manager._type = YTDLPInfoType.VIDEO
+            status_manager.info_type = YTDLPInfoType.VIDEO
             status_manager.name = track.title
             if on_status:
                 on_status(status_manager)
             _log.info(f"Resolved single track: '{track.title}' (stream_ready: {track.is_stream_ready()})")
-            try:
-                await anext(gen, None)
-            except Exception:
-                pass
+            await gen.aclose()
             return track, status_manager
 
         _log.warning(f"Could not resolve any tracks for query: '{query_or_url}'")
         return None, status_manager
-

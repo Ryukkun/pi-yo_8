@@ -23,7 +23,7 @@ class LazyPlaylist(Playlist):
         first_entry_info: dict[str, Any],
         generator: AsyncGenerator[dict[str, Any]],
         on_status: Callable[[StatusManager], None] | None = None,
-    ):
+    ) -> None:
         title = first_entry_info.get("playlist_title", "No Title")
         url = first_entry_info.get("playlist_webpage_url", "")
         super().__init__(title, url)
@@ -101,7 +101,7 @@ class LazyPlaylist(Playlist):
             idx = self.next_indexes[i]
             if idx < len(self.entries):
                 entry = self.entries[idx]
-                if not entry.is_stream_ready() and (entry._load_task is None or entry._load_task.done()):
+                if not entry.is_stream_ready() and not entry.is_loading():
                     asyncio.create_task(ensure_track_playable(entry, on_status=self.on_status))
 
     async def get_current_track(self) -> Track | None:
@@ -126,6 +126,7 @@ class LazyPlaylist(Playlist):
                 return await self.get_current_track()
         return None
 
+
 async def ensure_track_playable(track: Track, on_status: Callable[[StatusManager], None] | None = None) -> bool:
     """
     トラックのストリームURLが有効か検査し、無効なら再抽出を行う。
@@ -139,13 +140,14 @@ async def ensure_track_playable(track: Track, on_status: Callable[[StatusManager
         _log.info(f"Track '{track.title}' stream URL inaccessible/expired. Re-extracting...")
 
     # 既に抽出タスクが実行中であれば、その完了を待つ（重複実行を防止）
-    if track._load_task is not None and not track._load_task.done():
+    if track.is_loading() and track._load_task is not None:
         _log.debug(f"Track '{track.title}' stream extraction already in flight, awaiting existing task...")
         return await track._load_task
 
-    track._load_task = asyncio.create_task(_do_extract_stream(track, on_status))
+    task = asyncio.create_task(_do_extract_stream(track, on_status))
+    track._load_task = task
     try:
-        return await track._load_task
+        return await task
     finally:
         track._load_task = None
 
@@ -154,7 +156,7 @@ async def _do_extract_stream(track: Track, on_status: Callable[[StatusManager], 
     _log.info(f"Extracting stream URL for: '{track.title}' ({track.web_url})")
     extractor = YTDLPManager.get_extractor(YTDLP_VIDEO_PARAMS)
     gen, sm = extractor.extract_raw_info(track.web_url)
-    sm._type = YTDLPInfoType.VIDEO
+    sm.info_type = YTDLPInfoType.VIDEO
     sm.name = track.title
     if on_status:
         on_status(sm)
@@ -168,12 +170,8 @@ async def _do_extract_stream(track: Track, on_status: Callable[[StatusManager], 
                 if fresh.raw_info:
                     track.raw_info.update(fresh.raw_info)
                 _log.info(f"Successfully extracted stream URL for '{track.title}'")
-                try:
-                    await anext(gen, None)
-                except Exception:
-                    pass
+                await gen.aclose()
                 return True
     except Exception as e:
         _log.error(f"Failed to extract stream for '{track.title}': {e}", exc_info=True)
     return False
-
