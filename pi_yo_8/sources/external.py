@@ -29,7 +29,12 @@ def _format_apple_artwork(artwork: dict[str, Any] | None, size: int = 600) -> st
     url_tpl = artwork.get("dictionary", {}).get("url")
     if not isinstance(url_tpl, str) or not url_tpl:
         return None
-    return url_tpl.replace("{w}", str(size)).replace("{h}", str(size)).replace("{f}", "jpg")
+    return (
+        url_tpl.replace("{w}", str(size))
+        .replace("{h}", str(size))
+        .replace("{c}", "bb")
+        .replace("{f}", "jpg")
+    )
 
 
 def _extract_spotify_cover_url(entity: dict[str, Any]) -> str | None:
@@ -113,8 +118,8 @@ def parse_spotify_embed_html(
             source="spotify",
         )
 
-    if entity_type in ("playlist", "album"):
-        pl_title = str(entity.get("name") or entity.get("title") or "Spotify Playlist")
+    if entity_type in ("playlist", "album", "artist"):
+        pl_title = str(entity.get("name") or entity.get("title") or "Spotify")
         pl_subtitle = str(entity.get("subtitle") or "")
         track_list = entity.get("trackList") or []
         tracks: list[Track] = []
@@ -123,8 +128,11 @@ def parse_spotify_embed_html(
                 continue
             t_title = str(item.get("title") or "No Title")
             t_artist = str(item.get("subtitle") or "").replace("\xa0", " ").strip()
-            if not t_artist and entity_type == "album" and pl_subtitle:
-                t_artist = pl_subtitle
+            if not t_artist:
+                if entity_type == "album" and pl_subtitle:
+                    t_artist = pl_subtitle
+                elif entity_type == "artist":
+                    t_artist = pl_title
 
             t_uri = str(item.get("uri") or "")
             t_id = t_uri.split(":")[-1] if ":" in t_uri else (str(item["uid"]) if item.get("uid") else None)
@@ -176,10 +184,12 @@ def parse_apple_music_html(
     d0 = data_list[0].get("data", {})
     sections = d0.get("sections") or []
 
-    # 単曲直リンクページ (/song/...) の判定
+    # 単曲直リンクページ (/song/...) または ミュージックビデオ (/music-video/...) の判定
     for section in sections:
-        if section.get("itemKind") == "songDetailHeader" and section.get("items"):
-            item0 = section["items"][0]
+        kind = section.get("itemKind")
+        items = section.get("items") or []
+        if kind == "songDetailHeader" and items:
+            item0 = items[0]
             title = str(item0.get("title") or "No Title")
             artist = str(item0.get("artists") or "")
             if not artist:
@@ -204,9 +214,69 @@ def parse_apple_music_html(
                 thumbnail_url=thumb,
                 source="apple_music",
             )
+        if kind == "tvMovieDetailHeaderLockup" and items:
+            item0 = items[0]
+            title = str(item0.get("title") or "No Title")
+            artist = _extract_subtitle_artists(item0)
+            cd = item0.get("contentDescriptor") or {}
+            track_id = cd.get("identifiers", {}).get("storeAdamID")
+            web_url = cd.get("url") or source_url
+            thumb = _format_apple_artwork(item0.get("artwork"))
+            return _build_external_track(
+                track_id=str(track_id) if track_id else None,
+                title=title,
+                artist=artist,
+                web_url=str(web_url),
+                duration_sec=None,
+                thumbnail_url=thumb,
+                source="apple_music",
+            )
 
-    # プレイリスト / アルバムページ
-    pl_title = "Apple Music"
+    # アーティストページ (/artist/...) の判定
+    artist_name: str | None = None
+    artist_thumb: str | None = None
+    artist_tracks: list[Track] = []
+    for section in sections:
+        kind = section.get("itemKind")
+        items = section.get("items") or []
+        if kind == "artistDetailHeader" and items:
+            header = items[0]
+            artist_name = str(header.get("title") or "Artist")
+            artist_thumb = _format_apple_artwork(
+                header.get("artwork") or header.get("circleArtwork") or header.get("fallbackArtwork")
+            )
+        elif kind == "artistFeaturedContentAndTracks" and items and artist_name:
+            raw_tracks = items[0].get("tracks") or []
+            for t in raw_tracks:
+                if not isinstance(t, dict):
+                    continue
+                t_title = str(t.get("title") or "No Title")
+                t_dur_ms = t.get("duration")
+                t_dur_sec = float(t_dur_ms) / 1000.0 if isinstance(t_dur_ms, (int, float)) else None
+                cd = t.get("contentDescriptor") or {}
+                t_id = cd.get("identifiers", {}).get("storeAdamID") or t.get("id")
+                t_id_str = str(t_id) if t_id is not None else None
+                t_url = str(cd.get("url") or source_url)
+                t_thumb = _format_apple_artwork(t.get("artwork")) or artist_thumb
+                artist_tracks.append(
+                    _build_external_track(
+                        track_id=t_id_str,
+                        title=t_title,
+                        artist=artist_name,
+                        web_url=t_url,
+                        duration_sec=t_dur_sec,
+                        thumbnail_url=t_thumb,
+                        source="apple_music",
+                        playlist_title=artist_name,
+                    )
+                )
+    if artist_name and artist_tracks:
+        return artist_name, source_url, artist_tracks
+
+    # プレイリスト / アルバム / see-all トップソングページ
+    seo_title = str(d0.get("seoData", {}).get("pageTitle") or "").replace("\xa0", " ")
+    fallback_title = seo_title.removesuffix("- Apple Music").strip() if seo_title else "Apple Music"
+    pl_title = fallback_title or "Apple Music"
     pl_artist = ""
     pl_thumb: str | None = None
     tracks: list[Track] = []
@@ -302,7 +372,12 @@ class ExternalMusicResolver:
 
             elif analysis.is_apple_music:
                 final_url, html = await _fetch_page(url)
-                parsed = parse_apple_music_html(html, final_url, song_id=analysis.apple_song_id)
+                final_analysis = UrlAnalyzer(final_url)
+                parsed = parse_apple_music_html(
+                    html,
+                    final_url,
+                    song_id=analysis.apple_song_id or final_analysis.apple_song_id,
+                )
 
             if isinstance(parsed, Track):
                 status_manager.info_type = YTDLPInfoType.VIDEO
