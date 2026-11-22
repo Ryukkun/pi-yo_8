@@ -261,8 +261,7 @@ async def test_lazy_playlist_from_tracks_and_extract_external():
     assert len(pl.entries) == 1
     assert t1.playlist_title == "My Playlist"
     await pl.update_next_indexes()
-    assert len(pl.next_indexes) == 25
-    assert pl.next_indexes[0] == 0
+    assert list(pl.next_indexes) == [0]
 
     async def fake_search_gen() -> AsyncGenerator[dict[str, Any]]:
         yield {

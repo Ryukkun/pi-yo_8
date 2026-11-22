@@ -76,7 +76,11 @@ class PlayerService:
         if not raw:
             return None
         if isinstance(raw, LazyPlaylist):
-            return await raw.get_current_track()
+            track = await raw.get_current_track()
+            if track is not None:
+                return track
+            await self._advance_and_update_status(1)
+            return await self.get_current_playable_track()
         if isinstance(raw, Track):
             if await ensure_track_playable(raw, on_status=self.on_status_report):
                 return raw
@@ -163,6 +167,8 @@ class PlayerService:
             if isinstance(head, LazyPlaylist):
                 self.status = head.status
                 if not head.next_indexes:
+                    if head.entries:
+                        head.next_indexes.append(0)
                     await head.update_next_indexes()
             await self.play_loop()
             if self.player_track.is_paused():

@@ -130,3 +130,37 @@ def test_mixer_no_opus_silence_before_speaking():
         vc.send_audio_packet.assert_not_called()
     finally:
         loop.close()
+
+
+@pytest.mark.asyncio
+async def test_select_history_finished_playlist_restarts_from_head():
+    mock_audio = MagicMock()
+    mock_audio.is_paused.return_value = False
+
+    async def empty_gen():
+        if False:
+            yield {}
+
+    first_entry = {
+        "id": "vid1",
+        "title": "Song 1",
+        "url": "https://www.youtube.com/watch?v=vid1",
+        "duration": 180,
+        "playlist_title": "iyowa",
+        "playlist_webpage_url": "ytsearch30:iyowa",
+    }
+    pl = LazyPlaylist(first_entry, empty_gen())
+    await pl.decompress_task
+    # 最後まで再生済みの状態にする
+    assert await pl.next(1) == 1
+    assert list(pl.next_indexes) == []
+
+    service = PlayerService("TestGuild", mock_audio)
+    service.queue.play_history.append(pl)
+    service.play_loop = AsyncMock()
+
+    await service.select_history("hist:0")
+
+    assert service.queue.get_current_raw() is pl
+    assert list(pl.next_indexes) == [0]
+    assert service.status is pl.status

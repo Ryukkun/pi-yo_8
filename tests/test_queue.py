@@ -128,3 +128,49 @@ async def test_recall_history_item_preserves_playlist_state():
     assert pl0.next_indexes[0] == 2
     assert list(queue.play_history) == [t_cur]
 
+
+@pytest.mark.asyncio
+async def test_non_loop_playlist_advances_out_of_queue_at_end():
+    pl = Playlist("Search PL", "ytsearch30:iyowa", loop_pl=False)
+    pl.entries = [Track(id=f"p{i}", title=f"P{i}", web_url=f"http://p{i}") for i in range(3)]
+    pl.cooldowns = [0, 0, 0]
+    await pl.update_next_indexes()
+
+    t_after = Track(id="after", title="After PL", web_url="http://after")
+    queue = PlayQueue()
+    queue.play_queue.extend([pl, t_after])
+
+    # 0 -> 1 -> 2
+    assert await queue.next(1) is True
+    assert queue.get_current_raw() is pl
+    assert list(pl.next_indexes) == [1, 2]
+
+    assert await queue.next(1) is True
+    assert queue.get_current_raw() is pl
+    assert list(pl.next_indexes) == [2]
+
+    # 最終曲 (2) の次でプレイリストがキューから抜け、後続の単曲へ進む
+    assert await queue.next(1) is True
+    assert queue.get_current_raw() is t_after
+    assert list(pl.next_indexes) == []
+    # 終端後に update_next_indexes を呼んでも先頭(0)に戻らない
+    await pl.update_next_indexes()
+    assert list(pl.next_indexes) == []
+
+
+@pytest.mark.asyncio
+async def test_non_loop_playlist_skip_across_end():
+    pl = Playlist("Search PL", "ytsearch30:test", loop_pl=False)
+    pl.entries = [Track(id=f"p{i}", title=f"P{i}", web_url=f"http://p{i}") for i in range(3)]
+    pl.cooldowns = [0, 0, 0]
+    await pl.update_next_indexes()
+
+    t1 = Track(id="t1", title="T1", web_url="http://t1")
+    t2 = Track(id="t2", title="T2", web_url="http://t2")
+    queue = PlayQueue()
+    queue.play_queue.extend([pl, t1, t2])
+
+    # 0 から 4 つ進むと PL(0->1->2->終端で1消費) + t1(1消費) = t2 に着地
+    assert await queue.next(4) is True
+    assert queue.get_current_raw() is t2
+

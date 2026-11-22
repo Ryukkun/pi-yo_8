@@ -60,7 +60,12 @@ class Playlist:
         else:
             num_entries = len(self.entries)
             while len(self.next_indexes) < length:
-                i = (self.next_indexes[-1] + 1) if self.next_indexes else 0
+                if self.next_indexes:
+                    i = self.next_indexes[-1] + 1
+                elif self.play_history:
+                    i = self.play_history[-1] + 1
+                else:
+                    i = 0
                 if not self.status.loop_pl and num_entries <= i:
                     break
                 self.next_indexes.append(i % num_entries)
@@ -100,7 +105,8 @@ class Playlist:
         completed = 0
         while completed < count and self.next_indexes:
             self.play_history.append(self.next_indexes.popleft())
-            completed += 1
+            if self.next_indexes:
+                completed += 1
         self._preload_upcoming_entries()
         self._update_cooldowns()
         return count - completed

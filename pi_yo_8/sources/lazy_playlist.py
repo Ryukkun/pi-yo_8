@@ -89,20 +89,16 @@ class LazyPlaylist(Playlist):
         if self.status.random_pl:
             return
 
-        if not self.next_indexes and self.entries:
-            self.next_indexes.append(0)
-
         while len(self.next_indexes) < length:
-            i = (self.next_indexes[-1] + 1) if self.next_indexes else 0
-            if i >= len(self.entries):
-                if self.decompress_task.done():
-                    if not self.status.loop_pl or not self.entries:
-                        break
-                    self.next_indexes.append(i % len(self.entries))
-                else:
-                    break
+            if self.next_indexes:
+                i = self.next_indexes[-1] + 1
+            elif self.play_history:
+                i = self.play_history[-1] + 1
             else:
-                self.next_indexes.append(i)
+                i = 0
+            if i >= len(self.entries):
+                break
+            self.next_indexes.append(i)
 
         self._preload_upcoming_entries()
 
@@ -148,7 +144,9 @@ class LazyPlaylist(Playlist):
                 if await ensure_track_playable(current_track, on_status=self.on_status):
                     return current_track
                 _log.warning(f"Track '{current_track.title}' could not be played. Skipping to next.")
-                await self.next()
+                remaining = await self.next()
+                if remaining > 0:
+                    return None
                 return await self.get_current_track()
         return None
 
