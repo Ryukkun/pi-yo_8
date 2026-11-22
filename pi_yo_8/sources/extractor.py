@@ -52,16 +52,6 @@ YTDLP_VIDEO_PARAMS = {
     "extractor_args": _YOUTUBE_EXTRACTOR_ARGS,
 }
 
-YTDLP_SEARCH_PARAMS = {
-    "http_headers": {
-        "Accept-Language": "ja-JP,ja;q=0.9",
-    },
-    'format': 'bestaudio[acodec=opus]/bestaudio/best',
-    'quiet': True,
-    'skip_download': True,
-    "noplaylist": True,
-}
-
 
 class YTDLPExtractor:
     def __init__(self, params: dict[str, Any]) -> None:

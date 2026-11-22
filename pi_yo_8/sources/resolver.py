@@ -22,10 +22,11 @@ class TrackResolver:
         _log.info(f"Resolving query: '{query_or_url}'")
         analysis = UrlAnalyzer(query_or_url)
         if analysis.is_spotify or analysis.is_apple_music:
-            return await ExternalMusicResolver.resolve(query_or_url, analysis, on_status=on_status)
+            return await ExternalMusicResolver.resolve(analysis.normalized_url, analysis, on_status=on_status)
 
+        target_query = analysis.normalized_url if analysis.is_url else query_or_url
         extractor = YTDLPManager.get_extractor(YTDLP_GENERAL_PARAMS)
-        gen, status_manager = extractor.extract_raw_info(query_or_url)
+        gen, status_manager = extractor.extract_raw_info(target_query)
         if on_status:
             on_status(status_manager)
 
