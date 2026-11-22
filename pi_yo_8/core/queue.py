@@ -85,3 +85,92 @@ class PlayQueue:
             if len(items) >= count:
                 break
         return items
+
+    def get_upcoming_playlists(self, max_count: int = 2) -> list[tuple[int, Playlist]]:
+        """後続キュー(play_queue[1:])に含まれるPlaylistを最大max_count件返す。"""
+        upcoming: list[tuple[int, Playlist]] = []
+        for idx in range(1, len(self.play_queue)):
+            item = self.play_queue[idx]
+            if isinstance(item, Playlist):
+                upcoming.append((idx, item))
+                if len(upcoming) >= max_count:
+                    break
+        return upcoming
+
+    def get_history_menu_items(
+        self, max_count: int = 25, prev_display_count: int = 4
+    ) -> list[tuple[str, str]]:
+        """
+        上の履歴セレクトメニューに表示する (label, value) のリストを古い順で返す。
+        下のキューメニューに表示される直近 prev_display_count 件より前の履歴を対象とする。
+        """
+        collected: list[tuple[str, str]] = []
+        remaining_prev = prev_display_count
+
+        head = self.get_current_raw()
+        if isinstance(head, Playlist):
+            pl_hist = list(head.play_history)
+            if len(pl_hist) > remaining_prev:
+                older_count = len(pl_hist) - remaining_prev
+                # 新しい方（5個前）から古い方へ走査して枠を埋める
+                for offset in range(older_count):
+                    steps = remaining_prev + 1 + offset
+                    entry_idx = pl_hist[older_count - 1 - offset]
+                    if entry_idx < len(head.entries):
+                        entry = head.entries[entry_idx]
+                        title = getattr(entry, "title", None)
+                        if callable(title):
+                            title = title()
+                        video_title = str(title or "No Title")
+                        label = f"Playlist | {video_title}"[:100]
+                        collected.append((label, f"pl_rewind:{steps}"))
+                        if len(collected) >= max_count:
+                            collected.reverse()
+                            return collected
+            remaining_prev = max(0, remaining_prev - len(pl_hist))
+
+        # 過去のキュー履歴を新しい方から走査
+        for hist_idx in range(len(self.play_history) - 1, -1, -1):
+            item = self.play_history[hist_idx]
+            if isinstance(item, Playlist):
+                remaining_prev = max(0, remaining_prev - len(item.play_history))
+                pl_title = str(item.title or "No Title")
+                label = f"Playlist | ##{pl_title}##"[:100]
+                collected.append((label, f"hist:{hist_idx}"))
+            else:
+                if remaining_prev > 0:
+                    remaining_prev -= 1
+                    continue
+                entry_title = getattr(item, "title", None)
+                if callable(entry_title):
+                    entry_title = entry_title()
+                video_title = str(entry_title or "No Title")
+                label = f"単曲 | {video_title}"[:100]
+                collected.append((label, f"hist:{hist_idx}"))
+
+            if len(collected) >= max_count:
+                break
+
+        collected.reverse()
+        return collected
+
+    def skip_to_queue_index(self, target_index: int) -> bool:
+        """指定したキューインデックスのアイテムが先頭になるまで進める。"""
+        if target_index <= 0 or target_index >= len(self.play_queue):
+            return False
+        for _ in range(target_index):
+            self.play_history.append(self.play_queue.popleft())
+        return bool(self.play_queue)
+
+    def recall_history_item(self, history_index: int) -> bool:
+        """play_history の指定インデックスのアイテムを先頭へ復帰させる（状態はリセットしない）。"""
+        if history_index < 0 or history_index >= len(self.play_history):
+            return False
+        hist_list = list(self.play_history)
+        target = hist_list.pop(history_index)
+        self.play_history.clear()
+        self.play_history.extend(hist_list)
+        if self.play_queue:
+            self.play_history.append(self.play_queue.popleft())
+        self.play_queue.appendleft(target)
+        return True

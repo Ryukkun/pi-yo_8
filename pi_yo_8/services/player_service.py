@@ -114,15 +114,19 @@ class PlayerService:
             if self.on_track_change:
                 self.on_track_change()
 
-    async def _advance_and_update_status(self, count: int = 1, ignore_playlist: bool = False) -> bool:
-        if count == 0:
-            return bool(self.queue.play_queue)
-        res = await self.queue.next(count, ignore_playlist)
-        if res and self.queue.play_queue:
+    def _sync_head_status(self) -> None:
+        if self.queue.play_queue:
             head = self.queue.play_queue[0]
             if isinstance(head, LazyPlaylist):
                 head.status.set(self.status.loop, self.status.loop_pl, self.status.random_pl)
                 self.status = head.status
+
+    async def _advance_and_update_status(self, count: int = 1, ignore_playlist: bool = False) -> bool:
+        if count == 0:
+            return bool(self.queue.play_queue)
+        res = await self.queue.next(count, ignore_playlist)
+        if res:
+            self._sync_head_status()
         return res
 
     async def skip_tracks(self, count: int = 1) -> None:
@@ -134,6 +138,33 @@ class PlayerService:
         await self.play_loop()
         if self.player_track.is_paused():
             self.player_track.resume()
+
+    async def skip_to_queue_index(self, target_index: int) -> None:
+        if not self.queue.skip_to_queue_index(target_index):
+            return
+        self._sync_head_status()
+        await self.play_loop()
+        if self.player_track.is_paused():
+            self.player_track.resume()
+
+    async def select_history(self, action_value: str) -> None:
+        if action_value.startswith("pl_rewind:"):
+            steps = int(action_value.split(":", 1)[1])
+            await self.skip_tracks(-steps)
+            return
+
+        if action_value.startswith("hist:"):
+            hist_idx = int(action_value.split(":", 1)[1])
+            if not self.queue.recall_history_item(hist_idx):
+                return
+            head = self.queue.get_current_raw()
+            if isinstance(head, LazyPlaylist):
+                self.status = head.status
+                if not head.next_indexes:
+                    await head.update_next_indexes()
+            await self.play_loop()
+            if self.player_track.is_paused():
+                self.player_track.resume()
 
     async def seek_or_skip(self, skip_input: str | None) -> None:
         if not skip_input:

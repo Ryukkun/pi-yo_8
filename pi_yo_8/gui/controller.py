@@ -120,15 +120,26 @@ class EmbedController:
         change_view = False
         components = target_message.components
 
+        select_count = 0
         for row in components:
             if isinstance(row, ActionRow):
                 for child in row.children:
                     if isinstance(child, SelectMenu):
-                        if [opt.to_dict() for opt in view.select_opt] != [opt.to_dict() for opt in child.options]:
+                        select_count += 1
+                        if child.placeholder == '履歴':
+                            expected_opts = view.history_select_opt
+                            expected_disabled = len(expected_opts) == 1 and expected_opts[0].value == 'none'
+                            if child.disabled != expected_disabled:
+                                change_view = True
+                        else:
+                            expected_opts = view.select_opt
+                        if [opt.to_dict() for opt in expected_opts] != [opt.to_dict() for opt in child.options]:
                             change_view = True
                     elif isinstance(child, Button) and child.label in ('▶', 'II'):
                         if view.pause_play.label != child.label:
                             change_view = True
+        if select_count != 2:
+            change_view = True
 
         try:
             if change_view:

@@ -16,6 +16,7 @@ class PlayerControlsView(discord.ui.View):
     def __init__(self, guild_session: "GuildSession") -> None:
         super().__init__(timeout=None)
         self.guild_session = guild_session
+        self.history_select_opt: list[discord.SelectOption] = []
         self.select_opt: list[discord.SelectOption] = []
         self.pause_play = PlayPauseButton(self.guild_session)
         self.add_item(self.pause_play)
@@ -23,6 +24,7 @@ class PlayerControlsView(discord.ui.View):
         self.add_item(NextTrackButton(self.guild_session))
         self.add_item(OptionsButton(self.guild_session))
         self.add_item(DisconnectButton(self.guild_session))
+        self.add_item(HistorySelectMenu(self, self.guild_session.music.queue))
         self.add_item(QueueSelectMenu(self, self.guild_session.music.queue))
         self.add_item(ToggleStatusButton(self, '単曲 ループ', 'loop'))
         if self.guild_session.music.queue.is_playing_playlist():
@@ -32,13 +34,13 @@ class PlayerControlsView(discord.ui.View):
             self.add_item(ToggleStatusButton(self, 'Playlist ループ', 'loop_pl', True))
             self.add_item(ToggleStatusButton(self, 'シャッフル', 'random_pl', True))
 
-    @discord.ui.button(label="<", row=2)
+    @discord.ui.button(label="<", row=3)
     async def prev_track_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
         await self.guild_session.music.skip_tracks(-1)
 
-    @discord.ui.button(label="10↩︎", row=2)
+    @discord.ui.button(label="10↩︎", row=3)
     async def rewind_10s_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         self.guild_session.embed.record_channel_activity()
         await interaction.response.defer()
@@ -49,7 +51,7 @@ class PlayerControlsView(discord.ui.View):
 class PlayPauseButton(discord.ui.Button):
     def __init__(self, guild_session: "GuildSession") -> None:
         _label = '▶' if guild_session.music.player_track.is_paused() else 'II'
-        super().__init__(label=_label, style=discord.ButtonStyle.blurple, row=2)
+        super().__init__(label=_label, style=discord.ButtonStyle.blurple, row=3)
         self.guild_session = guild_session
 
     async def callback(self, interaction: Interaction) -> None:
@@ -65,7 +67,7 @@ class PlayPauseButton(discord.ui.Button):
 
 class Forward10sButton(discord.ui.Button):
     def __init__(self, guild_session: "GuildSession") -> None:
-        super().__init__(label="↪︎10", row=2)
+        super().__init__(label="↪︎10", row=3)
         self.guild_session = guild_session
 
     async def callback(self, interaction: Interaction) -> None:
@@ -77,7 +79,7 @@ class Forward10sButton(discord.ui.Button):
 
 class NextTrackButton(discord.ui.Button):
     def __init__(self, guild_session: "GuildSession") -> None:
-        super().__init__(label=">", row=2)
+        super().__init__(label=">", row=3)
         self.guild_session = guild_session
 
     async def callback(self, interaction: Interaction) -> None:
@@ -88,7 +90,7 @@ class NextTrackButton(discord.ui.Button):
 
 class OptionsButton(discord.ui.Button):
     def __init__(self, guild_session: "GuildSession") -> None:
-        super().__init__(label="⚙️", row=3)
+        super().__init__(label="⚙️", row=4)
         self.guild_session = guild_session
 
     async def callback(self, interaction: Interaction) -> None:
@@ -109,7 +111,7 @@ class OptionsButton(discord.ui.Button):
 
 class DisconnectButton(discord.ui.Button):
     def __init__(self, guild_session: "GuildSession") -> None:
-        super().__init__(label="切断", row=3, style=discord.ButtonStyle.red)
+        super().__init__(label="切断", row=4, style=discord.ButtonStyle.red)
         self.guild_session = guild_session
 
     async def callback(self, interaction: Interaction) -> None:
@@ -122,7 +124,7 @@ class ToggleStatusButton(discord.ui.Button):
         self.view_parent = parent
         self.name = status_name
         self.disable = disable
-        super().__init__(label=label, row=1, style=self.style_check(), disabled=disable)
+        super().__init__(label=label, row=2, style=self.style_check(), disabled=disable)
 
     def style_check(self) -> discord.ButtonStyle:
         if self.disable:
@@ -139,12 +141,38 @@ class ToggleStatusButton(discord.ui.Button):
         await interaction.response.edit_message(view=self.view_parent)
 
 
+class HistorySelectMenu(discord.ui.Select):
+    def __init__(self, parent: 'PlayerControlsView', queue: "PlayQueue") -> None:
+        self.view_parent = parent
+        items = queue.get_history_menu_items(25)
+        select_opt = [
+            discord.SelectOption(label=label, value=value, default=False)
+            for label, value in items
+        ]
+        disabled = False
+        if not select_opt:
+            select_opt.append(discord.SelectOption(label='履歴はないよぉ～ん', value='none', default=False))
+            disabled = True
+        parent.history_select_opt = select_opt
+        super().__init__(placeholder='履歴', options=select_opt, row=0, disabled=disabled)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+        if not self.values or self.values[0] in ('', 'none'):
+            return
+
+        self.view_parent.guild_session.embed.record_channel_activity()
+        await self.view_parent.guild_session.music.select_history(self.values[0])
+
+
 class QueueSelectMenu(discord.ui.Select):
     def __init__(self, parent: 'PlayerControlsView', queue: "PlayQueue") -> None:
         self.view_parent = parent
         select_opt: list[discord.SelectOption] = []
+        upcoming_pls = queue.get_upcoming_playlists(2)
         prev_items = queue.get_prev_items(4)
-        next_items = queue.get_next_items(25 - len(prev_items))
+        next_limit = max(0, 25 - len(prev_items) - len(upcoming_pls))
+        next_items = queue.get_next_items(next_limit)
         for i in range(-len(prev_items), len(next_items)):
             entry = prev_items[i] if i < 0 else next_items[i]
             entry_title = getattr(entry, "title", None)
@@ -159,10 +187,15 @@ class QueueSelectMenu(discord.ui.Select):
                 label = video_title[:100]
             select_opt.append(discord.SelectOption(label=label, value=str(i), default=(i == 0)))
 
+        for q_idx, pl in upcoming_pls:
+            pl_title = str(getattr(pl, "title", None) or "No Title")
+            label = f"next playlist >> {pl_title}"[:100]
+            select_opt.append(discord.SelectOption(label=label, value=f"pl:{q_idx}", default=False))
+
         if not select_opt:
             select_opt.append(discord.SelectOption(label='動画がないよぉ～ん', value='0', default=False))
         parent.select_opt = select_opt
-        super().__init__(placeholder='キュー表示', options=select_opt, row=0)
+        super().__init__(placeholder='キュー表示', options=select_opt, row=1)
 
     async def callback(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
@@ -170,7 +203,11 @@ class QueueSelectMenu(discord.ui.Select):
             return
 
         self.view_parent.guild_session.embed.record_channel_activity()
-        await self.view_parent.guild_session.music.skip_tracks(int(self.values[0]))
+        val = self.values[0]
+        if val.startswith("pl:"):
+            await self.view_parent.guild_session.music.skip_to_queue_index(int(val[3:]))
+        else:
+            await self.view_parent.guild_session.music.skip_tracks(int(val))
 
 
 async def send_play_option_message(channel: discord.abc.Messageable, guild_session: "GuildSession") -> discord.Message:
