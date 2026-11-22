@@ -102,19 +102,21 @@ class PlayQueue:
     ) -> list[tuple[str, str]]:
         """
         上の履歴セレクトメニューに表示する (label, value) のリストを古い順で返す。
-        下のキューメニューに表示される直近 prev_display_count 件より前の履歴を対象とする。
+        現在再生中のプレイリストは下のメニューに表示されない5個前以降、
+        過去のキュー履歴はプレイリスト・単曲ともに隙間がある限り表示する。
         """
         collected: list[tuple[str, str]] = []
-        remaining_prev = prev_display_count
 
         head = self.get_current_raw()
         if isinstance(head, Playlist):
             pl_hist = list(head.play_history)
-            if len(pl_hist) > remaining_prev:
-                older_count = len(pl_hist) - remaining_prev
+            if len(pl_hist) > prev_display_count:
+                pl_title = str(head.title or "No Title")
+                pl_prefix = pl_title if len(pl_title) <= 15 else f"{pl_title[:14]}…"
+                older_count = len(pl_hist) - prev_display_count
                 # 新しい方（5個前）から古い方へ走査して枠を埋める
                 for offset in range(older_count):
-                    steps = remaining_prev + 1 + offset
+                    steps = prev_display_count + 1 + offset
                     entry_idx = pl_hist[older_count - 1 - offset]
                     if entry_idx < len(head.entries):
                         entry = head.entries[entry_idx]
@@ -122,30 +124,25 @@ class PlayQueue:
                         if callable(title):
                             title = title()
                         video_title = str(title or "No Title")
-                        label = f"Playlist | {video_title}"[:100]
+                        label = f"{pl_prefix}  |  {video_title}"[:100]
                         collected.append((label, f"pl_rewind:{steps}"))
                         if len(collected) >= max_count:
                             collected.reverse()
                             return collected
-            remaining_prev = max(0, remaining_prev - len(pl_hist))
 
         # 過去のキュー履歴を新しい方から走査
         for hist_idx in range(len(self.play_history) - 1, -1, -1):
             item = self.play_history[hist_idx]
             if isinstance(item, Playlist):
-                remaining_prev = max(0, remaining_prev - len(item.play_history))
                 pl_title = str(item.title or "No Title")
-                label = f"Playlist | ##{pl_title}##"[:100]
+                label = f"Playlist  |  {pl_title}"[:100]
                 collected.append((label, f"hist:{hist_idx}"))
             else:
-                if remaining_prev > 0:
-                    remaining_prev -= 1
-                    continue
                 entry_title = getattr(item, "title", None)
                 if callable(entry_title):
                     entry_title = entry_title()
                 video_title = str(entry_title or "No Title")
-                label = f"単曲 | {video_title}"[:100]
+                label = f"単曲  |  {video_title}"[:100]
                 collected.append((label, f"hist:{hist_idx}"))
 
             if len(collected) >= max_count:

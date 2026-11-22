@@ -68,15 +68,14 @@ async def test_get_upcoming_playlists():
 @pytest.mark.asyncio
 async def test_history_menu_items_single_tracks():
     queue = PlayQueue()
-    tracks = [Track(id=str(i), title=f"Track {i}", web_url=f"http://{i}") for i in range(10)]
+    tracks = [Track(id=str(i), title=f"Track {i}", web_url=f"http://{i}") for i in range(4)]
     queue.play_queue.extend(tracks)
 
-    # 9番目の曲 (Track 9) まで進める -> play_history は 0..8
-    await queue.next(9)
+    # 3曲目まで進める -> 4曲以下でも単曲履歴が表示される
+    await queue.next(2)
     items = queue.get_history_menu_items(max_count=25, prev_display_count=4)
-    # 5, 6, 7, 8 は下のメニューに出るので、0..4 が古い順で返る
-    assert [label for label, _ in items] == [f"単曲 | Track {i}" for i in range(5)]
-    assert [val for _, val in items] == [f"hist:{i}" for i in range(5)]
+    assert [label for label, _ in items] == [f"単曲  |  Track {i}" for i in range(2)]
+    assert [val for _, val in items] == [f"hist:{i}" for i in range(2)]
 
 
 @pytest.mark.asyncio
@@ -85,7 +84,7 @@ async def test_history_menu_items_playlist_overflow_and_past_playlist():
     pl0.entries = [Track(id="a0", title="A0", web_url="http://a0")]
     await pl0.update_next_indexes()
 
-    pl1 = Playlist("Current PL", "http://pl1")
+    pl1 = Playlist("12345678901234567890", "http://pl1")
     pl1.entries = [Track(id=f"b{i}", title=f"B{i}", web_url=f"http://b{i}") for i in range(8)]
     pl1.cooldowns = [0] * 8
     await pl1.update_next_indexes()
@@ -99,9 +98,9 @@ async def test_history_menu_items_playlist_overflow_and_past_playlist():
 
     items = queue.get_history_menu_items(max_count=25, prev_display_count=4)
     assert items == [
-        ("Playlist | ##Past PL##", "hist:0"),
-        ("Playlist | B0", "pl_rewind:6"),
-        ("Playlist | B1", "pl_rewind:5"),
+        ("Playlist  |  Past PL", "hist:0"),
+        ("12345678901234…  |  B0", "pl_rewind:6"),
+        ("12345678901234…  |  B1", "pl_rewind:5"),
     ]
 
 
