@@ -167,6 +167,11 @@ async def _do_extract_stream(track: Track, on_status: Callable[[StatusManager], 
                 track.stream_info = fresh.stream_info
                 track.duration = fresh.duration or track.duration
                 track.thumbnail_url = fresh.thumbnail_url or track.thumbnail_url
+                track.upload_date = fresh.upload_date or track.upload_date
+                track.view_count = fresh.view_count if fresh.view_count is not None else track.view_count
+                track.uploader = fresh.uploader or track.uploader
+                track.uploader_url = fresh.uploader_url or track.uploader_url
+                track.uploader_id = fresh.uploader_id or track.uploader_id
                 if fresh.raw_info:
                     track.raw_info.update(fresh.raw_info)
                 _log.info(f"Successfully extracted stream URL for '{track.title}'")

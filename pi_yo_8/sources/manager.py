@@ -30,6 +30,7 @@ class YTDLPManager:
     def shutdown_all(cls) -> None:
         if cls.YT_DLP is not None:
             cls.YT_DLP.shutdown()
+            cls.YT_DLP = None
 
     def shutdown(self) -> None:
         with self._lock:
@@ -48,6 +49,9 @@ class YTDLPManager:
                 if extractor.process.is_alive():
                     try:
                         extractor.process.join(timeout=0.2)
+                        if extractor.process.is_alive():
+                            extractor.process.kill()
+                            extractor.process.join(timeout=0.2)
                     except Exception:
                         pass
             self.ytdlp.clear()

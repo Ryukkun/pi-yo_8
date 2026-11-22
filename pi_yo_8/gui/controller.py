@@ -96,8 +96,33 @@ class EmbedController:
         except Exception:
             _log.info(f"Embed.create_and_send_main_display - {self.guild_session.guild.name}", exc_info=True)
 
+    async def flush_error_notifications(self) -> None:
+        """未通知の抽出エラーがあれば操作チャンネルへ独立したEmbedとして送信する"""
+        if not self.latest_action_channel:
+            return
+        for sm in list(self.guild_session.ytdlp_status_managers):
+            errors = sm.consume_unreported_errors()
+            if not errors:
+                continue
+            target_label = f"[{sm.name}]({sm.url})" if sm.name and UrlAnalyzer(sm.url).is_url else (sm.name or sm.url)
+            header = f"{sm.info_type.name}: {target_label}\n" if target_label else f"{sm.info_type.name}\n"
+            body = "\n".join(e.description for e in errors)
+            # Discord Embed description上限 (4096文字) に収める
+            max_body_len = 3800
+            if len(body) > max_body_len:
+                body = body[:max_body_len] + "\n..."
+            embed = EmbedTemplates.create_failure_embed(
+                title="読み込みエラー / 警告",
+                description=f"{header}```\n{body}\n```",
+            )
+            try:
+                await self.latest_action_channel.send(embed=embed)
+            except Exception:
+                _log.debug(f"Failed to send error notification to channel in {self.guild_session.guild.name}", exc_info=True)
+
     async def refresh_main_display(self) -> None:
         self.last_update_time = time.time()
+        await self.flush_error_notifications()
         if not self.latest_action_channel:
             return
 
@@ -207,16 +232,11 @@ class EmbedController:
                 inline=False,
             )
 
-        for status in snap.statuses:
-            if status.recent_errors:
-                display_name = f"[{status.name}]({status.url})" if UrlAnalyzer(status.url).is_url else status.name
-                name = f"{status.type_name}:{display_name}" if display_name else status.type_name
-                embed.add_field(name=name, value="```" + "\n".join(status.recent_errors) + "```")
-
         return embed
 
     async def task_loop(self) -> None:
         try:
+            await self.flush_error_notifications()
             now = time.time()
             snap = self.guild_session.get_snapshot()
 

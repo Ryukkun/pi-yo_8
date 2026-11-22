@@ -63,10 +63,11 @@ class MultiTrackVoiceClient:
 
     def _run_loop(self) -> None:
         send_audio = self.vc.send_audio_packet
-        self._set_speaking_state(SpeakingState.voice)
         start_time = time.perf_counter()
         audio_frames = 0
         silence_frames = 0
+        is_speaking = False
+        consecutive_silence = 0
 
         try:
             while self.enable_loop:
@@ -99,14 +100,24 @@ class MultiTrackVoiceClient:
 
                 if audio_bytes:
                     audio_frames += 1
+                    consecutive_silence = 0
+                    if not is_speaking:
+                        self._set_speaking_state(SpeakingState.voice)
+                        is_speaking = True
                     send_audio(audio_bytes, encode=self.should_encode)
                 else:
                     silence_frames += 1
+                    consecutive_silence += 1
                     send_audio(opus.OPUS_SILENCE, encode=False)
                     playing = sum(1 for t in self.tracks if not t.is_paused())
                     if playing == 0:
-                        self._set_speaking_state(SpeakingState.none)
+                        if is_speaking:
+                            self._set_speaking_state(SpeakingState.none)
+                            is_speaking = False
                         break
+                    if is_speaking and consecutive_silence >= 5:
+                        self._set_speaking_state(SpeakingState.none)
+                        is_speaking = False
         except Exception:
             _log.exception(f"MultiTrackVoiceClient._run_loop guild:{self.guild.name}")
         finally:

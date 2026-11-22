@@ -86,6 +86,8 @@ class AudioTrack:
         header_lines: list[str] = []
         if stream.http_headers:
             for k, v in stream.http_headers.items():
+                if k.lower() == 'user-agent':
+                    continue
                 header_lines.append(f"{k}: {v}")
         if stream.cookies:
             header_lines.append(f"Cookie: {stream.cookies}")

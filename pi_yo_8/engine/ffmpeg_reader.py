@@ -2,7 +2,6 @@ import logging
 import threading
 import time
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
 
 from discord import FFmpegAudio
 
@@ -21,7 +20,7 @@ class FFmpegAudioReader:
         self.pending_audio_queue: deque[bytes] = deque()
         self.history_audio_queue: deque[bytes] = deque(maxlen=self.MAX_HISTORY_FRAMES)
         self.stop_flag = threading.Event()
-        self.exe = ThreadPoolExecutor(max_workers=1)
+        self._done = False
 
         def read_all() -> None:
             try:
@@ -40,9 +39,10 @@ class FFmpegAudioReader:
             except Exception as e:
                 _log.error(f"FFmpeg reader error: {e}", exc_info=True)
             finally:
-                self.exe.shutdown(wait=False)
+                self._done = True
 
-        self.read_all_task = self.exe.submit(read_all)
+        self._thread = threading.Thread(target=read_all, daemon=True)
+        self._thread.start()
 
     def read(self) -> bytes | None:
         """
@@ -55,7 +55,7 @@ class FFmpegAudioReader:
             data = self.pending_audio_queue.popleft()
             self.history_audio_queue.append(data)
             return data
-        if self.read_all_task.done():
+        if self._done:
             return b''
         return None
 
@@ -63,10 +63,6 @@ class FFmpegAudioReader:
         self.stop_flag.set()
         try:
             self.ffmpeg.cleanup()
-        except Exception:
-            pass
-        try:
-            self.exe.shutdown(wait=False, cancel_futures=True)
         except Exception:
             pass
         self.pending_audio_queue.clear()

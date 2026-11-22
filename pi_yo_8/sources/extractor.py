@@ -53,7 +53,7 @@ class YTDLPExtractor:
 
     def _start_process(self) -> None:
         self.connection, child = Pipe()
-        self.process = Process(target=YTDLPExtractor._extract_info, args=(child, self.params))
+        self.process = Process(target=YTDLPExtractor._extract_info, args=(child, self.params), daemon=True)
         self.process.start()
 
     def stop(self) -> None:
@@ -65,6 +65,9 @@ class YTDLPExtractor:
             try:
                 self.process.terminate()
                 self.process.join(timeout=0.5)
+                if self.process.is_alive():
+                    self.process.kill()
+                    self.process.join(timeout=0.2)
             except Exception:
                 pass
 
