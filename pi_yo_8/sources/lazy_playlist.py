@@ -5,7 +5,7 @@ from typing import Any
 
 from pi_yo_8.core.playlist import Playlist
 from pi_yo_8.core.track import Track
-from pi_yo_8.sources.extractor import YTDLP_SEARCH_PARAMS, YTDLP_VIDEO_PARAMS
+from pi_yo_8.sources.extractor import YTDLP_VIDEO_PARAMS
 from pi_yo_8.sources.http import is_url_accessible
 from pi_yo_8.sources.manager import YTDLPManager
 from pi_yo_8.sources.mapper import map_info_to_track
@@ -178,20 +178,48 @@ async def ensure_track_playable(track: Track, on_status: Callable[[StatusManager
         track._load_task = None
 
 
+async def _resolve_youtube_url(
+    search_query: str,
+    title: str,
+    on_status: Callable[[StatusManager], None] | None = None,
+) -> str | None:
+    """検索クエリからYouTube動画URLを1件取得する (extract_flatによる第1段階)"""
+    target_query = f"ytsearch1:{search_query}"
+    _log.info(f"Searching YouTube URL for external track '{title}': {target_query}")
+    extractor = YTDLPManager.get_extractor(YTDLP_VIDEO_PARAMS)
+    gen, sm = extractor.extract_raw_info(target_query)
+    sm.info_type = YTDLPInfoType.VIDEO
+    sm.name = title
+    if on_status:
+        on_status(sm)
+    try:
+        async for info in gen:
+            if video_url := info.get("webpage_url") or info.get("original_url") or info.get("url"):
+                await gen.aclose()
+                return str(video_url)
+    except Exception as e:
+        _log.error(f"Failed to search YouTube URL for '{title}': {e}", exc_info=True)
+    return None
+
+
 async def _do_extract_stream(track: Track, on_status: Callable[[StatusManager], None] | None = None) -> bool:
     search_query = track.raw_info.get("search_query") if track.raw_info else None
     is_external = isinstance(search_query, str) and bool(search_query)
 
     if is_external:
-        target_query = f"ytsearch1:{search_query}"
-        _log.info(f"Searching stream URL for external track '{track.title}': {target_query}")
-        extractor = YTDLPManager.get_extractor(YTDLP_SEARCH_PARAMS)
+        assert isinstance(search_query, str)
+        target_url = track.raw_info.get("resolved_youtube_url")
+        if not target_url:
+            target_url = await _resolve_youtube_url(search_query, track.title, on_status)
+            if not target_url:
+                return False
+            track.raw_info["resolved_youtube_url"] = target_url
     else:
-        target_query = track.web_url
-        _log.info(f"Extracting stream URL for: '{track.title}' ({target_query})")
-        extractor = YTDLPManager.get_extractor(YTDLP_VIDEO_PARAMS)
+        target_url = track.web_url
 
-    gen, sm = extractor.extract_raw_info(target_query)
+    _log.info(f"Extracting stream URL for: '{track.title}' ({target_url})")
+    extractor = YTDLPManager.get_extractor(YTDLP_VIDEO_PARAMS)
+    gen, sm = extractor.extract_raw_info(target_url)
     sm.info_type = YTDLPInfoType.VIDEO
     sm.name = track.title
     if on_status:

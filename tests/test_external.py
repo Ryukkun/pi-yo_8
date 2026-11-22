@@ -8,7 +8,7 @@ import pytest
 from pi_yo_8.core.track import Track
 from pi_yo_8.core.url import UrlAnalyzer
 from pi_yo_8.sources.external import parse_apple_music_html, parse_spotify_embed_html
-from pi_yo_8.sources.extractor import YTDLP_SEARCH_PARAMS
+from pi_yo_8.sources.extractor import YTDLP_VIDEO_PARAMS
 from pi_yo_8.sources.lazy_playlist import LazyPlaylist, _do_extract_stream
 from pi_yo_8.sources.status import StatusManager
 
@@ -264,7 +264,14 @@ async def test_lazy_playlist_from_tracks_and_extract_external():
     assert len(pl.next_indexes) == 25
     assert pl.next_indexes[0] == 0
 
-    async def fake_gen() -> AsyncGenerator[dict[str, Any]]:
+    async def fake_search_gen() -> AsyncGenerator[dict[str, Any]]:
+        yield {
+            "id": "yt123",
+            "url": "https://www.youtube.com/watch?v=yt123",
+            "title": "YouTube Video Title",
+        }
+
+    async def fake_video_gen() -> AsyncGenerator[dict[str, Any]]:
         yield {
             "id": "yt123",
             "title": "YouTube Video Title",
@@ -277,15 +284,23 @@ async def test_lazy_playlist_from_tracks_and_extract_external():
         }
 
     mock_extractor = MagicMock()
-    mock_extractor.extract_raw_info.return_value = (fake_gen(), StatusManager("ytsearch1:Original Artist - Original Spotify Title"))
+    mock_extractor.extract_raw_info.side_effect = [
+        (fake_search_gen(), StatusManager("ytsearch1:Original Artist - Original Spotify Title")),
+        (fake_video_gen(), StatusManager("https://www.youtube.com/watch?v=yt123")),
+    ]
 
     with patch("pi_yo_8.sources.lazy_playlist.YTDLPManager.get_extractor", return_value=mock_extractor) as mock_get_ext:
         ok = await _do_extract_stream(t1)
 
     assert ok is True
-    mock_get_ext.assert_called_once_with(YTDLP_SEARCH_PARAMS)
-    mock_extractor.extract_raw_info.assert_called_once_with("ytsearch1:Original Artist - Original Spotify Title")
+    assert mock_get_ext.call_count == 2
+    mock_get_ext.assert_any_call(YTDLP_VIDEO_PARAMS)
+    assert mock_extractor.extract_raw_info.call_args_list[0].args == (
+        "ytsearch1:Original Artist - Original Spotify Title",
+    )
+    assert mock_extractor.extract_raw_info.call_args_list[1].args == ("https://www.youtube.com/watch?v=yt123",)
     assert t1.is_stream_ready()
+    assert t1.raw_info["resolved_youtube_url"] == "https://www.youtube.com/watch?v=yt123"
     # 元のSpotifyメタデータは保持され、欠損サムネイルのみ補完される
     assert t1.title == "Original Spotify Title"
     assert t1.uploader == "Original Artist"
