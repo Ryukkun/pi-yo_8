@@ -52,6 +52,16 @@ YTDLP_VIDEO_PARAMS = {
     "extractor_args": _YOUTUBE_EXTRACTOR_ARGS,
 }
 
+YTDLP_SEARCH_PARAMS = {
+    "http_headers": {
+        "Accept-Language": "ja-JP,ja;q=0.9",
+    },
+    'format': 'bestaudio[acodec=opus]/bestaudio/best',
+    'quiet': True,
+    'skip_download': True,
+    "noplaylist": True,
+}
+
 
 class YTDLPExtractor:
     def __init__(self, params: dict[str, Any]) -> None:
@@ -204,7 +214,12 @@ class YTDLPExtractor:
                             send_count += 1
 
                         if (result := future.result()) and ("entries" not in result or send_count == 0):
-                            safe_send(result)
+                            if "entries" in result and isinstance(result["entries"], list):
+                                for entry in result["entries"]:
+                                    if isinstance(entry, dict):
+                                        safe_send(entry)
+                            else:
+                                safe_send(result)
                     except (KeyboardInterrupt, SystemExit):
                         break
                     except Exception as e:
