@@ -64,6 +64,7 @@ class StatusManager:
         self.name = name
         self.info_type = info_type
         self.is_running = True
+        self.is_rate_limited = False
         self._errors: list[ErrorMessage] = []
         self.lock = Lock()
 

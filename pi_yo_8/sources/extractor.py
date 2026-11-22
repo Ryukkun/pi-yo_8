@@ -5,7 +5,8 @@ import signal
 import threading
 import time
 import traceback
-from collections.abc import AsyncGenerator
+from collections import deque
+from collections.abc import AsyncGenerator, Callable
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Pipe, Process, connection
 from typing import Any
@@ -45,9 +46,58 @@ YTDLP_VIDEO_PARAMS = {
 }
 
 
+class YTDLPRateLimiter:
+    """
+    yt-dlp への高頻度リクエストを検知して一時的に拒否するスライディングウィンドウ型レートリミッター
+    """
+
+    def __init__(
+        self,
+        max_requests: int = 8,
+        window_seconds: float = 10.0,
+        cooldown_seconds: float = 10.0,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.cooldown_seconds = cooldown_seconds
+        self._clock = clock
+        self._timestamps: deque[float] = deque()
+        self._cooldown_until: float = 0.0
+        self._lock = threading.Lock()
+
+    def allow_request(self) -> tuple[bool, float]:
+        """リクエストを許可するか判定し、(許可可否, クールダウン残り秒数) を返す。"""
+        now = self._clock()
+        with self._lock:
+            if now < self._cooldown_until:
+                return False, self._cooldown_until - now
+
+            cutoff = now - self.window_seconds
+            while self._timestamps and self._timestamps[0] <= cutoff:
+                self._timestamps.popleft()
+
+            if len(self._timestamps) >= self.max_requests:
+                self._cooldown_until = now + self.cooldown_seconds
+                self._timestamps.clear()
+                return False, self.cooldown_seconds
+
+            self._timestamps.append(now)
+            return True, 0.0
+
+    def reset(self) -> None:
+        """記録されたリクエスト履歴とクールダウン状態をリセットする。"""
+        with self._lock:
+            self._timestamps.clear()
+            self._cooldown_until = 0.0
+
+
 class YTDLPExtractor:
-    def __init__(self, params: dict[str, Any]) -> None:
+    _default_rate_limiter = YTDLPRateLimiter()
+
+    def __init__(self, params: dict[str, Any], rate_limiter: YTDLPRateLimiter | None = None) -> None:
         self.params = params
+        self.rate_limiter = rate_limiter or self._default_rate_limiter
         self.is_running: bool = False
         self._start_process()
 
@@ -83,6 +133,23 @@ class YTDLPExtractor:
         return ydl
 
     def extract_raw_info(self, url: str) -> tuple[AsyncGenerator[dict[str, Any]], StatusManager]:
+        status_manager = StatusManager(url if UrlAnalyzer(url).is_url else '')
+        allowed, retry_after = self.rate_limiter.allow_request()
+        if not allowed:
+            self.is_running = False
+            status_manager.is_running = False
+            status_manager.is_rate_limited = True
+            wait_sec = max(1, int(retry_after + 0.99))
+            msg = f"yt-dlpへのリクエストが集中しているため一時的に制限しました（約{wait_sec}秒後に再試行してください）。"
+            status_manager.append_error(ErrorMessage(ErrorType.ERROR, msg, "RateLimitError"))
+            _log.warning(f"YTDLPExtractor rate limited request for '{url}' (retry_after={retry_after:.2f}s)")
+
+            async def empty_generator() -> AsyncGenerator[dict[str, Any]]:
+                if False:
+                    yield {}
+
+            return empty_generator(), status_manager
+
         self.is_running = True
         # 残存している未読データをパージしてパイプの同期ズレを防止
         try:
@@ -93,7 +160,6 @@ class YTDLPExtractor:
 
         self.connection.send(url)
         loop = asyncio.get_running_loop()
-        status_manager = StatusManager(url if UrlAnalyzer(url).is_url else '')
 
         async def generator() -> AsyncGenerator[dict[str, Any]]:
             reached_eof = False
