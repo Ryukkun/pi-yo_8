@@ -3,6 +3,7 @@ from collections.abc import Callable
 
 from pi_yo_8.core.track import Track
 from pi_yo_8.core.url import UrlAnalyzer
+from pi_yo_8.sources.external import ExternalMusicResolver
 from pi_yo_8.sources.extractor import YTDLP_GENERAL_PARAMS
 from pi_yo_8.sources.lazy_playlist import LazyPlaylist
 from pi_yo_8.sources.manager import YTDLPManager
@@ -19,6 +20,10 @@ class TrackResolver:
         on_status: Callable[[StatusManager], None] | None = None,
     ) -> tuple[Track | LazyPlaylist | None, StatusManager | None]:
         _log.info(f"Resolving query: '{query_or_url}'")
+        analysis = UrlAnalyzer(query_or_url)
+        if analysis.is_spotify or analysis.is_apple_music:
+            return await ExternalMusicResolver.resolve(query_or_url, analysis, on_status=on_status)
+
         extractor = YTDLPManager.get_extractor(YTDLP_GENERAL_PARAMS)
         gen, status_manager = extractor.extract_raw_info(query_or_url)
         if on_status:

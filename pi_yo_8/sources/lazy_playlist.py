@@ -5,7 +5,7 @@ from typing import Any
 
 from pi_yo_8.core.playlist import Playlist
 from pi_yo_8.core.track import Track
-from pi_yo_8.sources.extractor import YTDLP_VIDEO_PARAMS
+from pi_yo_8.sources.extractor import YTDLP_SEARCH_PARAMS, YTDLP_VIDEO_PARAMS
 from pi_yo_8.sources.http import is_url_accessible
 from pi_yo_8.sources.manager import YTDLPManager
 from pi_yo_8.sources.mapper import map_info_to_track
@@ -34,10 +34,32 @@ class LazyPlaylist(Playlist):
         self.cooldowns.append(0)
 
         self.on_status = on_status
-        self._generator = generator
-        self.decompress_task = asyncio.create_task(self._decompress_loop())
+        self._generator: AsyncGenerator[dict[str, Any]] | None = generator
+        self.decompress_task: asyncio.Task[None] | asyncio.Future[None] = asyncio.create_task(self._decompress_loop())
+
+    @classmethod
+    def from_tracks(
+        cls,
+        title: str,
+        url: str,
+        tracks: list[Track],
+        on_status: Callable[[StatusManager], None] | None = None,
+    ) -> "LazyPlaylist":
+        instance = cls.__new__(cls)
+        Playlist.__init__(instance, title, url)
+        instance.entries = list(tracks)
+        instance.cooldowns = [0] * len(tracks)
+        instance.random.set_range(len(tracks))
+        instance.on_status = on_status
+        instance._generator = None
+        done_future: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        done_future.set_result(None)
+        instance.decompress_task = done_future
+        return instance
 
     async def _decompress_loop(self) -> None:
+        if self._generator is None:
+            return
         try:
             async for entry in self._generator:
                 if entry.get("duration") is None and entry.get("channel") is None and entry.get("view_count") is None:
@@ -155,9 +177,19 @@ async def ensure_track_playable(track: Track, on_status: Callable[[StatusManager
 
 
 async def _do_extract_stream(track: Track, on_status: Callable[[StatusManager], None] | None = None) -> bool:
-    _log.info(f"Extracting stream URL for: '{track.title}' ({track.web_url})")
-    extractor = YTDLPManager.get_extractor(YTDLP_VIDEO_PARAMS)
-    gen, sm = extractor.extract_raw_info(track.web_url)
+    search_query = track.raw_info.get("search_query") if track.raw_info else None
+    is_external = isinstance(search_query, str) and bool(search_query)
+
+    if is_external:
+        target_query = f"ytsearch1:{search_query}"
+        _log.info(f"Searching stream URL for external track '{track.title}': {target_query}")
+        extractor = YTDLPManager.get_extractor(YTDLP_SEARCH_PARAMS)
+    else:
+        target_query = track.web_url
+        _log.info(f"Extracting stream URL for: '{track.title}' ({target_query})")
+        extractor = YTDLPManager.get_extractor(YTDLP_VIDEO_PARAMS)
+
+    gen, sm = extractor.extract_raw_info(target_query)
     sm.info_type = YTDLPInfoType.VIDEO
     sm.name = track.title
     if on_status:
@@ -167,13 +199,22 @@ async def _do_extract_stream(track: Track, on_status: Callable[[StatusManager], 
             if info.get("formats") and info.get("url"):
                 fresh = map_info_to_track(info)
                 track.stream_info = fresh.stream_info
-                track.duration = fresh.duration or track.duration
-                track.thumbnail_url = fresh.thumbnail_url or track.thumbnail_url
-                track.upload_date = fresh.upload_date or track.upload_date
-                track.view_count = fresh.view_count if fresh.view_count is not None else track.view_count
-                track.uploader = fresh.uploader or track.uploader
-                track.uploader_url = fresh.uploader_url or track.uploader_url
-                track.uploader_id = fresh.uploader_id or track.uploader_id
+                if is_external:
+                    track.duration = track.duration or fresh.duration
+                    track.thumbnail_url = track.thumbnail_url or fresh.thumbnail_url
+                    track.upload_date = track.upload_date or fresh.upload_date
+                    track.view_count = track.view_count if track.view_count is not None else fresh.view_count
+                    track.uploader = track.uploader or fresh.uploader
+                    track.uploader_url = track.uploader_url or fresh.uploader_url
+                    track.uploader_id = track.uploader_id or fresh.uploader_id
+                else:
+                    track.duration = fresh.duration or track.duration
+                    track.thumbnail_url = fresh.thumbnail_url or track.thumbnail_url
+                    track.upload_date = fresh.upload_date or track.upload_date
+                    track.view_count = fresh.view_count if fresh.view_count is not None else track.view_count
+                    track.uploader = fresh.uploader or track.uploader
+                    track.uploader_url = fresh.uploader_url or track.uploader_url
+                    track.uploader_id = fresh.uploader_id or track.uploader_id
                 if fresh.raw_info:
                     track.raw_info.update(fresh.raw_info)
                 _log.info(f"Successfully extracted stream URL for '{track.title}'")
