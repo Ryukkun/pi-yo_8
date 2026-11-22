@@ -48,6 +48,8 @@ class LazyPlaylist(Playlist):
         instance = cls.__new__(cls)
         Playlist.__init__(instance, title, url)
         instance.entries = list(tracks)
+        for track in instance.entries:
+            track.playlist_title = track.playlist_title or instance.title
         instance.cooldowns = [0] * len(tracks)
         instance.random.set_range(len(tracks))
         instance.on_status = on_status

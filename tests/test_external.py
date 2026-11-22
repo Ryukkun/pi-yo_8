@@ -120,6 +120,7 @@ def test_parse_spotify_playlist_and_album():
     assert tracks[0].uploader == "Artist A, Artist B"
     assert tracks[0].thumbnail_url == "https://i.scdn.co/image/cover123"
     assert tracks[0].web_url == "https://open.spotify.com/track/111"
+    assert tracks[0].playlist_title == "Today's Top Hits"
     assert tracks[0].raw_info["search_query"] == "Artist A, Artist B - Song One"
     assert tracks[1].duration == 200.5
 
@@ -169,6 +170,7 @@ def test_parse_apple_music_playlist_and_album_song():
     assert pl_title == "Test Album"
     assert len(tracks) == 2
     assert tracks[0].thumbnail_url == "https://example.com/600x600bb.jpg"
+    assert tracks[0].playlist_title == "Test Album"
     assert tracks[1].uploader == "Main Artist"
     assert tracks[1].raw_info["search_query"] == "Main Artist - Track 2"
 
@@ -177,6 +179,7 @@ def test_parse_apple_music_playlist_and_album_song():
     assert isinstance(single_res, Track)
     assert single_res.id == "1002"
     assert single_res.title == "Track 2"
+    assert single_res.playlist_title is None
 
 
 def test_parse_apple_music_direct_song():
@@ -220,6 +223,7 @@ async def test_lazy_playlist_from_tracks_and_extract_external():
     pl = LazyPlaylist.from_tracks("My Playlist", "https://open.spotify.com/playlist/xyz", [t1])
     assert pl.decompress_task.done()
     assert len(pl.entries) == 1
+    assert t1.playlist_title == "My Playlist"
     await pl.update_next_indexes()
     assert len(pl.next_indexes) == 25
     assert pl.next_indexes[0] == 0

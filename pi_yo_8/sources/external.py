@@ -52,6 +52,7 @@ def _build_external_track(
     duration_sec: float | None,
     thumbnail_url: str | None,
     source: str,
+    playlist_title: str | None = None,
 ) -> Track:
     clean_title = title.strip() or "No Title"
     clean_artist = artist.replace("\xa0", " ").strip() if artist else ""
@@ -63,6 +64,7 @@ def _build_external_track(
         duration=duration_sec,
         uploader=clean_artist or None,
         thumbnail_url=thumbnail_url,
+        playlist_title=playlist_title,
         raw_info={
             "search_query": search_query,
             "external_source": source,
@@ -139,6 +141,7 @@ def parse_spotify_embed_html(
                     duration_sec=t_dur_sec,
                     thumbnail_url=thumbnail_url,
                     source="spotify",
+                    playlist_title=pl_title,
                 )
             )
         if tracks:
@@ -238,6 +241,7 @@ def parse_apple_music_html(
                         duration_sec=t_dur_sec,
                         thumbnail_url=t_thumb,
                         source="apple_music",
+                        playlist_title=pl_title,
                     )
                 )
 
@@ -248,6 +252,7 @@ def parse_apple_music_html(
     if song_id:
         for track in tracks:
             if track.id == song_id:
+                track.playlist_title = None
                 return track
 
     return pl_title, source_url, tracks
