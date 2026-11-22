@@ -64,6 +64,13 @@ async def test_get_upcoming_playlists():
     assert upcoming[0] == (2, pl1)
     assert upcoming[1] == (4, pl2)
 
+    # 単曲とプレイリストが混在する後続アイテム取得（除外指定なし／あり）
+    upcoming_all = queue.get_upcoming_queue_items(2)
+    assert upcoming_all == [(1, t1), (2, pl1)]
+
+    upcoming_excluded = queue.get_upcoming_queue_items(2, exclude_ids={id(t1)})
+    assert upcoming_excluded == [(2, pl1), (3, t2)]
+
 
 @pytest.mark.asyncio
 async def test_history_menu_items_single_tracks():

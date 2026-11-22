@@ -97,6 +97,20 @@ class PlayQueue:
                     break
         return upcoming
 
+    def get_upcoming_queue_items(
+        self, max_count: int = 2, exclude_ids: set[int] | None = None
+    ) -> list[tuple[int, Any]]:
+        """後続キュー(play_queue[1:])に含まれるアイテム(Playlist/Track)を最大max_count件返す。"""
+        upcoming: list[tuple[int, Any]] = []
+        for idx in range(1, len(self.play_queue)):
+            item = self.play_queue[idx]
+            if exclude_ids and not isinstance(item, Playlist) and id(item) in exclude_ids:
+                continue
+            upcoming.append((idx, item))
+            if len(upcoming) >= max_count:
+                break
+        return upcoming
+
     def get_history_menu_items(
         self, max_count: int = 25, prev_display_count: int = 4
     ) -> list[tuple[str, str]]:

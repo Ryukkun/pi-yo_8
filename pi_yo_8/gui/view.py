@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 import discord
 from discord import Interaction
 
+from pi_yo_8.core.playlist import Playlist
 from pi_yo_8.core.types import SENDABLE_CHANNEL_TYPES
 from pi_yo_8.gui.utils import EmbedTemplates
 
@@ -169,10 +170,12 @@ class QueueSelectMenu(discord.ui.Select):
     def __init__(self, parent: 'PlayerControlsView', queue: "PlayQueue") -> None:
         self.view_parent = parent
         select_opt: list[discord.SelectOption] = []
-        upcoming_pls = queue.get_upcoming_playlists(2)
         prev_items = queue.get_prev_items(4)
-        next_limit = max(0, 25 - len(prev_items) - len(upcoming_pls))
-        next_items = queue.get_next_items(next_limit)
+        max_next = max(0, 25 - len(prev_items))
+        raw_next_items = queue.get_next_items(max_next)
+        exclude_ids = {id(x) for x in raw_next_items}
+        upcoming_items = queue.get_upcoming_queue_items(2, exclude_ids=exclude_ids)
+        next_items = raw_next_items[: max(0, max_next - len(upcoming_items))]
         for i in range(-len(prev_items), len(next_items)):
             entry = prev_items[i] if i < 0 else next_items[i]
             entry_title = getattr(entry, "title", None)
@@ -187,10 +190,14 @@ class QueueSelectMenu(discord.ui.Select):
                 label = video_title[:100]
             select_opt.append(discord.SelectOption(label=label, value=str(i), default=(i == 0)))
 
-        for q_idx, pl in upcoming_pls:
-            pl_title = str(getattr(pl, "title", None) or "No Title")
-            label = f"next playlist >> {pl_title}"[:100]
-            select_opt.append(discord.SelectOption(label=label, value=f"pl:{q_idx}", default=False))
+        for q_idx, item in upcoming_items:
+            item_title = getattr(item, "title", None)
+            if callable(item_title):
+                item_title = item_title()
+            title_str = str(item_title or "No Title")
+            prefix = "next playlist >>" if isinstance(item, Playlist) else "next video >>"
+            label = f"{prefix} {title_str}"[:100]
+            select_opt.append(discord.SelectOption(label=label, value=f"q:{q_idx}", default=False))
 
         if not select_opt:
             select_opt.append(discord.SelectOption(label='動画がないよぉ～ん', value='0', default=False))
@@ -204,8 +211,8 @@ class QueueSelectMenu(discord.ui.Select):
 
         self.view_parent.guild_session.embed.record_channel_activity()
         val = self.values[0]
-        if val.startswith("pl:"):
-            await self.view_parent.guild_session.music.skip_to_queue_index(int(val[3:]))
+        if val.startswith(("q:", "pl:")):
+            await self.view_parent.guild_session.music.skip_to_queue_index(int(val.split(":", 1)[1]))
         else:
             await self.view_parent.guild_session.music.skip_tracks(int(val))
 
