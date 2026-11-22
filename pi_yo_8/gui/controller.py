@@ -74,7 +74,7 @@ class EmbedController:
         try:
             self.last_update_time = time.time()
             if self.latest_action_channel:
-                embed = await self.build_main_embed()
+                embeds = await self.build_main_embeds()
                 play_option = False
                 if self.main_display:
                     try:
@@ -86,7 +86,7 @@ class EmbedController:
                         pass
 
                 self.main_display = await self.latest_action_channel.send(
-                    embed=embed, view=PlayerControlsView(self.guild_session)
+                    embeds=embeds, view=PlayerControlsView(self.guild_session)
                 )
                 self.options_display = (
                     await send_play_option_message(self.latest_action_channel, self.guild_session)
@@ -96,40 +96,15 @@ class EmbedController:
         except Exception:
             _log.info(f"Embed.create_and_send_main_display - {self.guild_session.guild.name}", exc_info=True)
 
-    async def flush_error_notifications(self) -> None:
-        """未通知の抽出エラーがあれば操作チャンネルへ独立したEmbedとして送信する"""
-        if not self.latest_action_channel:
-            return
-        for sm in list(self.guild_session.ytdlp_status_managers):
-            errors = sm.consume_unreported_errors()
-            if not errors:
-                continue
-            target_label = f"[{sm.name}]({sm.url})" if sm.name and UrlAnalyzer(sm.url).is_url else (sm.name or sm.url)
-            header = f"{sm.info_type.name}: {target_label}\n" if target_label else f"{sm.info_type.name}\n"
-            body = "\n".join(e.description for e in errors)
-            # Discord Embed description上限 (4096文字) に収める
-            max_body_len = 3800
-            if len(body) > max_body_len:
-                body = body[:max_body_len] + "\n..."
-            embed = EmbedTemplates.create_failure_embed(
-                title="読み込みエラー / 警告",
-                description=f"{header}```\n{body}\n```",
-            )
-            try:
-                await self.latest_action_channel.send(embed=embed)
-            except Exception:
-                _log.debug(f"Failed to send error notification to channel in {self.guild_session.guild.name}", exc_info=True)
-
     async def refresh_main_display(self) -> None:
         self.last_update_time = time.time()
-        await self.flush_error_notifications()
         if not self.latest_action_channel:
             return
 
         if last_message := self.latest_action_channel.last_message:
             if self.guild_session.bot.user and self.guild_session.bot.user.id == last_message.author.id:
                 if last_message.embeds:
-                    if embed_color := last_message.embeds[0].colour:
+                    if embed_color := last_message.embeds[-1].colour:
                         if embed_color.value == EmbedTemplates.get_persistent_color().value and self.main_display:
                             if await self._update_main_display(self.main_display):
                                 return
@@ -140,7 +115,7 @@ class EmbedController:
         await self.create_and_send_main_display()
 
     async def _update_main_display(self, target_message: Message) -> bool:
-        embed = await self.build_main_embed()
+        embeds = await self.build_main_embeds()
         view = PlayerControlsView(self.guild_session)
         change_view = False
         components = target_message.components
@@ -157,12 +132,12 @@ class EmbedController:
 
         try:
             if change_view:
-                await target_message.edit(embed=embed, view=view)
+                await target_message.edit(embeds=embeds, view=view)
             else:
                 # API節約: Embed内容に変化がなければ送信をスキップ
-                if target_message.embeds and target_message.embeds[0].to_dict() == embed.to_dict():
+                if [e.to_dict() for e in target_message.embeds] == [e.to_dict() for e in embeds]:
                     return True
-                await target_message.edit(embed=embed)
+                await target_message.edit(embeds=embeds)
             return True
         except NotFound:
             return False
@@ -170,6 +145,29 @@ class EmbedController:
     async def build_main_embed(self) -> Embed:
         snap = self.guild_session.get_snapshot()
         return self.render_embed_from_snapshot(snap)
+
+    async def build_main_embeds(self) -> list[Embed]:
+        snap = self.guild_session.get_snapshot()
+        return self.render_embeds_from_snapshot(snap)
+
+    def render_embeds_from_snapshot(self, snap: PlaybackSnapshot) -> list[Embed]:
+        embeds: list[Embed] = []
+        error_lines: list[str] = []
+        for status in snap.statuses:
+            if status.recent_errors:
+                display_name = f"[{status.name}]({status.url})" if UrlAnalyzer(status.url).is_url else status.name
+                header = f"{status.type_name}: {display_name}" if display_name else status.type_name
+                errs = "\n".join(status.recent_errors)
+                error_lines.append(f"**{header}**\n```\n{errs}\n```")
+
+        if error_lines:
+            desc = "\n".join(error_lines)
+            if len(desc) > 3900:
+                desc = desc[:3900] + "\n..."
+            embeds.append(EmbedTemplates.create_failure_embed(title="ログ", description=desc))
+
+        embeds.append(self.render_embed_from_snapshot(snap))
+        return embeds
 
     def render_embed_from_snapshot(self, snap: PlaybackSnapshot) -> Embed:
         if snap.track:
@@ -236,7 +234,6 @@ class EmbedController:
 
     async def task_loop(self) -> None:
         try:
-            await self.flush_error_notifications()
             now = time.time()
             snap = self.guild_session.get_snapshot()
 

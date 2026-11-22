@@ -30,7 +30,6 @@ YTDLP_GENERAL_PARAMS = {
     'skip_download': True,
     "lazy_playlist": True,
     "forcejson": True,
-    "extractor_args": {"youtube": {"player_client": ["android", "default", "-tv", "-mweb"]}},
 }
 
 YTDLP_VIDEO_PARAMS = {
@@ -43,7 +42,6 @@ YTDLP_VIDEO_PARAMS = {
     'quiet': True,
     'skip_download': True,
     "noplaylist": True,
-    "extractor_args": {"youtube": {"player_client": ["android", "default", "-tv", "-mweb"]}},
 }
 
 

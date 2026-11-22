@@ -26,7 +26,6 @@ class ErrorMessage:
     name: str = ''
     traceback: str = ''
     occurred_time: float = field(default_factory=time.time)
-    reported: bool = False
 
 
 class LambdaLogger:
@@ -92,13 +91,3 @@ class StatusManager:
                     else:
                         break
         return result
-
-    def consume_unreported_errors(self, max_count: int = 5) -> list[ErrorMessage]:
-        """未送信の WARNING / ERROR メッセージを抽出し、送信済みとしてマークする"""
-        result: list[ErrorMessage] = []
-        with self.lock:
-            for error in self._errors:
-                if not error.reported and error.type in (ErrorType.WARNING, ErrorType.ERROR):
-                    error.reported = True
-                    result.append(error)
-        return result[-max_count:]
