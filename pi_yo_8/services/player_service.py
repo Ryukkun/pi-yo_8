@@ -48,7 +48,8 @@ class PlayerService:
         self.queue.play_queue.append(result)
         if not self.player_track.has_audio_data():
             await self.play_loop()
-        self.player_track.resume()
+        if self.player_track.has_audio_data():
+            self.player_track.resume()
 
     async def play(self, query: str) -> None:
         if not query:
@@ -67,7 +68,8 @@ class PlayerService:
             self.status = result.status
 
         await self.play_loop()
-        self.player_track.resume()
+        if self.player_track.has_audio_data():
+            self.player_track.resume()
 
     async def get_current_playable_track(self) -> Track | None:
         raw = self.queue.get_current_raw()
@@ -78,6 +80,9 @@ class PlayerService:
         if isinstance(raw, Track):
             if await ensure_track_playable(raw, on_status=self.on_status_report):
                 return raw
+            if raw.rate_limited:
+                _log.warning(f"{self.guild_name} : Track '{raw.title}' rate-limited. Stopping without skipping.")
+                return None
             # 再生不能なら次へスキップ
             await self.skip_tracks(1)
             return await self.get_current_playable_track()
@@ -111,6 +116,7 @@ class PlayerService:
             )
         else:
             _log.info(f"{self.guild_name} : Play loop finished - no more tracks to play.")
+            self.player_track.pause()
             if self.on_track_change:
                 self.on_track_change()
 

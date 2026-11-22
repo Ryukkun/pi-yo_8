@@ -147,6 +147,11 @@ class LazyPlaylist(Playlist):
                 _log.info(f"Loading current track at index {idx}: '{current_track.title}'")
                 if await ensure_track_playable(current_track, on_status=self.on_status):
                     return current_track
+                if current_track.rate_limited:
+                    _log.warning(
+                        f"Track '{current_track.title}' extraction was rate-limited. Stopping without skipping."
+                    )
+                    return None
                 _log.warning(f"Track '{current_track.title}' could not be played. Skipping to next.")
                 await self.next()
                 return await self.get_current_track()
@@ -162,6 +167,7 @@ async def ensure_track_playable(track: Track, on_status: Callable[[StatusManager
         _log.debug(f"Track '{track.title}' stream ready, checking URL accessibility...")
         if await is_url_accessible(track.stream_info.url, track.stream_info.http_headers, track.stream_info.cookies):
             _log.debug(f"Track '{track.title}' stream URL is accessible.")
+            track.rate_limited = False
             return True
         _log.info(f"Track '{track.title}' stream URL inaccessible/expired. Re-extracting...")
 
@@ -182,7 +188,7 @@ async def _resolve_youtube_url(
     search_query: str,
     title: str,
     on_status: Callable[[StatusManager], None] | None = None,
-) -> str | None:
+) -> tuple[str | None, bool]:
     """検索クエリからYouTube動画URLを1件取得する (extract_flatによる第1段階)"""
     target_query = f"ytsearch1:{search_query}"
     _log.info(f"Searching YouTube URL for external track '{title}': {target_query}")
@@ -192,17 +198,21 @@ async def _resolve_youtube_url(
     sm.name = title
     if on_status:
         on_status(sm)
+    if sm.is_rate_limited:
+        await gen.aclose()
+        return None, True
     try:
         async for info in gen:
             if video_url := info.get("webpage_url") or info.get("original_url") or info.get("url"):
                 await gen.aclose()
-                return str(video_url)
+                return str(video_url), False
     except Exception as e:
         _log.error(f"Failed to search YouTube URL for '{title}': {e}", exc_info=True)
-    return None
+    return None, sm.is_rate_limited
 
 
 async def _do_extract_stream(track: Track, on_status: Callable[[StatusManager], None] | None = None) -> bool:
+    track.rate_limited = False
     search_query = track.raw_info.get("search_query") if track.raw_info else None
     is_external = isinstance(search_query, str) and bool(search_query)
 
@@ -210,8 +220,9 @@ async def _do_extract_stream(track: Track, on_status: Callable[[StatusManager], 
         assert isinstance(search_query, str)
         target_url = track.raw_info.get("resolved_youtube_url")
         if not target_url:
-            target_url = await _resolve_youtube_url(search_query, track.title, on_status)
+            target_url, rate_limited = await _resolve_youtube_url(search_query, track.title, on_status)
             if not target_url:
+                track.rate_limited = rate_limited
                 return False
             track.raw_info["resolved_youtube_url"] = target_url
     else:
@@ -224,6 +235,10 @@ async def _do_extract_stream(track: Track, on_status: Callable[[StatusManager], 
     sm.name = track.title
     if on_status:
         on_status(sm)
+    if sm.is_rate_limited:
+        track.rate_limited = True
+        await gen.aclose()
+        return False
     try:
         async for info in gen:
             if info.get("formats") and info.get("url"):

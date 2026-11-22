@@ -30,6 +30,7 @@ class Track:
     stream_info: StreamInfo | None = None
     raw_info: dict[str, Any] = field(default_factory=dict)
     _load_task: asyncio.Task[bool] | None = field(default=None, repr=False, compare=False)
+    rate_limited: bool = field(default=False, repr=False, compare=False)
 
     def is_stream_ready(self) -> bool:
         return self.stream_info is not None and bool(self.stream_info.url)
