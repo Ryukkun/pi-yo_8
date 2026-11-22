@@ -108,16 +108,17 @@ class MultiTrackVoiceClient:
                 else:
                     silence_frames += 1
                     consecutive_silence += 1
-                    send_audio(opus.OPUS_SILENCE, encode=False)
+                    if is_speaking:
+                        send_audio(opus.OPUS_SILENCE, encode=False)
+                        if consecutive_silence >= 5:
+                            self._set_speaking_state(SpeakingState.none)
+                            is_speaking = False
                     playing = sum(1 for t in self.tracks if not t.is_paused())
                     if playing == 0:
                         if is_speaking:
                             self._set_speaking_state(SpeakingState.none)
                             is_speaking = False
                         break
-                    if is_speaking and consecutive_silence >= 5:
-                        self._set_speaking_state(SpeakingState.none)
-                        is_speaking = False
         except Exception:
             _log.exception(f"MultiTrackVoiceClient._run_loop guild:{self.guild.name}")
         finally:
