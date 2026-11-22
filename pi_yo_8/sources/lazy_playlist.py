@@ -8,7 +8,7 @@ from pi_yo_8.core.track import Track
 from pi_yo_8.sources.extractor import YTDLP_VIDEO_PARAMS
 from pi_yo_8.sources.http import is_url_accessible
 from pi_yo_8.sources.manager import YTDLPManager
-from pi_yo_8.sources.mapper import map_info_to_track
+from pi_yo_8.sources.mapper import is_playable_entry, map_info_to_track
 from pi_yo_8.sources.status import StatusManager, YTDLPInfoType
 
 _log = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class LazyPlaylist(Playlist):
     async def _decompress_loop(self) -> None:
         try:
             async for entry in self._generator:
-                if entry.get("duration") is None and entry.get("channel") is None and entry.get("view_count") is None:
+                if not is_playable_entry(entry):
                     continue
                 track = map_info_to_track(entry)
                 track.playlist_title = track.playlist_title or self.title

@@ -46,6 +46,8 @@ class PlayerService:
             return
 
         self.queue.play_queue.append(result)
+        if len(self.queue.play_queue) == 1 and isinstance(result, LazyPlaylist):
+            self.status = result.status
         if not self.player_track.has_audio_data():
             await self.play_loop()
         self.player_track.resume()

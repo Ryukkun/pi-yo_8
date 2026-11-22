@@ -6,7 +6,7 @@ from pi_yo_8.core.url import UrlAnalyzer
 from pi_yo_8.sources.extractor import YTDLP_GENERAL_PARAMS
 from pi_yo_8.sources.lazy_playlist import LazyPlaylist
 from pi_yo_8.sources.manager import YTDLPManager
-from pi_yo_8.sources.mapper import map_info_to_track
+from pi_yo_8.sources.mapper import is_playable_entry, map_info_to_track
 from pi_yo_8.sources.status import StatusManager, YTDLPInfoType
 
 _log = logging.getLogger(__name__)
@@ -25,6 +25,8 @@ class TrackResolver:
             on_status(status_manager)
 
         async for info in gen:
+            if not is_playable_entry(info):
+                continue
             if info.get("playlist"):
                 analysis = UrlAnalyzer(query_or_url)
                 playlist = LazyPlaylist(info, gen, on_status=on_status)

@@ -2,6 +2,37 @@ from typing import Any
 
 from pi_yo_8.core.track import StreamInfo, Track
 
+_NON_VIDEO_YT_URL_PATTERNS = (
+    "youtube.com/channel/",
+    "youtube.com/@",
+    "youtube.com/c/",
+    "youtube.com/user/",
+    "youtube.com/playlist",
+)
+
+_WEBPAGE_URL_PATTERNS = (
+    "youtube.com/watch",
+    "youtu.be/",
+    *_NON_VIDEO_YT_URL_PATTERNS,
+)
+
+
+def is_playable_entry(info: dict[str, Any]) -> bool:
+    """検索結果やプレイリスト内のエントリが再生可能な動画・音声か判定する"""
+    ie_key = str(info.get("ie_key") or info.get("extractor_key") or "").lower()
+    if ie_key == "youtubetab":
+        return False
+
+    entry_url = str(info.get("url") or info.get("webpage_url") or "")
+    if any(pattern in entry_url for pattern in _NON_VIDEO_YT_URL_PATTERNS):
+        return False
+
+    return not (
+        info.get("duration") is None
+        and info.get("channel") is None
+        and info.get("view_count") is None
+    )
+
 
 def calculate_gain(volume_data: dict[str, Any] | None) -> float | None:
     if volume_data and (volume := volume_data.get('perceptualLoudnessDb')) is not None:
@@ -53,7 +84,7 @@ def map_info_to_track(info: dict[str, Any]) -> Track:
 
     stream_info = None
     if stream_url := info.get("url"):
-        is_webpage = ("youtube.com/watch" in stream_url) or ("youtu.be/" in stream_url) or ("youtube.com/playlist" in stream_url)
+        is_webpage = any(pattern in stream_url for pattern in _WEBPAGE_URL_PATTERNS)
         has_formats = bool(info.get("formats"))
         if has_formats or not is_webpage:
             headers = info.get("http_headers") or {}

@@ -16,7 +16,7 @@ class Playlist:
         title: str,
         url: str,
         loop: bool = False,
-        loop_pl: bool = True,
+        loop_pl: bool = False,
         random_pl: bool = False,
         preload_callback: Callable[[list[Any]], Any] | None = None,
     ) -> None:

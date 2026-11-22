@@ -106,9 +106,9 @@ class MultiTrackVoiceClient:
                 else:
                     silence_frames += 1
                     if is_speaking:
+                        send_audio(opus.OPUS_SILENCE, encode=False)
                         self._set_speaking_state(SpeakingState.none)
                         is_speaking = False
-                    send_audio(opus.OPUS_SILENCE, encode=False)
                     if sum(1 for t in self.tracks if not t.is_paused()) == 0:
                         break
         except Exception:
