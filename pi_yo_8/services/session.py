@@ -36,6 +36,7 @@ class GuildSession:
         self.empty_channel_loop_count = 0
         self.ytdlp_status_managers: list[StatusManager] = []
         self._is_closing = False
+        self._shutdown_task: asyncio.Task[None] | None = None
 
         self.multi_track_voice_client = MultiTrackVoiceClient(guild, self.vc, bot.loop)
         player_track = self.multi_track_voice_client.add_track(opus_mode=True)
@@ -128,10 +129,14 @@ class GuildSession:
             except RuntimeError:
                 pass
 
-    async def bye(self, text: str = '切断') -> None:
-        if self._is_closing:
-            return
-        self._is_closing = True
+    async def bye(self, text: str = '切断', wait: bool = True) -> None:
+        if not self._is_closing:
+            self._is_closing = True
+            self._shutdown_task = asyncio.create_task(self._shutdown(text))
+        if wait and self._shutdown_task is not None:
+            await self._shutdown_task
+
+    async def _shutdown(self, text: str) -> None:
         self.inactivity_check_loop.cancel()
 
         self.multi_track_voice_client.kill()
@@ -139,8 +144,10 @@ class GuildSession:
             self.on_destroy(self.guild.id)
 
         _log.info(f"{self.guild.name} : #{text}")
+        await asyncio.sleep(0.02)
         try:
-            await self.vc.disconnect()
+            if self.vc.is_connected():
+                await asyncio.wait_for(self.vc.disconnect(), timeout=3.0)
         except Exception:
             pass
 

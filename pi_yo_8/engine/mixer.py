@@ -55,8 +55,9 @@ class MultiTrackVoiceClient:
 
     def _set_speaking_state(self, speaking: SpeakingState) -> None:
         try:
-            if self.vc.ws:
-                asyncio.run_coroutine_threadsafe(self.vc.ws.speak(speaking), self.loop)
+            ws = getattr(self.vc, 'ws', None)
+            if ws is not None:
+                asyncio.run_coroutine_threadsafe(ws.speak(speaking), self.loop)
         except Exception:
             _log.exception(f"MultiTrackVoiceClient._set_speaking_state guild:{self.guild.name}")
 
@@ -64,6 +65,8 @@ class MultiTrackVoiceClient:
         send_audio = self.vc.send_audio_packet
         self._set_speaking_state(SpeakingState.voice)
         start_time = time.perf_counter()
+        audio_frames = 0
+        silence_frames = 0
 
         try:
             while self.enable_loop:
@@ -74,14 +77,18 @@ class MultiTrackVoiceClient:
 
                 active_tracks = len(byte_list)
                 audio_bytes: bytes = b''
-                if active_tracks >= 1:
+                if active_tracks == 1:
+                    audio_bytes = byte_list[0]
+                elif active_tracks >= 2:
                     if self.should_encode:
+                        max_len = max(len(b) for b in byte_list)
+                        arrays = [
+                            np.frombuffer(b.ljust(max_len, b'\x00'), dtype=np.int16)
+                            for b in byte_list
+                        ]
                         adjust_vol = 1 / sqrt(active_tracks)
-                        audio_numpy: np.ndarray = np.sum(
-                            [np.frombuffer(byte_list[i], dtype=np.int16) * adjust_vol for i in range(active_tracks)],
-                            axis=0
-                        )
-                        audio_bytes = audio_numpy.astype(np.int16).tobytes()
+                        audio_numpy = np.sum(arrays, axis=0) * adjust_vol
+                        audio_bytes = np.clip(audio_numpy, -32768, 32767).astype(np.int16).tobytes()
                     else:
                         audio_bytes = byte_list[0]
 
@@ -91,8 +98,10 @@ class MultiTrackVoiceClient:
                     time.sleep(delay)
 
                 if audio_bytes:
+                    audio_frames += 1
                     send_audio(audio_bytes, encode=self.should_encode)
                 else:
+                    silence_frames += 1
                     send_audio(opus.OPUS_SILENCE, encode=False)
                     playing = sum(1 for t in self.tracks if not t.is_paused())
                     if playing == 0:
@@ -101,5 +110,15 @@ class MultiTrackVoiceClient:
         except Exception:
             _log.exception(f"MultiTrackVoiceClient._run_loop guild:{self.guild.name}")
         finally:
+            conn = getattr(self.vc, '_connection', None)
+            _log.debug(
+                "MultiTrackVoiceClient loop ended: guild=%s audio_frames=%d silence_frames=%d mode=%s dave=%s can_encrypt=%s",
+                self.guild.name,
+                audio_frames,
+                silence_frames,
+                getattr(self.vc, 'mode', None),
+                bool(getattr(conn, 'dave_session', None)),
+                getattr(conn, 'can_encrypt', None),
+            )
             with self._thread_lock:
                 self._thread_running = False

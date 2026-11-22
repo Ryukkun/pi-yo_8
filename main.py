@@ -1,7 +1,7 @@
+import argparse
 import asyncio
 import logging
-import shutil
-from pathlib import Path
+import os
 
 import discord
 from discord.ext import commands
@@ -9,38 +9,45 @@ from discord.ext import commands
 IS_MAIN_PROCESS = __name__ == "__main__"
 _log = logging.getLogger(__name__)
 
-async def main() -> None:
-    base_dir = Path(__file__).resolve().parent
-    config_file = base_dir / "pi_yo_8" / "config.py"
-    template_file = base_dir / "pi_yo_8" / "resources" / "config_template.py"
 
-    if not config_file.exists():
-        shutil.copy(template_file, config_file)
-        raise RuntimeError("Config ファイル (pi_yo_8/config.py) をテンプレートから生成しました。Token等を設定して再起動してください。")
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Discord Music Bot (pi-yo_8) の起動スクリプト")
+    parser.add_argument("--debug", action="store_true", help="デバッグモードを有効にする")
+    return parser.parse_args()
 
-    from pi_yo_8 import config
+
+async def main(debug: bool = False) -> None:
+    from pi_yo_8.core.config import app_config
     from pi_yo_8.core.logging import setup_logger
     from pi_yo_8.engine.discord_patch import apply_discord_patch
     from pi_yo_8.main import MusicBotCog
     from pi_yo_8.sources.manager import YTDLPManager
 
+    setup_logger(logging.DEBUG if debug else logging.INFO)
     apply_discord_patch()
+
+    if not app_config.token:
+        raise RuntimeError("Token が未設定です。config.json に token を設定して再起動してください。")
+
+    os.makedirs(app_config.guild_config, exist_ok=True)
+    os.makedirs(app_config.user_config, exist_ok=True)
 
     intents = discord.Intents.default()
     intents.message_content = True
     intents.reactions = True
     intents.voice_states = True
-    bot = commands.Bot(command_prefix=config.Prefix, intents=intents)
+    bot = commands.Bot(command_prefix=app_config.prefix, intents=intents)
     YTDLPManager.initialize(general_pool_size=4, video_pool_size=4)
-    setup_logger()
 
     async with bot:
         await bot.add_cog(MusicBotCog(bot))
-        await bot.start(config.Token)
+        await bot.start(app_config.token)
+
 
 if IS_MAIN_PROCESS:
+    args = parse_args()
     try:
-        asyncio.run(main())
+        asyncio.run(main(debug=args.debug), debug=args.debug)
     except KeyboardInterrupt:
         _log.info("Bot has stopped (Ctrl+C).")
     finally:

@@ -77,6 +77,11 @@ class EmbedTemplates:
         return Embed(title=title, description=description, colour=Colour.red())
 
     @classmethod
+    def create_info_embed(cls, title: str, description: str | None = None) -> Embed:
+        """標準通知用Embed"""
+        return Embed(title=title, description=description, colour=cls.MAIN_COLOR)
+
+    @classmethod
     def get_main_color(cls) -> Colour:
         """bot ベースカラー"""
         return cls.MAIN_COLOR

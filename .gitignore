@@ -3,7 +3,10 @@ test/*
 
 
 config.ini
-config.py
+/pi_yo_8/config.py
+config.json
+guild_config/
+user_config/
 __pycache__
 .DS_Store
 uv.lock
