@@ -145,7 +145,7 @@ class ToggleStatusButton(discord.ui.Button):
 class HistorySelectMenu(discord.ui.Select):
     def __init__(self, parent: 'PlayerControlsView', queue: "PlayQueue") -> None:
         self.view_parent = parent
-        items = queue.get_history_menu_items(25)
+        items = queue.get_history_menu_items(max_past=5, max_current_pl=20)
         select_opt = [
             discord.SelectOption(label=label, value=value, default=False)
             for label, value in items
@@ -170,14 +170,12 @@ class QueueSelectMenu(discord.ui.Select):
     def __init__(self, parent: 'PlayerControlsView', queue: "PlayQueue") -> None:
         self.view_parent = parent
         select_opt: list[discord.SelectOption] = []
-        prev_items = queue.get_prev_items(4)
-        max_next = max(0, 25 - len(prev_items))
+        max_next = 25
         raw_next_items = queue.get_next_items(max_next)
         exclude_ids = {id(x) for x in raw_next_items}
         upcoming_items = queue.get_upcoming_queue_items(2, exclude_ids=exclude_ids)
         next_items = raw_next_items[: max(0, max_next - len(upcoming_items))]
-        for i in range(-len(prev_items), len(next_items)):
-            entry = prev_items[i] if i < 0 else next_items[i]
+        for i, entry in enumerate(next_items):
             entry_title = getattr(entry, "title", None)
             if callable(entry_title):
                 entry_title = entry_title()
@@ -195,7 +193,7 @@ class QueueSelectMenu(discord.ui.Select):
             if callable(item_title):
                 item_title = item_title()
             title_str = str(item_title or "No Title")
-            prefix = "next playlist >>" if isinstance(item, Playlist) else "next video >>"
+            prefix = "次のPlaylist  │ " if isinstance(item, Playlist) else "次の単曲  │ "
             label = f"{prefix} {title_str}"[:100]
             select_opt.append(discord.SelectOption(label=label, value=f"q:{q_idx}", default=False))
 

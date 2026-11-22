@@ -75,14 +75,14 @@ async def test_get_upcoming_playlists():
 @pytest.mark.asyncio
 async def test_history_menu_items_single_tracks():
     queue = PlayQueue()
-    tracks = [Track(id=str(i), title=f"Track {i}", web_url=f"http://{i}") for i in range(4)]
+    tracks = [Track(id=str(i), title=f"Track {i}", web_url=f"http://{i}") for i in range(8)]
     queue.play_queue.extend(tracks)
 
-    # 3曲目まで進める -> 4曲以下でも単曲履歴が表示される
-    await queue.next(2)
-    items = queue.get_history_menu_items(max_count=25, prev_display_count=4)
-    assert [label for label, _ in items] == [f"単曲  |  Track {i}" for i in range(2)]
-    assert [val for _, val in items] == [f"hist:{i}" for i in range(2)]
+    # 7曲進める -> 過去の履歴は最大5件 (Track 2 .. Track 6) が古い順で返る
+    await queue.next(7)
+    items = queue.get_history_menu_items(max_past=5, max_current_pl=20)
+    assert [label for label, _ in items] == [f"単曲  |  Track {i}" for i in range(2, 7)]
+    assert [val for _, val in items] == [f"hist:{i}" for i in range(2, 7)]
 
 
 @pytest.mark.asyncio
@@ -92,23 +92,22 @@ async def test_history_menu_items_playlist_overflow_and_past_playlist():
     await pl0.update_next_indexes()
 
     pl1 = Playlist("12345678901234567890", "http://pl1")
-    pl1.entries = [Track(id=f"b{i}", title=f"B{i}", web_url=f"http://b{i}") for i in range(8)]
-    pl1.cooldowns = [0] * 8
+    pl1.entries = [Track(id=f"b{i}", title=f"B{i}", web_url=f"http://b{i}") for i in range(25)]
+    pl1.cooldowns = [0] * 25
     await pl1.update_next_indexes()
 
     queue = PlayQueue()
     queue.play_queue.extend([pl0, pl1])
 
-    # pl0 を飛ばして pl1 を6曲進める（pl1.play_history は 0..5 の6曲）
+    # pl0 を飛ばして pl1 を22曲進める -> 過去PL1件 + 現PLの直近20件 (B2..B21) が返る
     assert queue.skip_to_queue_index(1) is True
-    await queue.next(6)
+    await queue.next(22)
 
-    items = queue.get_history_menu_items(max_count=25, prev_display_count=4)
-    assert items == [
-        ("Playlist  |  Past PL", "hist:0"),
-        ("12345678901234…  |  B0", "pl_rewind:6"),
-        ("12345678901234…  |  B1", "pl_rewind:5"),
-    ]
+    items = queue.get_history_menu_items(max_past=5, max_current_pl=20)
+    assert items[0] == ("Playlist  |  Past PL", "hist:0")
+    assert len(items) == 21
+    assert items[1] == ("12345678901234…  |  B2", "pl_rewind:20")
+    assert items[-1] == ("12345678901234…  |  B21", "pl_rewind:1")
 
 
 @pytest.mark.asyncio
