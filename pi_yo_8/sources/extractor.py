@@ -19,6 +19,12 @@ from pi_yo_8.sources.status import ErrorMessage, ErrorType, LambdaLogger, Status
 
 _log = logging.getLogger("pi_yo_8.ytdlp")
 
+_YOUTUBE_EXTRACTOR_ARGS = {
+    "youtube": {
+        "player_client": ["default", "-tv_samsung", "-tv", "-tv_simply"],
+    },
+}
+
 YTDLP_GENERAL_PARAMS = {
     "http_headers": {
         "Accept-Language": "ja-JP,ja;q=0.9",
@@ -30,6 +36,7 @@ YTDLP_GENERAL_PARAMS = {
     'skip_download': True,
     "lazy_playlist": True,
     "forcejson": True,
+    "extractor_args": _YOUTUBE_EXTRACTOR_ARGS,
 }
 
 YTDLP_VIDEO_PARAMS = {
@@ -42,6 +49,7 @@ YTDLP_VIDEO_PARAMS = {
     'quiet': True,
     'skip_download': True,
     "noplaylist": True,
+    "extractor_args": _YOUTUBE_EXTRACTOR_ARGS,
 }
 
 
