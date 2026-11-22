@@ -26,6 +26,7 @@ class Track:
     upload_date: str | None = None
     thumbnail_url: str | None = None
     channel_icon_url: str | None = None
+    playlist_title: str | None = None
     stream_info: StreamInfo | None = None
     raw_info: dict[str, Any] = field(default_factory=dict)
     _load_task: asyncio.Task[bool] | None = field(default=None, repr=False, compare=False)

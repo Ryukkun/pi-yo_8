@@ -80,6 +80,7 @@ def map_info_to_track(info: dict[str, Any]) -> Track:
         view_count=view_count,
         upload_date=upload_date,
         thumbnail_url=thumbnail_url,
+        playlist_title=info.get("playlist_title"),
         stream_info=stream_info,
         raw_info=filter_essential_raw_info(info),
     )

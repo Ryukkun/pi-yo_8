@@ -29,6 +29,7 @@ class LazyPlaylist(Playlist):
         super().__init__(title, url)
 
         first_track = map_info_to_track(first_entry_info)
+        first_track.playlist_title = first_track.playlist_title or self.title
         self.entries.append(first_track)
         self.cooldowns.append(0)
 
@@ -42,6 +43,7 @@ class LazyPlaylist(Playlist):
                 if entry.get("duration") is None and entry.get("channel") is None and entry.get("view_count") is None:
                     continue
                 track = map_info_to_track(entry)
+                track.playlist_title = track.playlist_title or self.title
                 self.entries.append(track)
                 max_cooldown = max(self.cooldowns) if self.cooldowns else 0
                 self.cooldowns.append(max_cooldown)

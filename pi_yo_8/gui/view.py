@@ -150,8 +150,14 @@ class QueueSelectMenu(discord.ui.Select):
             entry_title = getattr(entry, "title", None)
             if callable(entry_title):
                 entry_title = entry_title()
-            title = str(entry_title or "No Title")[:100]
-            select_opt.append(discord.SelectOption(label=title, value=str(i), default=(i == 0)))
+            video_title = str(entry_title or "No Title")
+            playlist_title = getattr(entry, "playlist_title", None)
+            if playlist_title:
+                pl_prefix = playlist_title if len(playlist_title) <= 10 else f"{playlist_title[:9]}…"
+                label = f"{pl_prefix} │ {video_title}"[:100]
+            else:
+                label = video_title[:100]
+            select_opt.append(discord.SelectOption(label=label, value=str(i), default=(i == 0)))
 
         if not select_opt:
             select_opt.append(discord.SelectOption(label='動画がないよぉ～ん', value='0', default=False))
