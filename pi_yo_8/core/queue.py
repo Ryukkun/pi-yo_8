@@ -123,14 +123,14 @@ class PlayQueue:
             item = self.play_history[hist_idx]
             if isinstance(item, Playlist):
                 pl_title = str(item.title or "No Title")
-                label = f"Playlist  |  {pl_title}"[:100]
+                label = f"Playlist  │  {pl_title}"[:100]
                 past_collected.append((label, f"hist:{hist_idx}"))
             else:
                 entry_title = getattr(item, "title", None)
                 if callable(entry_title):
                     entry_title = entry_title()
                 video_title = str(entry_title or "No Title")
-                label = f"単曲  |  {video_title}"[:100]
+                label = f"単曲  │  {video_title}"[:100]
                 past_collected.append((label, f"hist:{hist_idx}"))
 
             if len(past_collected) >= max_past:
@@ -153,7 +153,7 @@ class PlayQueue:
                     if callable(title):
                         title = title()
                     video_title = str(title or "No Title")
-                    label = f"{pl_prefix}  |  {video_title}"[:100]
+                    label = f"{pl_prefix}  │  {video_title}"[:100]
                     current_pl_collected.append((label, f"pl_rewind:{steps}"))
             current_pl_collected.reverse()
 

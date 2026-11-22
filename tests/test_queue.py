@@ -81,7 +81,7 @@ async def test_history_menu_items_single_tracks():
     # 7曲進める -> 過去の履歴は最大5件 (Track 2 .. Track 6) が古い順で返る
     await queue.next(7)
     items = queue.get_history_menu_items(max_past=5, max_current_pl=20)
-    assert [label for label, _ in items] == [f"単曲  |  Track {i}" for i in range(2, 7)]
+    assert [label for label, _ in items] == [f"単曲  │  Track {i}" for i in range(2, 7)]
     assert [val for _, val in items] == [f"hist:{i}" for i in range(2, 7)]
 
 
@@ -104,10 +104,10 @@ async def test_history_menu_items_playlist_overflow_and_past_playlist():
     await queue.next(22)
 
     items = queue.get_history_menu_items(max_past=5, max_current_pl=20)
-    assert items[0] == ("Playlist  |  Past PL", "hist:0")
+    assert items[0] == ("Playlist  │  Past PL", "hist:0")
     assert len(items) == 21
-    assert items[1] == ("12345678901234…  |  B2", "pl_rewind:20")
-    assert items[-1] == ("12345678901234…  |  B21", "pl_rewind:1")
+    assert items[1] == ("12345678901234…  │  B2", "pl_rewind:20")
+    assert items[-1] == ("12345678901234…  │  B21", "pl_rewind:1")
 
 
 @pytest.mark.asyncio
